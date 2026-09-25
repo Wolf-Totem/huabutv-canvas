@@ -8,7 +8,8 @@ import "@/components/canvas/canvas-cloud-agent.css";
 import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { confirmCreateCanvasIfOthersPending } from "@/lib/canvas/confirm-create-canvas";
+import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, saveRemoteCanvasProjectNow } from "@/services/user-data-sync";
 
 function requireLogin(next: string) {
     useAuthDialogStore.getState().openAuth({ tab: "login", next });
@@ -18,7 +19,7 @@ function requireLogin(next: string) {
 export function CreationAgentEntry() {
     const { t } = useTranslation("canvas");
     const navigate = useNavigate();
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const hydrated = useCanvasStore((state) => state.hydrated);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
@@ -32,18 +33,26 @@ export function CreationAgentEntry() {
             return;
         }
         lock.current = true;
-        setBusy(true);
         setError("");
         try {
             if (!hydrated) throw new Error(t("agent.canvasRestoring"));
             if (created.current?.userId !== userId) created.current = null;
             if (!created.current) {
+                const decision = await confirmCreateCanvasIfOthersPending(modal);
+                if (useUserStore.getState().user?.id !== userId) return;
+                if (!decision.proceed) {
+                    navigate(`/canvas/${encodeURIComponent(decision.projectId)}?agent=1`);
+                    return;
+                }
+            }
+            setBusy(true);
+            if (!created.current) {
                 const result = await createCanvasProjectWithRemoteSync("Agent 创作");
                 if (!result.id) throw new Error(t("agent.createFailed"));
                 created.current = { id: result.id, userId };
-                if (result.syncError) throw new Error(t("agent.syncPending"));
+                if (result.syncError) throw new Error(result.syncError instanceof Error ? result.syncError.message : t("agent.syncPending"));
             } else {
-                await saveRemoteUserDataNow();
+                await saveRemoteCanvasProjectNow(created.current.id);
             }
             if (useUserStore.getState().user?.id !== userId) return;
             navigate(`/canvas/${encodeURIComponent(created.current.id)}?agent=1`);

@@ -59,32 +59,34 @@ html.mc-auth-open .portal-auth-overlay {
 
 .mc-nav {
     position: fixed;
-    top: 10px;
+    top: 16px;
     left: 0;
     right: 0;
     z-index: 80;
     display: flex;
     align-items: center;
-    gap: 22px;
-    width: min(1240px, calc(100% - 28px));
-    min-height: 88px;
+    gap: 18px;
+    /* 与 .mc-hero-top 同一内容宽，避免导航像盖在右侧模块上的第二条卡片 */
+    width: calc(100% - 56px);
+    max-width: 1680px;
+    min-height: 64px;
     margin: 0 auto;
-    padding: 14px 16px 14px 22px;
+    padding: 8px 28px 8px 16px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 999px;
     background: rgba(16, 18, 14, 0.55);
     backdrop-filter: blur(16px) saturate(1.2);
 }
 .mc-nav.is-solid { background: rgba(13, 15, 11, 0.92); }
-.mc-brand { display: flex; align-items: center; gap: 14px; }
-.mc-brand-mark { width: 52px; height: 52px; object-fit: contain; }
+.mc-brand { display: flex; align-items: center; gap: 10px; }
+.mc-brand-mark { width: 40px; height: 40px; object-fit: contain; }
 .mc-brand-text { display: grid; line-height: 1.05; }
-.mc-brand-text strong { font-size: 26px; font-weight: 800; color: #f2f6ea; }
-.mc-brand-text em { font-size: 14px; font-style: normal; letter-spacing: 0.22em; color: var(--mc-lime); }
-.mc-nav-links { display: flex; flex: 1; justify-content: center; gap: 28px; }
+.mc-brand-text strong { font-size: 20px; font-weight: 800; color: #f2f6ea; }
+.mc-brand-text em { font-size: 11px; font-style: normal; letter-spacing: 0.22em; color: var(--mc-lime); }
+.mc-nav-links { display: flex; flex: 1; justify-content: center; gap: 22px; }
 .mc-nav-links a {
     color: rgba(238, 244, 228, 0.82);
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 650;
     transition: color 0.18s ease, text-shadow 0.18s ease;
 }
@@ -94,7 +96,7 @@ html.mc-auth-open .portal-auth-overlay {
     text-shadow: 0 0 18px rgba(191, 242, 74, 0.45);
 }
 .mc-nav-actions { display: flex; gap: 8px; }
-.mc-btn { min-height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid transparent; font-size: 16px; font-weight: 700; cursor: pointer; }
+.mc-btn { min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid transparent; font-size: 14px; font-weight: 700; cursor: pointer; }
 .mc-nav-start { margin-right: 4px; min-height: 48px; padding: 0 22px; font-size: 18px; }
 .mc-btn-ghost { color: #eef3e6; background: rgba(20, 22, 16, 0.5); border-color: rgba(190, 242, 74, 0.34); }
 .mc-btn-primary { color: #16240a; background: linear-gradient(135deg, #caf75a, #a3e028); }
@@ -748,6 +750,7 @@ html.mc-public-home .workspace-account-popover {
     .mc-hero-banners { height: 220px; }
 }
 @media (max-width: 959px) {
+    .mc-nav { width: calc(100% - 28px); max-width: none; padding: 8px 14px; }
     .mc-hero-inner { padding: 100px 0 220px; }
     .mc-hero-top { display: block; width: calc(100% - 28px); padding-right: 0; }
     .mc-hero-copy { max-width: 100%; margin-bottom: 18px; padding-top: 8px; }

@@ -9,6 +9,7 @@ import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestamps";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
+import { confirmCreateCanvasIfOthersPending } from "@/lib/canvas/confirm-create-canvas";
 import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, forceOverwriteRemoteCanvasSync, loadCanvasProjectForEditing, localSavedRemotePendingMessage, saveRemoteUserDataNow, subscribeAgentCanvasRefresh } from "@/services/user-data-sync";
 import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
@@ -73,7 +74,7 @@ export function useCanvasProjectLifecycle({
     cleanupAssetImages,
     cleanupCanvasFiles,
 }: UseCanvasProjectLifecycleOptions) {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const navigate = useNavigate();
     const hydrated = useCanvasStore((state) => state.hydrated);
     const sessionHydrated = useUserStore((state) => state.hydrated);
@@ -216,11 +217,17 @@ export function useCanvasProjectLifecycle({
     }, [projectId, projectLoaded, updateProject, viewportRef]);
 
     const createAndOpenProject = useCallback(() => {
-        void createCanvasProjectWithRemoteSync(`自由画布 ${useCanvasStore.getState().projects.length + 1}`).then(({ id, syncError }) => {
+        void (async () => {
+            const decision = await confirmCreateCanvasIfOthersPending(modal);
+            if (!decision.proceed) {
+                navigate(`/canvas/${decision.projectId}`);
+                return;
+            }
+            const { id, syncError } = await createCanvasProjectWithRemoteSync(`自由画布 ${useCanvasStore.getState().projects.length + 1}`);
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
             navigate(`/canvas/${id}`);
-        });
-    }, [message, navigate]);
+        })();
+    }, [message, modal, navigate]);
 
     const deleteCurrentProject = useCallback(async () => {
         const drawingIds = nodesRef.current.flatMap((node) => node.type === "drawing" && node.metadata?.drawingId ? [node.metadata.drawingId] : []);

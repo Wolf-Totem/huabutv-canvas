@@ -240,7 +240,7 @@ export function resetRemoteUserDataSync() {
     acknowledgedAssets.clear();
     acknowledgedProjects.clear();
     if (syncTimer) {
-        window.clearTimeout(syncTimer);
+        globalThis.clearTimeout(syncTimer);
         syncTimer = null;
     }
     syncQueued = false;
@@ -272,11 +272,11 @@ export function scheduleRemoteUserDataSync() {
         syncQueued = true;
         return;
     }
-    if (syncTimer) window.clearTimeout(syncTimer);
-    syncTimer = window.setTimeout(() => {
+    if (syncTimer) globalThis.clearTimeout(syncTimer);
+    syncTimer = globalThis.setTimeout(() => {
         syncTimer = null;
         void saveRemoteUserDataNow().catch((error) => console.warn("云端自动同步失败", error));
-    }, 1200);
+    }, 1200) as unknown as number;
 }
 
 export function formatLocalSavedRemotePending(localAction: string, error: unknown): string {
@@ -290,12 +290,54 @@ export function localSavedRemotePendingMessage(localAction: string, error: unkno
     return formatLocalSavedRemotePending(localAction, error);
 }
 
+export function listPendingCanvasSyncProjects() {
+    const syncingIds = new Set(Object.keys(useSyncProgressStore.getState().syncingProjects));
+    const pending = useCanvasStore.getState().projects.filter((project) => {
+        if (syncingIds.has(project.id)) return true;
+        if (!activeRemoteUserId || remoteUserDataPhase !== "ready") return false;
+        return !sameEntitySnapshot(acknowledgedProjects.get(project.id), project);
+    });
+    return pending.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt) || right.id.localeCompare(left.id));
+}
+
+/** 只把这一张画布推到云端，不夹带账号里其它未同步画布/素材。旧数据交给后台 debounce 继续传。 */
+export async function saveRemoteCanvasProjectNow(projectId: string) {
+    const epoch = sessionEpoch;
+    if (!activeRemoteUserId) throw new Error("尚未建立云端同步会话");
+    requireRemoteUserDataBaseline();
+    await waitForRemoteProjectLoads();
+    await withRemoteUserDataSyncExclusive(async () => {
+        if (epoch !== sessionEpoch) throw new Error("账号已切换，已停止旧会话保存");
+        requireRemoteUserDataBaseline();
+        const project = useCanvasStore.getState().projects.find((item) => item.id === projectId);
+        if (!project) throw new Error("画布不存在");
+        if (sameEntitySnapshot(acknowledgedProjects.get(projectId), project) && verifiedProjects.has(projectId)) return;
+        repairMissingCanvasAssets(new Set([projectId]), incrementalSession);
+        const latest = useCanvasStore.getState().projects.find((item) => item.id === projectId) || project;
+        const referencedIds = collectAssetIds(latest);
+        const uploaded = new Map<string, string>();
+        const dirtyAssets = useAssetStore.getState().assets.filter((asset) => referencedIds.has(asset.id) && !sameEntitySnapshot(acknowledgedAssets.get(asset.id), asset));
+        for (const source of dirtyAssets) {
+            const remotePayload = await ensureRemoteResourceReferences(assetForRemoteSync(source), uploaded);
+            await upsertRemoteAsset(remotePayload);
+            acknowledgedAssets.set(source.id, source);
+            verifiedAssets.add(source.id);
+        }
+        const remotePayload = await ensureRemoteResourceReferences(latest, uploaded);
+        await upsertRemoteCanvasProject(sanitizeCanvasProjectForRemoteSync(remotePayload));
+        acknowledgedProjects.set(projectId, latest);
+        verifiedProjects.add(projectId);
+        void appQueryClient.invalidateQueries({ queryKey: ["canvas-library"] });
+    });
+}
+
 export async function createCanvasProjectWithRemoteSync(title: string, projectId?: string, initialContent?: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId">>) {
     const id = useCanvasStore.getState().createProject(title, projectId);
     if (initialContent) useCanvasStore.getState().updateProject(id, initialContent);
     if (!activeRemoteUserId) return { id, syncError: new Error("尚未建立云端同步会话") };
     try {
-        await saveRemoteUserDataNow();
+        await saveRemoteCanvasProjectNow(id);
+        scheduleRemoteUserDataSync();
         return { id };
     } catch (syncError) {
         scheduleRemoteUserDataSync();

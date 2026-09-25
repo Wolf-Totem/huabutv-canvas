@@ -20,6 +20,7 @@ import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { saveCanvasDrawing, type CanvasDrawingRenderDraft } from "@/lib/canvas/canvas-drawing-storage";
+import { confirmCreateCanvasIfOthersPending } from "@/lib/canvas/confirm-create-canvas";
 import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, loadCanvasProjectForEditing, saveRemoteUserDataNow, scheduleRemoteUserDataSync } from "@/services/user-data-sync";
 import { listRemoteCanvasProjectsPage, type CanvasLibrarySummary } from "@/services/api/user-data";
 import { useUserStore } from "@/stores/use-user-store";
@@ -34,7 +35,7 @@ import { useAppearanceStore } from "@/stores/use-appearance-store";
 const CanvasDeleteProjectsDialog = lazy(() => import("@/components/canvas/canvas-delete-projects-dialog").then((module) => ({ default: module.CanvasDeleteProjectsDialog })));
 
 export default function CanvasPage() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -95,10 +96,16 @@ export default function CanvasPage() {
         [forwardedQuery, navigate, preloadProject],
     );
     const createAndEnter = () => {
-        void createCanvasProjectWithRemoteSync(`自由画布 ${projects.length + 1}`).then(({ id, syncError }) => {
+        void (async () => {
+            const decision = await confirmCreateCanvasIfOthersPending(modal);
+            if (!decision.proceed) {
+                enterProject(decision.projectId);
+                return;
+            }
+            const { id, syncError } = await createCanvasProjectWithRemoteSync(`自由画布 ${useCanvasStore.getState().projects.length + 1}`);
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
             enterProject(id);
-        });
+        })();
     };
     const filteredProjects = useMemo(() => {
         if (userId) return projects;
@@ -392,11 +399,19 @@ export default function CanvasPage() {
             enterProject(projects[0].id);
             return;
         }
-        void createCanvasProjectWithRemoteSync(`自由画布 ${projects.length + 1}`).then(({ id, syncError }) => {
+        void (async () => {
+            if (mode !== "handoff") {
+                const decision = await confirmCreateCanvasIfOthersPending(modal);
+                if (!decision.proceed) {
+                    enterProject(decision.projectId);
+                    return;
+                }
+            }
+            const { id, syncError } = await createCanvasProjectWithRemoteSync(`自由画布 ${useCanvasStore.getState().projects.length + 1}`);
             if (syncError) message.warning(syncError instanceof Error ? `画布已在本地创建，云端同步失败：${syncError.message}` : "画布已在本地创建，云端同步失败");
             enterProject(id);
-        });
-    }, [hydrated, message, mode, projects, sessionHydrated, userId, libraryQuery.isSuccess]);
+        })();
+    }, [enterProject, hydrated, message, modal, mode, projects, sessionHydrated, userId, libraryQuery.isSuccess]);
 
     if (hydrated && !libraryQuery.isError && (mode === "new" || mode === "recent" || mode === "handoff")) return <main className="flex h-full items-center justify-center bg-background text-sm text-stone-500">正在打开画布...</main>;
 
