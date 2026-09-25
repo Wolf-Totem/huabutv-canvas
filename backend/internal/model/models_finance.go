@@ -74,6 +74,7 @@ type BillingOrder struct {
 	RefundedAt                   *time.Time    `json:"refundedAt"`
 	CreatedAt                    time.Time     `json:"createdAt" gorm:"index"`
 	UpdatedAt                    time.Time     `json:"updatedAt"`
+	BillingCostSnapshot
 }
 
 type RedeemBatch struct {

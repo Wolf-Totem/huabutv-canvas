@@ -14,13 +14,14 @@ test("portal home is the site root for every visitor and create lives at /create
     expect(guest).toContain("ManchuangHomePage");
     expect(guest).not.toContain("getWelcomeAvailability");
     expect(guest).not.toContain("welcomeReady");
-    expect(html).toContain("mc-boot-billboard");
+    expect(html).toContain("mc-boot");
+    expect(html).not.toContain("mc-boot-billboard");
     expect(html).not.toContain("portal-boot");
     expect(home).toContain("mc-hero-showcase");
     expect(home).toContain("mc-hero-create");
     expect(home).toContain("openAuth({ tab: \"login\" })");
     expect(home).toContain("mc-hero-preview");
-    expect(home).not.toContain("HeroRail");
+    expect(home).toContain("HeroRail");
     expect(home).toContain("openAuth");
     expect(home.indexOf("mc-nav-start")).toBeLessThan(home.indexOf("LANDING_NAV.map"));
     expect(home).toContain('openWorkspace("/create#plaza")');
@@ -29,6 +30,14 @@ test("portal home is the site root for every visitor and create lives at /create
     expect(router).toContain("deferred(<CreatePage />)");
     expect(router).toContain('to="/?auth=login"');
     expect(main).not.toContain("peekAuthUser");
+});
+
+test("home posters copy the reference site landscape billboard not a square", async () => {
+    const css = await Bun.file(new URL("../src/pages/public-home/manchuang-home.css", import.meta.url)).text();
+    expect(css).toContain("aspect-ratio: 5 / 2.8");
+    expect(css).toContain("clamp(340px, 34.72vw, 500px)");
+    expect(css).not.toContain("aspect-ratio: 1 / 1");
+    expect(css).not.toContain("aspect-ratio: 1;");
 });
 
 test("home posters are standalone banners not plaza works", async () => {
@@ -70,6 +79,9 @@ test("create page keeps the composer and names the feed 作品广场 with work t
     expect(featured).toContain(">作品广场<");
     expect(featured).toContain("WORK_TAGS");
     expect(featured).toContain("plaza-feed-grid");
+    expect(featured).toContain("listPlazaWorks");
+    expect(featured).toContain("allowProcessView");
+    expect(featured).not.toContain("featuredCanvases()");
     expect(featured).toContain("previewUrl");
     expect(router).toContain('path: "/plaza"');
     expect(router).toContain('path: "/plaza/:slug"');

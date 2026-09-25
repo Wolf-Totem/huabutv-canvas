@@ -37,7 +37,8 @@ import { modelCapabilityConfigFor, normalizeVideoValue, videoDurationOptions, ty
 import { mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import type { Skill } from "@/services/api/skills";
 import { resolveResourceUrl } from "@/services/api/resources";
-import { featuredCanvases, WORK_TAGS, type FeaturedCanvas } from "@/lib/plaza-catalog";
+import { watchFromPlazaWork, WORK_TAGS, type FeaturedCanvas } from "@/lib/plaza-catalog";
+import { listPlazaWorks } from "@/services/api/plaza";
 import "@/pages/plaza/plaza-watch.css";
 import { ossProcessedImage } from "@/lib/oss-image";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
@@ -809,8 +810,22 @@ export function CreationFeaturedWorks({ onStartPrompt: _onStartPrompt }: { onSta
     const [filter, setFilter] = useState<"all" | CreationMode | string>("all");
     const [limit, setLimit] = useState(16);
     const sentinelRef = useRef<HTMLDivElement>(null);
-    const source = featuredCanvases();
+    const [source, setSource] = useState<FeaturedCanvas[]>([]);
     const tags = WORK_TAGS;
+    useEffect(() => {
+        let active = true;
+        listPlazaWorks({ page: 1, pageSize: 80, sort: "hot" })
+            .then((list) => {
+                if (!active) return;
+                setSource(list.works.filter((work) => work.allowProcessView).map(watchFromPlazaWork));
+            })
+            .catch(() => {
+                if (active) setSource([]);
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
     const filtered = source.filter((item) => {
         if (filter === "all") return true;
         if (filter === "video" || filter === "image" || filter === "text") return item.mode === filter;

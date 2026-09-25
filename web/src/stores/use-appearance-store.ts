@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { CINEMATIC_SKINS } from "@/lib/cinematic-skins";
 import { DEFAULT_HOME_CTA_HREF, DEFAULT_HOME_CTA_LABEL, DEFAULT_HOME_NAV_ITEMS, normalizeHomeNavItems } from "@/lib/home-navigation";
 import { DEFAULT_MANCHUANG_LANDING, mergeManchuangLanding } from "@/lib/manchuang-landing";
+import { DEFAULT_CANVAS_APPEARANCE } from "@/lib/canvas/agent-appearance";
 import type { PublicAppearance } from "@/services/api/appearance";
 import { applySkinTheme, cinematicSkinDefinition, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
 
@@ -36,6 +37,7 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     homeCtaLabel: DEFAULT_HOME_CTA_LABEL,
     homeCtaHref: DEFAULT_HOME_CTA_HREF,
     landing: DEFAULT_MANCHUANG_LANDING,
+    canvas: DEFAULT_CANVAS_APPEARANCE,
     logoConfigured: true,
     darkLogoConfigured: true,
     authVideoConfigured: false,
@@ -102,6 +104,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         homeCtaLabel: normalizeAppearanceCopy(value?.homeCtaLabel, DEFAULT_HOME_CTA_LABEL) || DEFAULT_HOME_CTA_LABEL,
         homeCtaHref: normalizeAppearanceCopy(value?.homeCtaHref, DEFAULT_HOME_CTA_HREF) || DEFAULT_HOME_CTA_HREF,
         landing: mergeManchuangLanding(value?.landing),
+        canvas: value?.canvas?.avatarType ? { ...DEFAULT_CANVAS_APPEARANCE, ...value.canvas } : DEFAULT_CANVAS_APPEARANCE,
         logoConfigured: Boolean(value?.logoConfigured),
         darkLogoConfigured: Boolean(value?.darkLogoConfigured),
         authVideoConfigured: customVideo,

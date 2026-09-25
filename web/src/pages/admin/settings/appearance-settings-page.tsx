@@ -15,7 +15,8 @@ import { HomeNavSetting } from "@/pages/admin/settings/components/home-nav-setti
 import { WelcomeSetting } from "@/pages/admin/settings/components/welcome-setting";
 import { IpLocalePromptSetting } from "@/pages/admin/settings/components/ip-locale-prompt-setting";
 import { deleteAdminResources } from "@/services/api/admin-storage";
-import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
+import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, uploadLive2DModel, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
+import { DEFAULT_CANVAS_APPEARANCE } from "@/lib/canvas/agent-appearance";
 import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
 
 type DraftFiles = Record<AppearanceAssetSlot, File | null>;
@@ -420,6 +421,7 @@ export default function AppearanceSettingsPage() {
                 homeCtaHref: nextHomeCtaHref,
                 landing,
                 landingVideoResourceId: ids["landing-video"],
+                canvas: setting.canvas,
             });
             applySetting(updated);
             commitPublicAppearance(updated.public);
@@ -627,13 +629,58 @@ export default function AppearanceSettingsPage() {
                                 ))}
                                 <Button size="small" disabled={saving || refreshing || restoring || landing.heroShowcase.banners.length >= 12} onClick={() => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: [...current.heroShowcase.banners, { id: `banner-${Date.now()}`, title: "", imageUrl: "", href: "/create" }] } }))}>添加海报</Button>
                                 {landing.heroShowcase.tiles.map((item, index) => (
-                                    <div key={`${item.id}-${index}`} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_1fr]">
+                                    <div key={`${item.id}-${index}`} className="grid gap-2 rounded-lg border border-border p-3">
+                                        <span className="text-xs text-foreground/55">区域{["一", "二", "三", "四"][index] || index + 1} · {item.title || "入口"}</span>
+                                        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_1fr]">
                                         <Input value={item.title} maxLength={24} placeholder="入口标题" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, title: event.target.value } : row) } }))} />
                                         <Input value={item.subtitle} maxLength={80} placeholder="入口说明" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, subtitle: event.target.value } : row) } }))} />
                                         <Input value={item.badge || ""} maxLength={12} placeholder="角标" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, badge: event.target.value } : row) } }))} />
                                         <Input value={item.href} maxLength={300} placeholder="链接" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, href: event.target.value } : row) } }))} />
+                                        </div>
                                     </div>
                                 ))}
+                                <div className="rounded-xl border border-border bg-[#111] p-4 text-white">
+                                    <p className="mb-3 text-xs text-white/50">首页模块预览</p>
+                                    <div className="grid gap-3 lg:grid-cols-[1.15fr_1fr]">
+                                        <div className="flex min-h-[120px] items-center gap-4 rounded-2xl bg-[#1c1c1c] px-5">
+                                            <span className="grid size-14 place-items-center rounded-2xl bg-[#3b82f6] text-3xl">+</span>
+                                            <span>
+                                                <strong className="block text-[18px]">{landing.heroShowcase.create.title || "开始创作"}</strong>
+                                                <em className="mt-1 block text-[13px] not-italic text-white/55">{landing.heroShowcase.create.subtitle}</em>
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            {landing.heroShowcase.tiles.map((tile, index) => (
+                                                <div key={tile.id} className="relative min-h-[72px] rounded-2xl px-3.5 py-3" style={{ background: ["linear-gradient(135deg,#4b2a78,#2a1748)", "linear-gradient(135deg,#5a3a12,#2c1c0c)", "linear-gradient(135deg,#3a2460,#1c1238)", "linear-gradient(135deg,#163a58,#0d2438)"][index] }}>
+                                                    {tile.badge ? <b className="absolute right-2 top-2 rounded-md bg-white/15 px-1.5 text-[10px]">{tile.badge}</b> : null}
+                                                    <strong className="block text-[15px]">{tile.title}</strong>
+                                                    <em className="mt-1 block text-[12px] not-italic text-white/60">{tile.subtitle}</em>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-3">
+                                <strong className="text-sm">画布 Agent 形象</strong>
+                                <p className="text-xs text-foreground/55">可继续使用光球，或导入 Live2D ZIP（model3.json + moc3 + PNG）。未部署 Cubism Core 时前台自动回退光球。</p>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <Button size="small" disabled={saving} onClick={() => void updateAdminAppearance({ canvas: { ...DEFAULT_CANVAS_APPEARANCE, ...(setting.canvas || {}), avatarType: "orb" } }).then(applySetting)}>使用光球</Button>
+                                    <Button size="small" disabled={saving} onClick={() => document.getElementById("live2d-zip")?.click()}>导入 Live2D ZIP</Button>
+                                    <input id="live2d-zip" type="file" accept=".zip,application/zip" className="hidden" onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        event.target.value = "";
+                                        if (!file) return;
+                                        void uploadLive2DModel(file).then(async (model) => {
+                                            const updated = await updateAdminAppearance({
+                                                canvas: { ...DEFAULT_CANVAS_APPEARANCE, ...(setting.canvas || {}), avatarType: "live2d", live2dResourceId: model.resourceId, live2dEntry: model.entry },
+                                            });
+                                            applySetting(updated);
+                                            message.success("Live2D 模型已导入");
+                                        }).catch((error) => message.error(error instanceof Error ? error.message : "导入失败"));
+                                    }} />
+                                    {setting.canvas?.avatarType === "live2d" ? <span className="text-xs text-foreground/55">已启用 {setting.canvas.live2dEntry || "Live2D"}</span> : <span className="text-xs text-foreground/55">当前：光球</span>}
+                                </div>
                             </div>
                             <div className="space-y-3">
                                 <strong className="text-sm">漫创未登录首页内容</strong>

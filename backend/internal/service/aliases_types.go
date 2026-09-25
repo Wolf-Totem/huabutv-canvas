@@ -22,6 +22,8 @@ type (
 	APICallLogQuery                        = app.APICallLogQuery
 	AccountFileStorageUsage                = app.AccountFileStorageUsage
 	AdminAppearanceSetting                 = app.AdminAppearanceSetting
+	CanvasAppearance                       = app.CanvasAppearance
+	Live2DImport                           = app.Live2DImport
 	AdminAuditPage                         = app.AdminAuditPage
 	AdminCacheClearGroupResult             = app.AdminCacheClearGroupResult
 	AdminCacheClearRequest                 = app.AdminCacheClearRequest

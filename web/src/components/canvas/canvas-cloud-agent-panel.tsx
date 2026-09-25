@@ -9,6 +9,8 @@ import { nanoid } from "nanoid";
 
 import { ModelPicker } from "@/components/model-picker";
 import { FluidOrb } from "@/components/ui/fluid-orb";
+import { Live2DAvatar } from "@/components/canvas/live2d-avatar";
+import { apiBaseURL } from "@/services/api/request";
 import { markdownPlainText } from "@/lib/markdown-plain-text";
 import { cn } from "@/lib/utils";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
@@ -813,6 +815,15 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, re
     );
 }
 
+function AgentLauncherAvatar() {
+    const canvas = useAppearanceStore((state) => state.appearance.canvas);
+    if (canvas?.avatarType === "live2d" && canvas.live2dResourceId && canvas.live2dEntry) {
+        const url = `${apiBaseURL.replace(/\/$/, "")}/public/appearance/live2d/${encodeURIComponent(canvas.live2dResourceId)}/${canvas.live2dEntry.split("/").map(encodeURIComponent).join("/")}`;
+        return <Live2DAvatar url={url} width={62} height={62} fallback={<FluidOrb size={62} color="#7164f6" />} />;
+    }
+    return <FluidOrb size={62} color="#7164f6" />;
+}
+
 function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; onOpen: () => void }) {
     return (
         <motion.button
@@ -827,7 +838,7 @@ function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, onO
             whileTap={reducedMotion ? undefined : { scale: 0.96 }}
             transition={{ duration: reducedMotion ? 0 : 0.18 }}
         >
-            <FluidOrb size={62} color="#7164f6" />
+            <AgentLauncherAvatar />
             <span className="canvas-agent-launcher-label">Agent</span>
             <span className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
             {approvalPending ? <span className="canvas-agent-launcher-badge">待审批</span> : null}

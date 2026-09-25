@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { LANDING_NAV, mergeManchuangLanding, type LandingHeroShowcase } from "@/lib/manchuang-landing";
+import { LANDING_NAV, mergeManchuangLanding, type LandingHeroShowcase, type LandingRailCard } from "@/lib/manchuang-landing";
+import { listPlazaWorks } from "@/services/api/plaza";
 import { ossProcessedImage } from "@/lib/oss-image";
 import { DEFAULT_HOME_CTA_HREF, DEFAULT_HOME_CTA_LABEL } from "@/lib/home-navigation";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
@@ -45,6 +46,28 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
     const [activeCap, setActiveCap] = useState(0);
     const [solidNav, setSolidNav] = useState(false);
     const [activeSection, setActiveSection] = useState("top");
+    const [rail, setRail] = useState<LandingRailCard[]>(landing.rail);
+
+    useEffect(() => {
+        let active = true;
+        listPlazaWorks({ page: 1, pageSize: 40, sort: "hot" })
+            .then((list) => {
+                if (!active) return;
+                const items = list.works
+                    .filter((work) => work.allowProcessView && work.coverUrl)
+                    .map((work) => ({
+                        id: work.slug,
+                        imageUrl: work.coverUrl,
+                        previewUrl: work.watchUrl || "",
+                        label: work.title,
+                    }));
+                if (items.length) setRail(items);
+            })
+            .catch(() => undefined);
+        return () => {
+            active = false;
+        };
+    }, []);
 
     useLayoutEffect(() => {
         document.documentElement.classList.add("mc-public-home");
@@ -223,6 +246,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                         }}
                     />
                 </div>
+                <HeroRail items={rail} onOpen={(id) => openWorkspace(`/plaza/${encodeURIComponent(id)}`)} />
             </section>
 
             <section className="mc-section mc-canvas" id="product">
@@ -422,8 +446,11 @@ function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onO
                     {showcase.tiles.map((tile) => (
                         <button key={tile.id} type="button" className="mc-hero-tile" onClick={() => onOpen(tile.href)}>
                             {tile.badge ? <b>{tile.badge}</b> : null}
-                            <strong>{tile.title}</strong>
-                            <em>{tile.subtitle}</em>
+                            <span>
+                                <strong>{tile.title}</strong>
+                                <em>{tile.subtitle}</em>
+                            </span>
+                            <i className={`mc-hero-tile-icon is-${tile.id}`} aria-hidden="true" />
                         </button>
                     ))}
                 </div>
@@ -432,4 +459,126 @@ function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onO
     );
 }
 
+function neighborLift(index: number, hover: number) {
+    if (hover < 0) return 0;
+    const dist = Math.abs(index - hover);
+    if (dist === 0) return 1;
+    if (dist === 1) return 0.62;
+    if (dist === 2) return 0.26;
+    return 0;
+}
+
+function HeroRail({ items, onOpen }: { items: LandingRailCard[]; onOpen?: (id: string) => void }) {
+    const track = useRef<HTMLDivElement>(null);
+    const looped = useMemo(() => [0, 1, 2].flatMap((copy) => items.map((item) => ({ ...item, key: `${copy}-${item.id}` }))), [items]);
+
+    useEffect(() => {
+        const root = track.current;
+        if (!root) return;
+        const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const cards = Array.from(root.querySelectorAll<HTMLElement>(".mc-hero-card"));
+        if (!cards.length) return;
+        let width = cards[0].offsetWidth || 196;
+        let step = width + 18;
+        let total = cards.length * step;
+        const measure = () => {
+            width = cards[0].offsetWidth || 196;
+            step = width + 18;
+            total = cards.length * step;
+        };
+        const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+        observer?.observe(root);
+        let offset = 0;
+        let hover = -1;
+        const lifts = Array(cards.length).fill(0);
+        const enter: Array<() => void> = [];
+        const leave: Array<() => void> = [];
+        cards.forEach((card, index) => {
+            const onEnter = () => {
+                hover = index;
+                const url = card.getAttribute("data-preview") || "";
+                if (!url) return;
+                let video = card.querySelector("video");
+                if (!video) {
+                    video = document.createElement("video");
+                    video.className = "mc-hero-preview";
+                    video.muted = true;
+                    video.loop = true;
+                    video.playsInline = true;
+                    video.setAttribute("playsinline", "");
+                    video.preload = "auto";
+                    video.src = url;
+                    card.appendChild(video);
+                }
+                void video.play().catch(() => undefined);
+            };
+            const onLeave = () => {
+                if (hover === index) hover = -1;
+                const video = card.querySelector("video");
+                if (video) {
+                    video.pause();
+                    video.removeAttribute("src");
+                    video.load();
+                    video.remove();
+                }
+            };
+            card.addEventListener("pointerenter", onEnter);
+            card.addEventListener("pointerleave", onLeave);
+            enter.push(onEnter);
+            leave.push(onLeave);
+        });
+        let frame = 0;
+        const tick = () => {
+            const view = root.clientWidth || window.innerWidth;
+            const center = view / 2;
+            if (!reduced && hover < 0) {
+                offset += 0.45;
+                if (offset >= total) offset -= total;
+            }
+            cards.forEach((card, index) => {
+                let x = (index * step + offset) % total;
+                if (x < 0) x += total;
+                x -= step;
+                const mid = x + width / 2;
+                const p = Math.max(-1.5, Math.min(1.5, (mid - center) / (view * 0.6)));
+                const arc = 132 * (1 - p * p);
+                const target = neighborLift(index, hover);
+                lifts[index] += (target - lifts[index]) * 0.18;
+                const lift = lifts[index];
+                const y = -arc - 52 * lift;
+                const scale = 1 + 0.16 * lift;
+                const rot = p * 11 * (1 - lift);
+                card.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${rot.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
+                card.style.zIndex = String(Math.round(40 + lift * 60 - Math.abs(p) * 18));
+                const dist = hover < 0 ? 99 : Math.abs(index - hover);
+                card.classList.toggle("is-up", dist === 0 && hover >= 0);
+                card.classList.toggle("is-near", dist === 1 && hover >= 0);
+                card.classList.toggle("is-soft", dist === 2 && hover >= 0);
+            });
+            frame = window.requestAnimationFrame(tick);
+        };
+        tick();
+        return () => {
+            window.cancelAnimationFrame(frame);
+            observer?.disconnect();
+            cards.forEach((card, index) => {
+                card.removeEventListener("pointerenter", enter[index]);
+                card.removeEventListener("pointerleave", leave[index]);
+            });
+        };
+    }, [looped]);
+
+    if (!items.length) return null;
+    return (
+        <div className="mc-hero-rail" aria-hidden="true">
+            <div className="mc-hero-rail-track" ref={track}>
+                {looped.map((item) => (
+                    <div key={item.key} className="mc-hero-card" data-preview={item.previewUrl || undefined} title={item.label || undefined} role="button" tabIndex={0} onClick={() => onOpen?.(item.id)}>
+                        <img src={ossProcessedImage(item.imageUrl, 480)} alt="" loading="lazy" draggable={false} />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
 

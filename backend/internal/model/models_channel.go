@@ -87,6 +87,7 @@ type ChannelModelPriceTier struct {
 	PriceConfigured              bool              `json:"priceConfigured" gorm:"index"`
 	Enabled                      bool              `json:"enabled" gorm:"index"`
 	PriceVersion                 int64             `json:"priceVersion"`
+	CostPricing                  CreditCostPricing `json:"costPricing" gorm:"embedded;embeddedPrefix:cost_"`
 	CreatedAt                    time.Time         `json:"createdAt"`
 	UpdatedAt                    time.Time         `json:"updatedAt"`
 	DeletedAt                    gorm.DeletedAt    `json:"-" gorm:"index"`

@@ -1,12 +1,30 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 
 import { ossProcessedImage } from "@/lib/oss-image";
-import { featuredCanvases, PLAZA_DEMO_AUTHOR } from "@/lib/plaza-catalog";
+import { PLAZA_DEMO_AUTHOR, watchFromPlazaWork, type FeaturedCanvas } from "@/lib/plaza-catalog";
+import { listPlazaWorks } from "@/services/api/plaza";
 import "./plaza-watch.css";
 
 export default function PlazaProfilePage() {
     const { userId = PLAZA_DEMO_AUTHOR.id } = useParams();
-    const works = featuredCanvases();
+    const [works, setWorks] = useState<FeaturedCanvas[]>([]);
+    useEffect(() => {
+        let active = true;
+        listPlazaWorks({ page: 1, pageSize: 80, sort: "hot" })
+            .then((list) => {
+                if (!active) return;
+                const all = list.works.filter((work) => work.allowProcessView).map(watchFromPlazaWork);
+                const mine = all.filter((item) => !userId || item.authorId === userId || userId === PLAZA_DEMO_AUTHOR.id || userId === "featured");
+                setWorks(mine.length ? mine : all);
+            })
+            .catch(() => {
+                if (active) setWorks([]);
+            });
+        return () => {
+            active = false;
+        };
+    }, [userId]);
     const isDemo = !userId || userId === PLAZA_DEMO_AUTHOR.id || userId === "featured" || works.some((item) => item.authorId === userId);
     const name = isDemo ? PLAZA_DEMO_AUTHOR.name : userId;
     const likes = works.reduce((sum, item) => sum + (item.likeCount || 0), 0);

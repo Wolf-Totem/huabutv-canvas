@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 42
+const CurrentSchemaVersion int64 = 43
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -101,6 +101,7 @@ var schemaMigrations = []migration{
 	{version: 40, name: "streamer_wallet_payout_share", checksum: "sha256:streamer-wallet-payout-share-v40-20260924", apply: migrateSchemaV40},
 	{version: 41, name: "plaza_community", checksum: "sha256:plaza-community-v41-20260924", apply: migrateSchemaV41},
 	{version: 42, name: "plaza_external_cover", checksum: "sha256:plaza-external-cover-v42-20260925", apply: migrateSchemaV42},
+	{version: 43, name: "channel_model_cost_pricing", checksum: "sha256:channel-model-cost-pricing-v43-20260925", apply: migrateSchemaV43},
 }
 
 func acknowledgeExistingSchema(_ *gorm.DB) error {
@@ -109,6 +110,13 @@ func acknowledgeExistingSchema(_ *gorm.DB) error {
 
 func migrateSchemaV42(tx *gorm.DB) error {
 	return tx.AutoMigrate(&model.PlazaWork{})
+}
+
+func migrateSchemaV43(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.ChannelModelPriceTier{}); err != nil {
+		return err
+	}
+	return tx.AutoMigrate(&model.BillingOrder{})
 }
 
 func migrateSchemaV14(tx *gorm.DB) error {

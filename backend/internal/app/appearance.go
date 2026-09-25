@@ -24,8 +24,8 @@ import (
 const appearanceSettingKey = "appearance"
 
 const (
-	AppearanceAssetLogo     = "logo"
-	AppearanceAssetDarkLogo = "logo-dark"
+	AppearanceAssetLogo         = "logo"
+	AppearanceAssetDarkLogo     = "logo-dark"
 	AppearanceAssetVideo        = "video"
 	AppearanceAssetPoster       = "poster"
 	AppearanceAssetLandingVideo = "landing-video"
@@ -51,33 +51,34 @@ const (
 )
 
 type AppearanceSetting struct {
-	SchemaVersion             int                   `json:"schemaVersion"`
-	BrandName                 string                `json:"brandName"`
-	BrandSlug                 string                `json:"brandSlug"`
-	AuthHeroTitle             string                `json:"authHeroTitle"`
-	AuthHeroDescription       string                `json:"authHeroDescription"`
-	LogoResourceID            string                `json:"logoResourceId"`
-	DarkLogoResourceID        string                `json:"darkLogoResourceId"`
-	LogoFrameEnabled          bool                  `json:"logoFrameEnabled"`
-	AuthVideoResourceID       string                `json:"authVideoResourceId"`
-	AuthVideoPosterResourceID string                `json:"authVideoPosterResourceId"`
-	AuthVideoAutoplay         bool                  `json:"authVideoAutoplay"`
-	SkinID                    string                `json:"skinId"`
-	SkinThemes                []AppearanceSkinTheme `json:"skinThemes"`
-	EnabledSkins              []string              `json:"enabledSkins"`
-	DefaultMode               string                `json:"defaultMode"`
-	SEOTitle                  string                `json:"seoTitle"`
-	SEODescription            string                `json:"seoDescription"`
-	SEOKeywords               string                `json:"seoKeywords"`
-	FooterCopyright           string                `json:"footerCopyright"`
-	ICPFilingEnabled          bool                  `json:"icpFilingEnabled"`
-	ICPFilingNumber           string                `json:"icpFilingNumber"`
-	PublicHomepage            string                `json:"publicHomepage"`
+	SchemaVersion             int                     `json:"schemaVersion"`
+	BrandName                 string                  `json:"brandName"`
+	BrandSlug                 string                  `json:"brandSlug"`
+	AuthHeroTitle             string                  `json:"authHeroTitle"`
+	AuthHeroDescription       string                  `json:"authHeroDescription"`
+	LogoResourceID            string                  `json:"logoResourceId"`
+	DarkLogoResourceID        string                  `json:"darkLogoResourceId"`
+	LogoFrameEnabled          bool                    `json:"logoFrameEnabled"`
+	AuthVideoResourceID       string                  `json:"authVideoResourceId"`
+	AuthVideoPosterResourceID string                  `json:"authVideoPosterResourceId"`
+	AuthVideoAutoplay         bool                    `json:"authVideoAutoplay"`
+	SkinID                    string                  `json:"skinId"`
+	SkinThemes                []AppearanceSkinTheme   `json:"skinThemes"`
+	EnabledSkins              []string                `json:"enabledSkins"`
+	DefaultMode               string                  `json:"defaultMode"`
+	SEOTitle                  string                  `json:"seoTitle"`
+	SEODescription            string                  `json:"seoDescription"`
+	SEOKeywords               string                  `json:"seoKeywords"`
+	FooterCopyright           string                  `json:"footerCopyright"`
+	ICPFilingEnabled          bool                    `json:"icpFilingEnabled"`
+	ICPFilingNumber           string                  `json:"icpFilingNumber"`
+	PublicHomepage            string                  `json:"publicHomepage"`
 	HomeNavItems              []AppearanceHomeNavItem `json:"homeNavItems,omitempty"`
 	HomeCtaLabel              string                  `json:"homeCtaLabel,omitempty"`
 	HomeCtaHref               string                  `json:"homeCtaHref,omitempty"`
 	Landing                   json.RawMessage         `json:"landing,omitempty"`
 	LandingVideoResourceID    string                  `json:"landingVideoResourceId,omitempty"`
+	Canvas                    CanvasAppearance        `json:"canvas"`
 }
 
 type AppearanceHomeNavItem struct {
@@ -87,41 +88,42 @@ type AppearanceHomeNavItem struct {
 }
 
 type PublicAppearanceSetting struct {
-	SchemaVersion             int                 `json:"schemaVersion"`
-	BrandName                 string              `json:"brandName"`
-	BrandSlug                 string              `json:"brandSlug"`
-	AuthHeroTitle             string              `json:"authHeroTitle"`
-	AuthHeroDescription       string              `json:"authHeroDescription"`
-	LogoURL                   string              `json:"logoUrl"`
-	DarkLogoURL               string              `json:"darkLogoUrl"`
-	LogoFrameEnabled          bool                `json:"logoFrameEnabled"`
-	AuthVideoURL              string              `json:"authVideoUrl"`
-	AuthVideoPosterURL        string              `json:"authVideoPosterUrl"`
-	AuthVideoAutoplay         bool                `json:"authVideoAutoplay"`
-	SkinID                    string                `json:"skinId"`
-	ActiveSkin                AppearanceSkinTheme   `json:"activeSkin"`
-	EnabledSkins              []AppearanceSkinTheme `json:"enabledSkins"`
-	WorkspaceSkins            []AppearanceSkinTheme `json:"workspaceSkins"`
-	DefaultMode               string                `json:"defaultMode"`
-	SEOTitle                  string              `json:"seoTitle"`
-	SEODescription            string              `json:"seoDescription"`
-	SEOKeywords               string              `json:"seoKeywords"`
-	FooterCopyright           string              `json:"footerCopyright"`
-	ICPFilingEnabled          bool                `json:"icpFilingEnabled"`
-	ICPFilingNumber           string              `json:"icpFilingNumber"`
-	PublicHomepage            string              `json:"publicHomepage"`
+	SchemaVersion             int                     `json:"schemaVersion"`
+	BrandName                 string                  `json:"brandName"`
+	BrandSlug                 string                  `json:"brandSlug"`
+	AuthHeroTitle             string                  `json:"authHeroTitle"`
+	AuthHeroDescription       string                  `json:"authHeroDescription"`
+	LogoURL                   string                  `json:"logoUrl"`
+	DarkLogoURL               string                  `json:"darkLogoUrl"`
+	LogoFrameEnabled          bool                    `json:"logoFrameEnabled"`
+	AuthVideoURL              string                  `json:"authVideoUrl"`
+	AuthVideoPosterURL        string                  `json:"authVideoPosterUrl"`
+	AuthVideoAutoplay         bool                    `json:"authVideoAutoplay"`
+	SkinID                    string                  `json:"skinId"`
+	ActiveSkin                AppearanceSkinTheme     `json:"activeSkin"`
+	EnabledSkins              []AppearanceSkinTheme   `json:"enabledSkins"`
+	WorkspaceSkins            []AppearanceSkinTheme   `json:"workspaceSkins"`
+	DefaultMode               string                  `json:"defaultMode"`
+	SEOTitle                  string                  `json:"seoTitle"`
+	SEODescription            string                  `json:"seoDescription"`
+	SEOKeywords               string                  `json:"seoKeywords"`
+	FooterCopyright           string                  `json:"footerCopyright"`
+	ICPFilingEnabled          bool                    `json:"icpFilingEnabled"`
+	ICPFilingNumber           string                  `json:"icpFilingNumber"`
+	PublicHomepage            string                  `json:"publicHomepage"`
 	HomeNavItems              []AppearanceHomeNavItem `json:"homeNavItems,omitempty"`
 	HomeCtaLabel              string                  `json:"homeCtaLabel,omitempty"`
 	HomeCtaHref               string                  `json:"homeCtaHref,omitempty"`
 	Landing                   json.RawMessage         `json:"landing,omitempty"`
-	LandingVideoURL           string              `json:"landingVideoUrl,omitempty"`
-	LogoConfigured            bool                `json:"logoConfigured"`
-	DarkLogoConfigured        bool                `json:"darkLogoConfigured"`
-	AuthVideoConfigured       bool                `json:"authVideoConfigured"`
-	AuthVideoPosterConfigured bool                `json:"authVideoPosterConfigured"`
-	Configured                bool                `json:"configured"`
-	Revision                  string              `json:"revision"`
-	UpdatedAt                 time.Time           `json:"updatedAt,omitempty"`
+	LandingVideoURL           string                  `json:"landingVideoUrl,omitempty"`
+	Canvas                    CanvasAppearance        `json:"canvas"`
+	LogoConfigured            bool                    `json:"logoConfigured"`
+	DarkLogoConfigured        bool                    `json:"darkLogoConfigured"`
+	AuthVideoConfigured       bool                    `json:"authVideoConfigured"`
+	AuthVideoPosterConfigured bool                    `json:"authVideoPosterConfigured"`
+	Configured                bool                    `json:"configured"`
+	Revision                  string                  `json:"revision"`
+	UpdatedAt                 time.Time               `json:"updatedAt,omitempty"`
 }
 
 type AdminAppearanceSetting struct {
@@ -146,6 +148,7 @@ func defaultAppearanceSetting() AppearanceSetting {
 		EnabledSkins:      defaultEnabledCinematicSkinIDs(),
 		DefaultMode:       "dark",
 		PublicHomepage:    publicHomepageWelcome,
+		Canvas:            defaultCanvasAppearance(),
 	}
 }
 
@@ -222,6 +225,7 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	value.FooterCopyright = normalizeAppearanceSingleLine(value.FooterCopyright)
 	value.ICPFilingNumber = normalizeAppearanceSingleLine(value.ICPFilingNumber)
 	value.PublicHomepage = normalizePublicHomepage(value.PublicHomepage)
+	rawCanvas := value.Canvas
 	if err := validateAppearanceSetting(value); err != nil {
 		return nil, err
 	}
@@ -231,6 +235,21 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	current, before, err := s.readAppearance()
 	if err != nil {
 		return nil, err
+	}
+	if rawCanvas == (CanvasAppearance{}) {
+		value.Canvas = before.Canvas
+	}
+	canvas, canvasErr := normalizeCanvasAppearance(value.Canvas)
+	if canvasErr != nil {
+		return nil, canvasErr
+	}
+	value.Canvas = canvas
+	if value.Canvas.AvatarType == "live2d" {
+		entry, live2dErr := s.validateLive2DResource(actor, value.Canvas.Live2DResourceID, before.Canvas.Live2DResourceID)
+		if live2dErr != nil {
+			return nil, live2dErr
+		}
+		value.Canvas.Live2DEntry = entry
 	}
 	for _, candidate := range []struct {
 		slot       string
@@ -687,6 +706,7 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		HomeCtaLabel:        value.HomeCtaLabel,
 		HomeCtaHref:         value.HomeCtaHref,
 		Landing:             value.Landing,
+		Canvas:              normalizePublicCanvas(value.Canvas),
 		Configured:          setting != nil,
 		Revision:            revision,
 	}

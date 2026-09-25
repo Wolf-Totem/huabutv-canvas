@@ -32,6 +32,18 @@ export type PublicAppearance = {
     homeCtaHref?: string;
     landing?: Partial<ManchuangLanding>;
     landingVideoUrl?: string;
+    canvas?: {
+        agentName: string;
+        launcherLabel: string;
+        panelTitle: string;
+        welcomeTitle: string;
+        welcomeDescription: string;
+        inputPlaceholder: string;
+        avatarType: "orb" | "live2d";
+        live2dResourceId: string;
+        live2dEntry: string;
+        avatarHeight: number;
+    };
     logoConfigured: boolean;
     darkLogoConfigured: boolean;
     authVideoConfigured: boolean;
@@ -69,6 +81,7 @@ export type AdminAppearance = {
     homeCtaHref?: string;
     landing?: Partial<ManchuangLanding>;
     landingVideoResourceId?: string;
+    canvas?: PublicAppearance["canvas"];
     public: PublicAppearance;
     configured: boolean;
     updatedBy?: string;
@@ -125,10 +138,18 @@ export async function updateAdminAppearance(
         | "homeCtaHref"
         | "landing"
         | "landingVideoResourceId"
+        | "canvas"
     >,
 ) {
     const result = await http.patch<{ setting: AdminAppearance }>("/admin/settings/appearance", input);
     return result.setting;
+}
+
+export async function uploadLive2DModel(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    const result = await http.post<{ model: { resourceId: string; entry: string } }>("/admin/settings/appearance/live2d", body);
+    return result.model;
 }
 
 export async function resetAdminAppearance() {

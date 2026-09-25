@@ -142,4 +142,5 @@ func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"resource": resource})
 	})
+	registerLive2DRoutes(r, svc)
 }

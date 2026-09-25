@@ -1,4 +1,3 @@
-import featuredCanvases from "@/lib/plaza-featured.json";
 import homePosters from "@/lib/home-posters.json";
 
 export type LandingTextCard = { title: string; text: string; imageUrl?: string };
@@ -43,13 +42,7 @@ export type ManchuangLanding = {
 
 const img = (name: string) => `/manchuang/${name}`;
 
-const featuredRail = (): LandingRailCard[] =>
-    (featuredCanvases as Array<{ id?: string; publicationKey?: string; projectUuid?: string; name?: string; coverUrl?: string; previewUrl?: string }>).map((item, index) => ({
-        id: String(item.publicationKey || item.id || item.projectUuid || `featured-${index}`),
-        imageUrl: String(item.coverUrl || img(`carousel-${(index % 7) + 1}.webp`)),
-        previewUrl: String(item.previewUrl || ""),
-        label: String(item.name || ""),
-    }));
+const featuredRail = (): LandingRailCard[] => [];
 
 const defaultHeroShowcase = (): LandingHeroShowcase => {
     const banners = (homePosters as Array<{ id: string; title: string; imageUrl: string; previewUrl?: string; href?: string }>).map((item) => ({

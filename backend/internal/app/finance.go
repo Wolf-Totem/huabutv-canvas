@@ -106,9 +106,14 @@ type ResolveBillingBatchResult struct {
 	Failed        []ResolveBillingBatchFailure `json:"failed"`
 }
 
+type arkVideoFormula struct {
+	FormulaTokens int64
+}
+
 type tokenBillingEstimate struct {
 	InputTokens  int64
 	OutputTokens int64
+	Video        *arkVideoFormula
 }
 
 func (s *Service) Wallet(user *model.User, entryType string, page int, limit int) (*WalletSummary, error) {
@@ -690,7 +695,7 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 	if err != nil {
 		return nil, err
 	}
-	return &model.BillingOrder{
+	order := &model.BillingOrder{
 		ID: newID(), UserID: userID, IdempotencyKey: idempotencyKey, TaskID: taskID,
 		ChannelID: channelID, ChannelModelID: item.ID, PriceTierID: tier.ID, PriceTierVersion: tier.PriceVersion, PriceSelectorJSON: tier.SelectorJSON, Model: modelKey, Capability: capability,
 		Scene: truncateRunes(scene, 80), BillingMode: tier.BillingMode, PriceVersion: item.PriceVersion,
@@ -698,7 +703,9 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		ReservedAmountMicrocredits: amount, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits,
 		OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
 		Status: model.BillingStatusReserved,
-	}, nil
+	}
+	snapshotCreditCost(order, tier, quantity, tokenEstimate)
+	return order, nil
 }
 
 func channelModelPriceTierForBilling(channelModel model.ChannelModel, priceTierID string, capability string, intents ...ModelRequestIntent) *model.ChannelModelPriceTier {
@@ -781,7 +788,8 @@ func estimateArkVideoTokens(input map[string]any) tokenBillingEstimate {
 	if tokens > (1<<63-1-99)/110 {
 		return tokenBillingEstimate{}
 	}
-	return tokenBillingEstimate{OutputTokens: (tokens*110 + 99) / 100}
+	formula := (tokens*110 + 99) / 100
+	return tokenBillingEstimate{OutputTokens: formula, Video: &arkVideoFormula{FormulaTokens: formula}}
 }
 
 func arkVideoOutputPixels(resolution string, ratio string, modelName string) int64 {

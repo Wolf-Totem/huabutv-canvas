@@ -4,9 +4,9 @@ import { ChevronLeft, Clapperboard, Heart, Play, Share2, X } from "lucide-react"
 import { Link, useNavigate, useParams } from "react-router";
 
 import { ossProcessedImage } from "@/lib/oss-image";
-import { featuredBySlug, featuredCanvases, featuredTourProject, formatPlazaTime, watchFromPlazaWork, type FeaturedCanvas } from "@/lib/plaza-catalog";
-import { copyPlazaWork, getPlazaSnapshot, getPlazaWork, likePlazaWork, recordPlazaEvent, unlikePlazaWork, type PlazaWork } from "@/services/api/plaza";
-import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession } from "@/services/user-data-sync";
+import { formatPlazaTime, watchFromPlazaWork, type FeaturedCanvas } from "@/lib/plaza-catalog";
+import { copyPlazaWork, getPlazaSnapshot, getPlazaWork, likePlazaWork, listPlazaWorks, recordPlazaEvent, unlikePlazaWork, type PlazaWork } from "@/services/api/plaza";
+import { hasRemoteUserDataSyncSession } from "@/services/user-data-sync";
 import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -47,21 +47,10 @@ export default function PlazaWorkPage() {
     const [tourOpen, setTourOpen] = useState(false);
     const [tourProject, setTourProject] = useState<CanvasProject | null>(null);
     const [hoverStrip, setHoverStrip] = useState(false);
+    const [others, setOthers] = useState<FeaturedCanvas[]>([]);
+    const [ready, setReady] = useState(false);
 
-    const item = useMemo(() => {
-        const catalog = featuredBySlug(slug);
-        if (!apiWork) return catalog;
-        const fromApi = watchFromPlazaWork(apiWork);
-        if (!catalog) return fromApi;
-        return {
-            ...fromApi,
-            coverUrl: fromApi.coverUrl || catalog.coverUrl,
-            previewUrl: fromApi.previewUrl || catalog.previewUrl,
-            watchUrl: fromApi.watchUrl || catalog.watchUrl,
-            hlsUrl: fromApi.hlsUrl || catalog.hlsUrl,
-        };
-    }, [apiWork, slug]);
-    const others = useMemo(() => featuredCanvases(), []);
+    const item = useMemo(() => (apiWork ? watchFromPlazaWork(apiWork) : null), [apiWork]);
 
     useEffect(() => {
         let active = true;
@@ -75,9 +64,23 @@ export default function PlazaWorkPage() {
             void recordPlazaEvent(work.id, "view");
         }).catch(() => {
             if (active) setApiWork(null);
+        }).finally(() => {
+            if (active) setReady(true);
         });
         return () => { active = false; };
     }, [slug]);
+
+    useEffect(() => {
+        let active = true;
+        listPlazaWorks({ page: 1, pageSize: 24, sort: "hot" })
+            .then((list) => {
+                if (active) setOthers(list.works.filter((work) => work.allowProcessView || work.allowWatch).map(watchFromPlazaWork));
+            })
+            .catch(() => undefined);
+        return () => {
+            active = false;
+        };
+    }, []);
 
     useEffect(() => {
         const node = previewRef.current;
@@ -110,7 +113,8 @@ export default function PlazaWorkPage() {
         return () => window.cancelAnimationFrame(frame);
     }, [others.length, hoverStrip, watching, tourOpen]);
 
-    if (!item) return <div className="grid min-h-screen place-items-center bg-black text-white">作品不存在</div>;
+    if (!ready) return <div className="grid min-h-screen place-items-center bg-black text-white">正在打开作品</div>;
+    if (!item || !apiWork) return <div className="grid min-h-screen place-items-center bg-black text-white">作品不存在</div>;
 
     const requireLogin = (next: string) => useAuthDialogStore.getState().openAuth({ tab: "login", next });
     const previewSrc = item.previewUrl || item.watchUrl;
@@ -155,13 +159,15 @@ export default function PlazaWorkPage() {
     };
 
     const openTour = async () => {
+        if (!apiWork?.allowProcessView) {
+            message.warning("该作品暂未开放制作过程");
+            return;
+        }
         try {
-            const { work } = apiWork ? { work: apiWork } : await getPlazaWork(item.slug);
-            const snapshot = await getPlazaSnapshot(work.id);
-            setApiWork(work);
+            const snapshot = await getPlazaSnapshot(apiWork.id);
             setTourProject(snapshot.project);
             setTourOpen(true);
-            void recordPlazaEvent(work.id, "tour");
+            void recordPlazaEvent(apiWork.id, "tour");
         } catch {
             message.warning("该作品暂未开放制作过程");
         }
@@ -172,21 +178,13 @@ export default function PlazaWorkPage() {
             requireLogin(`/plaza/${item.slug}`);
             return;
         }
-        if (apiWork) {
-            try {
-                const result = await copyPlazaWork(apiWork.id);
-                message.success("已复制到你的画布");
-                navigate(`/canvas/${result.projectId}`);
-                return;
-            } catch {
-                // featured fallback
-            }
+        try {
+            const result = await copyPlazaWork(apiWork.id);
+            message.success("已复制到你的画布");
+            navigate(`/canvas/${result.projectId}`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "复制失败");
         }
-        const snapshot = featuredTourProject(item);
-        const result = await createCanvasProjectWithRemoteSync(`${item.title} 副本`, undefined, { nodes: snapshot.nodes, connections: snapshot.connections });
-        if (result.syncError) message.warning("已复制到本机画布，云端稍后同步");
-        else message.success("已复制到你的画布");
-        navigate(`/canvas/${result.id}`);
     };
 
     return (
@@ -216,7 +214,7 @@ export default function PlazaWorkPage() {
                 <div className="plaza-watch-bar">
                     <div className="plaza-watch-actions">
                         <button type="button" className="is-play" onClick={playLoud}><Play size={16} /> 立即观看</button>
-                        {(!apiWork || apiWork.allowProcessView) ? <button type="button" className="is-ghost" onClick={() => void openTour()}><Clapperboard size={16} /> 查看制作过程</button> : null}
+                        {apiWork.allowProcessView ? <button type="button" className="is-ghost" onClick={() => void openTour()}><Clapperboard size={16} /> 查看制作过程</button> : null}
                         <button type="button" className={`is-icon ${liked ? "is-liked" : ""}`} aria-label={`点赞，当前 ${likes}`} onClick={() => void like()}><Heart size={16} fill={liked ? "currentColor" : "none"} /></button>
                         <button type="button" className="is-icon" aria-label="复制链接" onClick={() => void share()}><Share2 size={16} /></button>
                     </div>

@@ -2,6 +2,21 @@ package app
 
 import "infinite-canvas/backend/internal/model"
 
+const maxChannelModelTokenPriceMicrocredits = int64(1_000_000) * CreditScale
+
+func validateTokenPrices(capability string, inputPrice, outputPrice, cachedPrice int64) error {
+	if inputPrice < 0 || outputPrice < 0 || cachedPrice < 0 {
+		return BadAuthRequest("模型积分价格不能小于 0")
+	}
+	if capability == "video" && (inputPrice != 0 || cachedPrice != 0) {
+		return BadAuthRequest("视频 Token 仅按视频用量计费，输入和缓存 Token 价格必须为 0")
+	}
+	if inputPrice > maxChannelModelTokenPriceMicrocredits || outputPrice > maxChannelModelTokenPriceMicrocredits || cachedPrice > maxChannelModelTokenPriceMicrocredits {
+		return BadAuthRequest("Token 每百万用量价格不能超过 1,000,000 积分")
+	}
+	return nil
+}
+
 // ValidateChannelModelPrice 校验渠道模型价格配置的有效性
 // 根据 billingMode 检查必要的价格字段是否已配置
 func ValidateChannelModelPrice(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice int64) bool {

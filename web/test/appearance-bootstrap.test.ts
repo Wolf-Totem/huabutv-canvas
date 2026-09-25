@@ -10,7 +10,7 @@ test("initial HTML stays brand neutral until the public appearance is resolved",
     expect(html).toContain("/favicon.png");
     expect(html).toContain("<title>画布TV</title>");
     expect(html).toContain('property="og:title" content="画布TV"');
-    expect(html).toContain('property="og:image" content="https://canvas.j11.net/og-image.png?v=1.5.32"');
+    expect(html).toContain('property="og:image" content="https://canvas.j11.net/og-image.png?v=1.5.36"');
     expect(mainSource).toContain("restoreCachedAppearance()");
     expect(mainSource.indexOf("restoreCachedAppearance()")).toBeLessThan(mainSource.indexOf("bootstrapAppearance()"));
     expect(mainSource.indexOf("bootstrapAppearance()")).toBeLessThan(mainSource.indexOf('import("./application")'));
@@ -106,7 +106,7 @@ test("public homepage defaults to the original welcome page and can switch to ma
     expect(pageSource).toContain("绘无限");
     expect(pageSource).toContain("mc-public-home");
     expect(pageSource).toContain("mc-hero-showcase");
-    expect(pageSource).not.toContain("HeroRail");
+    expect(pageSource).toContain("HeroRail");
     expect(pageSource).toContain("is-lit");
     expect(pageSource).not.toContain("最近项目");
     const landingCss = await Bun.file(new URL("../src/pages/public-home/manchuang-home.css", import.meta.url)).text();

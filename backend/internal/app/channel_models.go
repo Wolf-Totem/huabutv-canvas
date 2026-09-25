@@ -42,17 +42,18 @@ const maxAdminChannelModelBatchDeleteCount = 100
 type ChannelModelPriceTierRequest struct {
 	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、vquality、videoSeconds、imageCount；
 	// operation 可区分文生/图生/视频生，避免同一分辨率下错误复用价格。
-	Selector                     map[string]string `json:"selector"`
-	Resolution                   string            `json:"resolution"`
-	VideoSeconds                 int               `json:"videoSeconds"`
-	ProviderModelKey             string            `json:"providerModelKey"`
-	BillingMode                  string            `json:"billingMode"`
-	UnitPriceMicrocredits        int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64             `json:"cachedTokenPriceMicrocredits"`
-	PriceConfigured              bool              `json:"priceConfigured"`
-	Enabled                      *bool             `json:"enabled"`
+	Selector                     map[string]string       `json:"selector"`
+	Resolution                   string                  `json:"resolution"`
+	VideoSeconds                 int                     `json:"videoSeconds"`
+	ProviderModelKey             string                  `json:"providerModelKey"`
+	BillingMode                  string                  `json:"billingMode"`
+	UnitPriceMicrocredits        int64                   `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits  int64                   `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits int64                   `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits int64                   `json:"cachedTokenPriceMicrocredits"`
+	PriceConfigured              bool                    `json:"priceConfigured"`
+	Enabled                      *bool                   `json:"enabled"`
+	CostPricing                  model.CreditCostPricing `json:"costPricing"`
 }
 
 // AdminChannelModelFetchResult 是管理员从上游拉目录后的汇总：models 为去重后的标识，added 为本次新建条数。
@@ -496,6 +497,7 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 			PriceConfigured:              input.PriceConfigured,
 			Enabled:                      enabled,
 			PriceVersion:                 1,
+			CostPricing:                  input.CostPricing,
 		})
 	}
 	return result, nil
@@ -593,6 +595,9 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	}
 	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 {
 		return BadAuthRequest("模型积分价格不能小于 0")
+	}
+	if err := validateCreditCostPricing(capability, billingMode, input.CostPricing); err != nil {
+		return err
 	}
 	if !input.PriceConfigured {
 		return nil
