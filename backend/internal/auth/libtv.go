@@ -244,6 +244,32 @@ func (s *Service) TestLibTV(actor *model.User, projectUUID string) error {
 }
 
 func (s *Service) FetchLibTV(projectUUID string) (*LibTVImportResult, error) {
+	return s.fetchAdaptedGraph(projectUUID, true)
+}
+
+func (s *Service) FetchPublicGraph(projectUUID string) (*LibTVImportResult, error) {
+	imported, err := s.fetchAdaptedGraph(projectUUID, false)
+	if publicGraphUsable(imported) {
+		return imported, nil
+	}
+	lumlum, lumErr := s.FetchLumlumPublicCanvas(projectUUID)
+	if publicGraphUsable(lumlum) {
+		return lumlum, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if lumErr != nil {
+		return nil, lumErr
+	}
+	return nil, kernel.NotFound("没有制作过程")
+}
+
+func publicGraphUsable(result *LibTVImportResult) bool {
+	return result != nil && result.ImportedNodeCount >= 3 && result.ImportedConnectionCount >= 1
+}
+
+func (s *Service) fetchAdaptedGraph(projectUUID string, requireCopy bool) (*LibTVImportResult, error) {
 	_, value, err := s.readLibTVSetting()
 	if err != nil {
 		return nil, err
@@ -251,7 +277,7 @@ func (s *Service) FetchLibTV(projectUUID string) (*LibTVImportResult, error) {
 	if !value.Enabled || value.Token == "" {
 		return nil, kernel.BadAuthRequest("画布导入尚未启用或未配置凭据")
 	}
-	detail, err := s.fetchLibTVDetail(strings.TrimSpace(projectUUID), value.Token)
+	detail, err := s.fetchLibTVDetailMode(strings.TrimSpace(projectUUID), value.Token, requireCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -312,9 +338,13 @@ func publicLibTVSetting(setting *model.SystemSetting, value libTVSettingValue) *
 }
 
 func (s *Service) fetchLibTVDetail(projectUUID, token string) (*libTVDetail, error) {
+	return s.fetchLibTVDetailMode(projectUUID, token, true)
+}
+
+func (s *Service) fetchLibTVDetailMode(projectUUID, token string, requireCopy bool) (*libTVDetail, error) {
 	projectUUID = strings.TrimSpace(projectUUID)
 	if !isLibTVProjectUUID(projectUUID) {
-		return nil, kernel.BadAuthRequest("LibTV 画布 UUID 格式无效")
+		return nil, kernel.BadAuthRequest("画布 UUID 格式无效")
 	}
 	u, err := url.Parse(libTVDetailURL)
 	if err != nil {
@@ -368,8 +398,11 @@ func (s *Service) fetchLibTVDetail(projectUUID, token string) (*libTVDetail, err
 	if strings.TrimSpace(detail.ProjectMeta.UUID) == "" {
 		detail.ProjectMeta.UUID = projectUUID
 	}
-	if !detail.ProjectMeta.Effective.CanRead || !detail.ProjectMeta.Effective.CanCopy {
-		return nil, kernel.BadAuthRequest("当前 LibTV 画布不允许复制")
+	if !detail.ProjectMeta.Effective.CanRead {
+		return nil, kernel.BadAuthRequest("当前画布不允许读取")
+	}
+	if requireCopy && !detail.ProjectMeta.Effective.CanCopy {
+		return nil, kernel.BadAuthRequest("当前画布不允许复制")
 	}
 	return &detail, nil
 }

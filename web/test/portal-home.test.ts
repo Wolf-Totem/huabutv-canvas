@@ -1,18 +1,26 @@
 import { expect, test } from "bun:test";
 
 test("portal home is the site root for every visitor and create lives at /create", async () => {
-    const [root, home, router, main] = await Promise.all([
+    const [root, home, guest, html, router, main] = await Promise.all([
         Bun.file(new URL("../src/pages/public-home/root-home.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/public-home/manchuang-home.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/public-home/guest-home.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../index.html", import.meta.url)).text(),
         Bun.file(new URL("../src/router.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/main.tsx", import.meta.url)).text(),
     ]);
     expect(root).toContain("ManchuangHomePage");
     expect(root).not.toContain("CreatePage");
+    expect(guest).toContain("ManchuangHomePage");
+    expect(guest).not.toContain("getWelcomeAvailability");
+    expect(guest).not.toContain("welcomeReady");
+    expect(html).toContain("mc-boot-billboard");
+    expect(html).not.toContain("portal-boot");
     expect(home).toContain("mc-hero-showcase");
     expect(home).toContain("mc-hero-create");
     expect(home).toContain("openAuth({ tab: \"login\" })");
     expect(home).toContain("mc-hero-preview");
+    expect(home).not.toContain("HeroRail");
     expect(home).toContain("openAuth");
     expect(home.indexOf("mc-nav-start")).toBeLessThan(home.indexOf("LANDING_NAV.map"));
     expect(home).toContain('openWorkspace("/create#plaza")');
@@ -21,6 +29,12 @@ test("portal home is the site root for every visitor and create lives at /create
     expect(router).toContain("deferred(<CreatePage />)");
     expect(router).toContain('to="/?auth=login"');
     expect(main).not.toContain("peekAuthUser");
+});
+
+test("home posters are standalone banners not plaza works", async () => {
+    const posters = (await import("../src/lib/home-posters.json")).default as Array<{ id: string; imageUrl: string; href: string }>;
+    expect(posters.length).toBeGreaterThanOrEqual(6);
+    expect(posters.every((item) => item.imageUrl.startsWith("https://") && item.href.startsWith("/"))).toBe(true);
 });
 
 test("featured plaza cards ship enough covers to fill the home grid", async () => {

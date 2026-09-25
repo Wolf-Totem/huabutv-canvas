@@ -1,0 +1,44 @@
+[
+  {
+    "id": "poster-gallery",
+    "title": "AI 灵感画廊",
+    "imageUrl": "https://cdn.lumlum.tv/admin/home/home-banner/2026-09-04/1788489922898-2ee877952c7b9dc3.png",
+    "href": "/create"
+  },
+  {
+    "id": "poster-creator",
+    "title": "创作者活动",
+    "imageUrl": "https://cdn.lumlum.tv/admin/home/home-banner/2026-09-08/1788835784132-f30d61106f84cb8c.png",
+    "href": "/create"
+  },
+  {
+    "id": "poster-workflow",
+    "title": "创作者计划",
+    "imageUrl": "https://cdn.lumlum.tv/admin/home/home-banner/2026-09-04/1788490273306-cc1578c9d5db480d.png",
+    "href": "/create"
+  },
+  {
+    "id": "poster-main",
+    "title": "跟随时代潮流",
+    "imageUrl": "https://cdn.lumlum.tv/admin/home/home-banner/2026-07-15/1784116619115-1f1059455cb2b637.png",
+    "href": "/create"
+  },
+  {
+    "id": "poster-membership",
+    "title": "多种工作流任您挑选",
+    "imageUrl": "https://cdn.lumlum.tv/admin/home/home-banner/2026-07-15/1784116673610-3b2ca4216b4eb1d1.png",
+    "href": "/create"
+  },
+  {
+    "id": "poster-solo",
+    "title": "精选海报",
+    "imageUrl": "https://cdn.lumlum.tv/admin/home/home-banner/2026-09-04/1788490610826-1ac37509c0074610.png",
+    "href": "/create"
+  },
+  {
+    "id": "poster-extra",
+    "title": "开始创作",
+    "imageUrl": "https://cdn.lumlum.tv/admin/home/home-banner/2026-09-08/1788869258722-812fb83ee6069a1f.png",
+    "href": "/create"
+  }
+]

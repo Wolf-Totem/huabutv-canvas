@@ -105,7 +105,8 @@ test("public homepage defaults to the original welcome page and can switch to ma
     expect(pageSource).toContain("mc-hero");
     expect(pageSource).toContain("绘无限");
     expect(pageSource).toContain("mc-public-home");
-    expect(pageSource).toContain("neighborLift");
+    expect(pageSource).toContain("mc-hero-showcase");
+    expect(pageSource).not.toContain("HeroRail");
     expect(pageSource).toContain("is-lit");
     expect(pageSource).not.toContain("最近项目");
     const landingCss = await Bun.file(new URL("../src/pages/public-home/manchuang-home.css", import.meta.url)).text();

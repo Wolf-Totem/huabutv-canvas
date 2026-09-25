@@ -11,7 +11,7 @@
         <meta property="og:site_name" content="画布TV" />
         <meta property="og:title" content="画布TV" />
         <meta property="og:description" content="AI 影视与短剧创作工作台" />
-        <meta property="og:image" content="https://canvas.j11.net/og-image.png?v=1.5.32" />
+        <meta property="og:image" content="https://canvas.j11.net/og-image.png?v=1.5.35" />
         <meta property="og:image:type" content="image/png" />
         <meta property="og:image:width" content="1024" />
         <meta property="og:image:height" content="683" />
@@ -19,7 +19,7 @@
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="画布TV" />
         <meta name="twitter:description" content="AI 影视与短剧创作工作台" />
-        <meta name="twitter:image" content="https://canvas.j11.net/og-image.png?v=1.5.32" />
+        <meta name="twitter:image" content="https://canvas.j11.net/og-image.png?v=1.5.35" />
         <style>
             html {
                 background: #0b0d09;
@@ -62,12 +62,73 @@
             }
             @keyframes appearance-bootstrap-pulse { 0%, 100% { opacity: .62; transform: scale(.82); } 50% { opacity: 1; transform: scale(1.08); } }
             @keyframes appearance-bootstrap-orbit { to { transform: rotate(360deg); } }
-            .portal-boot { min-height: 100dvh; background: #111; color: #f4f1ea; font-family: "PingFang SC","Microsoft YaHei",sans-serif; }
-            .portal-boot-header { display: flex; height: 68px; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid rgba(255,255,255,.07); }
-            .portal-boot-hero { display: grid; place-items: center; padding: 72px 16px 36px; }
-            .portal-boot-start { display: grid; place-items: center; width: min(280px, 100%); height: 56px; border: 1px solid rgba(103,232,249,.55); border-radius: 999px; background: #202020; font-size: 16px; }
-            .portal-boot-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; width: min(1440px, calc(100% - 40px)); margin: 0 auto; }
-            .portal-boot-card { aspect-ratio: 16/9; border-radius: 10px; background: #1c1c1c; }
+            .mc-boot {
+                position: fixed;
+                inset: 0;
+                display: flex;
+                flex-direction: column;
+                background: #0b0d09 url("/manchuang/hero-vortex.webp") center / cover no-repeat;
+                color: #f2f6ea;
+                font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            }
+            .mc-boot-nav {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                width: min(1240px, calc(100% - 28px));
+                min-height: 72px;
+                margin: 12px auto 0;
+                padding: 0 22px;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 999px;
+                background: rgba(16, 18, 14, 0.55);
+            }
+            .mc-boot-nav strong { font-size: 22px; }
+            .mc-boot-nav span {
+                display: grid;
+                place-items: center;
+                min-width: 108px;
+                height: 40px;
+                border-radius: 999px;
+                background: linear-gradient(135deg, #caf75a, #a3e028);
+                color: #16240a;
+                font-size: 14px;
+                font-weight: 700;
+            }
+            .mc-boot-hero {
+                display: grid;
+                grid-template-columns: minmax(240px, 38%) minmax(0, 1fr);
+                align-items: center;
+                gap: 24px;
+                flex: 1;
+                width: min(1440px, calc(100% - 48px));
+                margin: 0 auto;
+                padding: 24px 0 40px;
+            }
+            .mc-boot-copy { display: grid; gap: 14px; align-content: center; }
+            .mc-boot-copy i {
+                display: block;
+                border-radius: 8px;
+                background: rgba(255, 255, 255, 0.12);
+            }
+            .mc-boot-billboard {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr) minmax(0, 1fr);
+                align-items: center;
+                gap: 12px;
+            }
+            .mc-boot-billboard i {
+                display: block;
+                aspect-ratio: 5 / 2.8;
+                border-radius: 16px;
+                background: rgba(255, 255, 255, 0.1);
+            }
+            .mc-boot-billboard i:first-child,
+            .mc-boot-billboard i:last-child { opacity: 0.62; transform: scale(0.86); }
+            @media (max-width: 920px) {
+                .mc-boot-hero { grid-template-columns: 1fr; }
+                .mc-boot-billboard { grid-template-columns: 0 1fr 0; }
+            }
             @media (prefers-reduced-motion: reduce) {
                 #root:empty::before,
                 #root:empty::after {
@@ -87,10 +148,16 @@
     </head>
     <body class="bg-background text-foreground antialiased">
         <div id="root">
-            <div class="portal-boot" aria-hidden="true">
-                <div class="portal-boot-header"><strong>画布TV</strong><span>作品广场</span></div>
-                <div class="portal-boot-hero"><div class="portal-boot-start">开始创作</div></div>
-                <div class="portal-boot-grid"><i class="portal-boot-card"></i><i class="portal-boot-card"></i><i class="portal-boot-card"></i><i class="portal-boot-card"></i></div>
+            <div class="mc-boot" aria-hidden="true">
+                <div class="mc-boot-nav"><strong>画布TV</strong><span>开始创作</span></div>
+                <div class="mc-boot-hero">
+                    <div class="mc-boot-copy">
+                        <i style="width:42%;height:12px"></i>
+                        <i style="width:78%;height:42px"></i>
+                        <i style="width:64%;height:16px"></i>
+                    </div>
+                    <div class="mc-boot-billboard"><i></i><i></i><i></i></div>
+                </div>
             </div>
         </div>
         <script type="module" src="/src/main.tsx"></script>

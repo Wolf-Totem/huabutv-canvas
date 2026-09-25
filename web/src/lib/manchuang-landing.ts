@@ -1,4 +1,5 @@
 import featuredCanvases from "@/lib/plaza-featured.json";
+import homePosters from "@/lib/home-posters.json";
 
 export type LandingTextCard = { title: string; text: string; imageUrl?: string };
 export type LandingStep = { step: string; phase: string; title: string; tagline: string; description: string; imageUrl: string; tags: string[] };
@@ -51,16 +52,15 @@ const featuredRail = (): LandingRailCard[] =>
     }));
 
 const defaultHeroShowcase = (): LandingHeroShowcase => {
-    const banners = featuredRail().slice(0, 8).map((item) => ({
+    const banners = (homePosters as Array<{ id: string; title: string; imageUrl: string; previewUrl?: string; href?: string }>).map((item) => ({
         id: item.id,
-        title: item.label || "精选画布",
+        title: item.title,
         imageUrl: item.imageUrl,
         previewUrl: item.previewUrl,
-        href: `/plaza/${encodeURIComponent(item.id)}`,
-        workId: item.id,
+        href: item.href || "/create",
     }));
     return {
-        banners: banners.length ? banners : [{ id: "banner-1", title: "精选画布", imageUrl: img("carousel-1.webp"), href: "/create" }],
+        banners: banners.length ? banners : [{ id: "banner-1", title: "精选海报", imageUrl: img("carousel-1.webp"), href: "/create" }],
         create: { title: "开始创作", subtitle: "打开画布，组织图片与视频创作", href: "/create" },
         tiles: [
             { id: "tile-model", title: "新模型", subtitle: "全新增模与视频能力", badge: "全新上线", href: "/create" },

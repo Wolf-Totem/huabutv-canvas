@@ -12,16 +12,16 @@ import (
 )
 
 type PlazaExternalSeedItem struct {
-	UUID         string `json:"uuid"`
-	Slug         string `json:"slug"`
-	Title        string `json:"title"`
-	Subtitle     string `json:"subtitle"`
-	CategoryID   string `json:"categoryId"`
-	AuthorID     string `json:"authorId"`
-	CoverURL     string `json:"coverUrl"`
-	WatchURL     string `json:"watchUrl"`
-	ProjectUUID  string `json:"projectUuid"`
-	DisplayOnly  bool   `json:"displayOnly"`
+	UUID        string `json:"uuid"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Subtitle    string `json:"subtitle"`
+	CategoryID  string `json:"categoryId"`
+	AuthorID    string `json:"authorId"`
+	CoverURL    string `json:"coverUrl"`
+	WatchURL    string `json:"watchUrl"`
+	ProjectUUID string `json:"projectUuid"`
+	DisplayOnly bool   `json:"displayOnly"`
 }
 
 type PlazaSeedReport struct {
@@ -75,30 +75,25 @@ func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem) (*PlazaSeedRe
 			continue
 		}
 		imported, err := s.fetchSeedCanvas(item)
-		var doc map[string]any
-		process := false
-		if err == nil && imported != nil && (imported.ImportedNodeCount >= 3 || imported.ImportedConnectionCount >= 1) {
-			if name := strings.TrimSpace(imported.ProjectName); name != "" && (item.Title == "" || item.Title == item.UUID || len([]rune(item.Title)) <= 8) {
-				item.Title = name
-			}
-			doc = canvasDocumentFromLibTV(item.Title, imported)
-			process = imported.ImportedConnectionCount >= 1 || imported.ImportedNodeCount >= 4
-			if err := s.saveImportedCanvasProject(item.AuthorID, item.Title, doc); err != nil {
-				report.Failed++
-				report.Errors = append(report.Errors, item.Slug+": "+err.Error())
-				continue
-			}
-		} else if strings.TrimSpace(item.CoverURL) != "" || strings.TrimSpace(item.WatchURL) != "" {
-			doc = canvasDocumentFromPoster(item.Title, item.CoverURL, item.WatchURL)
-		} else {
+		if err != nil || imported == nil || imported.ImportedConnectionCount < 1 || imported.ImportedNodeCount < 3 {
 			report.Failed++
 			if err != nil {
 				report.Errors = append(report.Errors, item.Slug+": "+err.Error())
 			} else {
-				report.Errors = append(report.Errors, item.Slug+": 流程图不完整")
+				report.Errors = append(report.Errors, item.Slug+": 没有制作过程")
 			}
 			continue
 		}
+		if name := strings.TrimSpace(imported.ProjectName); name != "" && (item.Title == "" || item.Title == item.UUID || len([]rune(item.Title)) <= 8) {
+			item.Title = name
+		}
+		doc := canvasDocumentFromLibTV(item.Title, imported)
+		if err := s.saveImportedCanvasProject(item.AuthorID, item.Title, doc); err != nil {
+			report.Failed++
+			report.Errors = append(report.Errors, item.Slug+": "+err.Error())
+			continue
+		}
+		process := true
 		if err := s.plazaDomain().SaveImportedDocument(plaza.ExternalSeedItem{
 			UUID: item.UUID, Slug: item.Slug, Title: item.Title, Subtitle: item.Subtitle,
 			CategoryID: item.CategoryID, AuthorID: item.AuthorID,
@@ -125,35 +120,12 @@ func (s *Service) fetchSeedCanvas(item PlazaExternalSeedItem) (*auth.LibTVImport
 			continue
 		}
 		tried[uuid] = struct{}{}
-		imported, err := s.auth.FetchLibTV(uuid)
-		if err == nil {
+		imported, err := s.auth.FetchPublicGraph(uuid)
+		if err == nil && imported != nil && imported.ImportedNodeCount >= 3 && imported.ImportedConnectionCount >= 1 {
 			return imported, nil
 		}
 	}
 	return nil, kernel.NotFound("画布不可导入")
-}
-
-func canvasDocumentFromPoster(title, cover, watch string) map[string]any {
-	now := time.Now().UTC().Format(time.RFC3339)
-	nodes := []any{}
-	if strings.TrimSpace(cover) != "" {
-		nodes = append(nodes, map[string]any{
-			"id": "cover", "type": "image", "title": title, "position": map[string]any{"x": 80, "y": 80},
-			"width": 720, "height": 405, "metadata": map[string]any{"content": cover, "status": "success"},
-		})
-	}
-	if strings.TrimSpace(watch) != "" {
-		nodes = append(nodes, map[string]any{
-			"id": "watch", "type": "video", "title": title, "position": map[string]any{"x": 860, "y": 80},
-			"width": 720, "height": 405, "metadata": map[string]any{"content": watch, "status": "success"},
-		})
-	}
-	return map[string]any{
-		"id": "plaza-poster", "title": title, "createdAt": now, "updatedAt": now,
-		"nodes": nodes, "connections": []any{}, "chatSessions": []any{}, "activeChatId": nil,
-		"backgroundMode": "lines", "showImageInfo": false, "viewport": map[string]any{"x": 40, "y": 20, "k": 0.4},
-		"directorScenes": []any{},
-	}
 }
 
 func (s *Service) saveImportedCanvasProject(userID, title string, doc map[string]any) error {

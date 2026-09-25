@@ -166,7 +166,20 @@ export type CanvasGenerationBatch = {
 export type CanvasBatchOperation = "try_on" | "creative";
 export type CanvasBatchRow = { id: string; enabled: boolean; inputNodeIds: string[]; prompt: string; outputNodeId?: string };
 export type CanvasBatchReferenceColumn = { id: string; label: string };
-export type CanvasBatchTableData = { operation: CanvasBatchOperation; concurrency: number; referenceColumns?: CanvasBatchReferenceColumn[]; rows: CanvasBatchRow[] };
+export type CanvasBatchTableContentKind = "content" | "storyboard";
+export type CanvasBatchTableData = {
+    operation: CanvasBatchOperation;
+    concurrency: number;
+    contentKind?: CanvasBatchTableContentKind;
+    storyboardRows?: StoryboardRow[];
+    storyboardTitle?: string;
+    storyboardSourceNodeIds?: string[];
+    globalPrompt?: string;
+    referenceColumns?: CanvasBatchReferenceColumn[];
+    textColumns?: CanvasBatchReferenceColumn[];
+    rows: CanvasBatchRow[];
+    aiGenerated?: boolean;
+};
 
 export type CanvasSkillSnapshot = {
     id: string;

@@ -11,12 +11,12 @@ import (
 )
 
 type ExternalSeedItem struct {
-	UUID       string
-	Slug       string
-	Title      string
-	Subtitle   string
-	CategoryID string
-	AuthorID   string
+	UUID             string
+	Slug             string
+	Title            string
+	Subtitle         string
+	CategoryID       string
+	AuthorID         string
 	CoverURL         string
 	WatchURL         string
 	AllowProcessView bool
@@ -26,6 +26,10 @@ type ExternalSeedItem struct {
 func (s *Service) SaveImportedDocument(item ExternalSeedItem, doc map[string]any) error {
 	if s == nil || s.repo == nil {
 		return kernel.NewAppError(500, "广场服务未初始化")
+	}
+	rawConn, _ := doc["connections"].([]any)
+	if nodeCount(doc) < 3 || len(rawConn) < 1 {
+		return kernel.NewAppError(400, "没有制作过程")
 	}
 	payload, err := json.Marshal(doc)
 	if err != nil {
