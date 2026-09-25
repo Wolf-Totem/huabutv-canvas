@@ -58,15 +58,17 @@ html.mc-auth-open .portal-auth-overlay {
 .mc-sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 .mc-nav {
-    position: sticky;
+    position: fixed;
     top: 10px;
-    z-index: 50;
+    left: 0;
+    right: 0;
+    z-index: 80;
     display: flex;
     align-items: center;
     gap: 22px;
     width: min(1240px, calc(100% - 28px));
     min-height: 88px;
-    margin: 10px auto 0;
+    margin: 0 auto;
     padding: 14px 16px 14px 22px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 999px;
@@ -115,7 +117,7 @@ html.mc-auth-open .portal-auth-overlay {
     min-height: 0;
     width: 100%;
     margin: 0 auto;
-    padding: 8px 0 280px;
+    padding: 108px 0 280px;
 }
 .mc-hero-top {
     display: grid;
@@ -731,7 +733,7 @@ html.mc-auth-open .portal-auth-overlay {
     .mc-hero-banners { height: 220px; }
 }
 @media (max-width: 959px) {
-    .mc-hero-inner { padding: 96px 0 220px; }
+    .mc-hero-inner { padding: 100px 0 220px; }
     .mc-hero-top { display: block; width: calc(100% - 28px); padding-right: 0; }
     .mc-hero-copy { max-width: 100%; margin-bottom: 18px; padding-top: 8px; }
     .mc-hero-title { width: min(720px, 92vw); }
