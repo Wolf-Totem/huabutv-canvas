@@ -823,7 +823,7 @@ func (s *Service) publicWorks(items []model.PlazaWork, viewerID string) ([]Publi
 			AllowWatch: item.AllowWatch, AllowProcessView: item.AllowProcessView, AllowCopy: item.AllowCopy,
 			Badges: decodeStringList(item.BadgesJSON), Score: item.Score,
 			ViewCount: item.ViewCount, WatchCount: item.WatchCount, TourCount: item.TourCount, LikeCount: item.LikeCount, CopyCount: item.CopyCount,
-			ListedAt: item.ListedAt, UpdatedAt: item.UpdatedAt,
+			ListedAt: item.ListedAt, UpdatedAt: item.UpdatedAt, SourceProjectID: item.SourceProjectID,
 		}
 		if item.CoverAssetID != "" {
 			view.CoverURL = plazaAssetURL(item.ID, item.CoverAssetID)

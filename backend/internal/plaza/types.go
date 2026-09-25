@@ -76,6 +76,7 @@ type PublicWork struct {
 	Liked            bool           `json:"liked"`
 	CoverURL         string         `json:"coverUrl,omitempty"`
 	WatchURL         string         `json:"watchUrl,omitempty"`
+	SourceProjectID  string         `json:"sourceProjectId,omitempty"`
 	Author           PublicAuthor   `json:"author"`
 	Category         PublicCategory `json:"category"`
 	ListedAt         *time.Time     `json:"listedAt,omitempty"`

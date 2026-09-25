@@ -42,6 +42,7 @@ export type PlazaWork = {
     liked?: boolean;
     coverUrl?: string;
     watchUrl?: string;
+    sourceProjectId?: string;
     author: PlazaAuthor;
     category: { id: string; slug: string; name: string; kind: string };
     listedAt?: string;
@@ -162,4 +163,20 @@ export function takeDownPlazaWork(id: string, note: string) {
 
 export function deletePlazaWork(id: string) {
     return http.delete<{ ok: true }>(`/admin/plaza/works/${encodeURIComponent(id)}`);
+}
+
+export type PlazaExternalSeedItem = {
+    uuid: string;
+    slug: string;
+    title: string;
+    subtitle?: string;
+    categoryId?: string;
+    authorId?: string;
+    coverUrl?: string;
+    watchUrl?: string;
+    projectUuid?: string;
+};
+
+export function seedAdminPlazaExternal(items: PlazaExternalSeedItem[]) {
+    return http.post<{ report: { imported: number; failed: number; skipped?: number; errors?: string[] } }>("/admin/plaza/seed-external", items);
 }

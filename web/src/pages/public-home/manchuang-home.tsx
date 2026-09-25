@@ -528,12 +528,12 @@ function HoverMediaButton({
 function HeroTileIcon({ id }: { id: string }) {
     const path =
         id === "tile-agent"
-            ? "M12 3l1.4 3.8L17 8.2l-3.6 1.4L12 13l-1.4-3.4L7 8.2l3.6-1.4L12 3zm6.5 8.2l.8 2.1 2.2.8-2.2.8-.8 2.1-.8-2.1-2.2-.8 2.2-.8.8-2.1zM5.5 13.2l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z"
+            ? "M7 7h4v4H7V7zm6 0h4v4h-4V7zM7 13h4v4H7v-4zm6 2.2 3.2-1.6 3.2 1.6v3.2L16.2 20 13 18.4v-3.2z"
             : id === "tile-director"
-                ? "M4 7.5h5.2L11 5h7.5v14H4V7.5zm3.2 3.2v6.6h9.6V10.7H7.2zm2 1.6h5.6v3.4H9.2v-3.4z"
+                ? "M4 7.2h5L11 5h9v14H4V7.2zm3.4 3v7.2h9.2V10.2H7.4z"
                 : id === "tile-review"
-                    ? "M4 5.5h5.2v13H4v-13zm6.4 0H20v4.1h-9.6V5.5zm0 5.5H20v7.5h-9.6V11z"
-                    : "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5z";
+                    ? "M4 6h16v12H4V6zm2 2v8h12V8H6zm3.2 2.2 5.4 2.8-5.4 2.8V10.2z"
+                    : "M5 8.2c0-1.2.9-2.2 2-2.2h1.1L9.4 4h5.2L16 6h1c1.1 0 2 1 2 2.2v9.6c0 1.2-.9 2.2-2 2.2H7c-1.1 0-2-1-2-2.2V8.2zm7 8.1A3.3 3.3 0 1 0 12 9.7a3.3 3.3 0 0 0 0 6.6z";
     return (
         <span className={`mc-hero-tile-icon is-${id}`} aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="currentColor">

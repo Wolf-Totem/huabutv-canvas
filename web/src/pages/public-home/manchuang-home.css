@@ -111,23 +111,19 @@ html.mc-auth-open .portal-auth-overlay {
     z-index: 2;
     display: block;
     min-height: 100svh;
-    width: min(1840px, 100%);
+    width: 100%;
     margin: 0 auto;
-    padding: 88px 0 260px;
-    container-type: inline-size;
+    padding: 72px 0 280px;
 }
 .mc-hero-top {
-    --mc-center: clamp(340px, 34.72vw, 500px);
-    --mc-side: calc(var(--mc-center) * 0.78);
-    --mc-overlap: 36px;
-    --mc-banner-gap: 12px;
-    --mc-track-side: calc(var(--mc-side) - var(--mc-overlap));
-    --mc-cluster: calc(var(--mc-track-side) * 2 + var(--mc-center) + var(--mc-banner-gap) * 2);
-    --mc-right-min: 64px;
-    --mc-title: clamp(72px, calc(100cqi - var(--mc-cluster) - var(--mc-right-min) - 48px), 280px);
     display: grid;
-    grid-template-columns: var(--mc-title) minmax(0, 1fr);
+    grid-template-columns: minmax(300px, 36%) minmax(0, 1fr);
+    column-gap: 28px;
     align-items: start;
+    width: calc(100% - 56px);
+    max-width: 1680px;
+    margin: 0 auto;
+    padding-right: 28px;
 }
 .mc-hero-copy {
     position: relative;
@@ -138,7 +134,7 @@ html.mc-auth-open .portal-auth-overlay {
     gap: 16px;
     width: 100%;
     max-width: none;
-    padding-top: 30px;
+    padding-top: 42px;
 }
 .mc-hero-copy .mc-kicker,
 .mc-hero-copy .mc-hero-title,
@@ -160,26 +156,26 @@ html.mc-auth-open .portal-auth-overlay {
     position: relative;
     z-index: 6;
     display: grid;
-    gap: 8px;
+    gap: 18px;
     width: 100%;
     min-width: 0;
+    padding-top: 18px;
 }
 .mc-hero-banner-cluster {
-    --mc-shift: max(0px, calc((100% - var(--mc-cluster) - var(--mc-right-min)) / 3));
     position: relative;
-    width: var(--mc-cluster);
-    margin-left: var(--mc-shift);
+    width: 100%;
+    margin-left: 0;
     overflow: visible;
 }
 .mc-hero-banners {
     position: relative;
     display: grid;
     width: 100%;
-    padding-top: 8px;
+    height: clamp(240px, 15.6vw, 280px);
     overflow: visible;
-    grid-template-columns: var(--mc-track-side) var(--mc-center) var(--mc-track-side);
-    gap: var(--mc-banner-gap);
-    align-items: center;
+    grid-template-columns: 17% minmax(0, 1fr) 17%;
+    gap: 10px;
+    align-items: stretch;
 }
 .mc-hero-banner {
     position: relative;
@@ -187,19 +183,18 @@ html.mc-auth-open .portal-auth-overlay {
     border: 0;
     padding: 0;
     width: 100%;
-    /* 参考站海报是横向宽幅（约 5:2.8），不是正方形 1:1 */
-    aspect-ratio: 5 / 2.8;
-    height: auto;
-    border-radius: 8px;
-    background: #292929;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 22px;
+    background: #16181d;
     cursor: pointer;
     transition: transform 0.28s ease, box-shadow 0.28s ease, opacity 0.28s ease, filter 0.28s ease;
 }
 .mc-hero-banner.is-main { position: relative; z-index: 2; margin-inline: 0; box-shadow: 0 18px 40px rgba(0,0,0,0.35); }
-.mc-hero-banner.is-side { position: relative; z-index: 1; width: var(--mc-side); opacity: 0.75; }
-.mc-hero-banner.is-side.is-left { justify-self: start; }
-.mc-hero-banner.is-side.is-right { justify-self: end; }
-.mc-hero-banner:hover { transform: scale(1.04); z-index: 3; opacity: 1; }
+.mc-hero-banner.is-side { position: relative; z-index: 1; width: 100%; opacity: 0.92; }
+.mc-hero-banner.is-side.is-left { justify-self: stretch; }
+.mc-hero-banner.is-side.is-right { justify-self: stretch; }
+.mc-hero-banner:hover { transform: scale(1.02); z-index: 3; opacity: 1; }
 .mc-hero-banner img,
 .mc-hero-banner video,
 .mc-hero-banner .mc-hero-preview { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -218,23 +213,26 @@ html.mc-auth-open .portal-auth-overlay {
     border: 0; border-radius: 50%;
     background: rgba(12,14,18,0.72); color: #fff; cursor: pointer; font-size: 26px;
 }
-.mc-hero-banner-nav.is-prev { left: calc(var(--mc-track-side) + var(--mc-banner-gap) - 52px); }
-.mc-hero-banner-nav.is-next { right: calc(var(--mc-track-side) + var(--mc-banner-gap) - 52px); }
+.mc-hero-banner-nav.is-prev { left: 10px; }
+.mc-hero-banner-nav.is-next { right: 10px; }
 .mc-hero-banner-dots { display: flex; justify-content: center; gap: 8px; padding: 8px 0 4px; }
 .mc-hero-banner-dots button {
     width: 12px; height: 4px; border: 0; border-radius: 99px;
     background: rgba(255,255,255,0.28); cursor: pointer;
 }
 .mc-hero-banner-dots button.is-on { background: #fff; width: 24px; }
-.mc-hero-actions { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; }
+.mc-hero-actions { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .mc-hero-create {
     position: relative;
     isolation: isolate;
     overflow: hidden;
     display: flex; align-items: center; gap: 18px;
-    min-height: 120px; padding: 18px 22px;
-    border: 0; border-radius: 16px; text-align: left;
-    background: #1c1c1c; color: #f4f6fb; cursor: pointer;
+    min-height: 176px; padding: 22px 26px;
+    border: 0; border-radius: 22px; text-align: left;
+    background:
+        radial-gradient(120% 90% at 12% 50%, rgba(90, 110, 130, 0.28), transparent 46%),
+        linear-gradient(135deg, #1a1d22 0%, #101215 58%, #0c0d10 100%);
+    color: #f4f6fb; cursor: pointer;
     transition: filter 0.2s ease, transform 0.2s ease;
 }
 .mc-hero-create::before {
@@ -269,40 +267,40 @@ html.mc-auth-open .portal-auth-overlay {
 .mc-hero-tile > *:not(.mc-hero-preview) { position: relative; z-index: 1; }
 .mc-hero-create:hover, .mc-hero-tile:hover { filter: brightness(1.16); transform: translateY(-2px); }
 .mc-hero-create-plus {
-    display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px;
-    background: #3b82f6; color: #fff; font-size: 32px; font-weight: 500;
+    display: grid; place-items: center; width: 64px; height: 64px; border-radius: 18px;
+    background: #67e8f9; color: #0b1220; font-size: 34px; font-weight: 600;
 }
-.mc-hero-create strong { display: block; font-size: 18px; font-weight: 650; }
+.mc-hero-create strong { display: block; font-size: 20px; font-weight: 700; }
 .mc-hero-create em { display: block; margin-top: 6px; font-style: normal; color: rgba(255,255,255,0.55); font-size: 13px; }
-.mc-hero-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mc-hero-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .mc-hero-tile {
-    position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    min-height: 72px; padding: 14px 14px 14px 16px;
-    border: 0; border-radius: 16px; text-align: left; cursor: pointer; color: #f4f6fb;
+    position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    min-height: 82px; padding: 14px 14px 14px 18px;
+    border: 0; border-radius: 18px; text-align: left; cursor: pointer; color: #f4f6fb;
     background: #171922;
     transition: filter 0.2s ease, transform 0.2s ease;
 }
 .mc-hero-tile span { display: grid; gap: 4px; min-width: 0; }
-.mc-hero-tile strong { display: block; font-size: 15px; font-weight: 650; }
-.mc-hero-tile em { display: block; font-style: normal; color: rgba(255,255,255,0.58); font-size: 12px; line-height: 1.35; }
-.mc-hero-tile:nth-child(1) { background: linear-gradient(135deg, #4b2a78, #2a1748); }
-.mc-hero-tile:nth-child(2) { background: linear-gradient(135deg, #5a3a12, #2c1c0c); }
-.mc-hero-tile:nth-child(3) { background: linear-gradient(135deg, #3a2460, #1c1238); }
-.mc-hero-tile:nth-child(4) { background: linear-gradient(135deg, #163a58, #0d2438); }
-.mc-hero-tile-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mc-hero-tile strong { display: block; font-size: 15px; font-weight: 700; }
+.mc-hero-tile em { display: block; font-style: normal; color: rgba(255,255,255,0.62); font-size: 12px; line-height: 1.35; }
+.mc-hero-tile:nth-child(1) { background: linear-gradient(135deg, #7a2d86, #3b1458); }
+.mc-hero-tile:nth-child(2) { background: linear-gradient(135deg, #8a5a16, #3a220c); }
+.mc-hero-tile:nth-child(3) { background: linear-gradient(135deg, #4a2878, #1c1238); }
+.mc-hero-tile:nth-child(4) { background: linear-gradient(135deg, #1a4a72, #0d2438); }
+.mc-hero-tile-title { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .mc-hero-tile b {
     position: static;
     flex: none;
-    padding: 2px 6px; border-radius: 8px; background: rgba(255,255,255,0.14);
+    padding: 2px 7px; border-radius: 8px; background: rgba(255,255,255,0.16);
     font-size: 10px; font-weight: 700;
 }
 .mc-hero-tile-icon {
     display: grid; place-items: center;
-    flex: none; width: 40px; height: 40px; border-radius: 12px;
+    flex: none; width: 58px; height: 58px; border-radius: 16px;
     background: rgba(255,255,255,0.16);
     color: #f4f6fb;
 }
-.mc-hero-tile-icon svg { width: 20px; height: 20px; display: block; }
+.mc-hero-tile-icon svg { width: 28px; height: 28px; display: block; }
 .mc-hero-card { cursor: pointer; }
 .mc-hero-rail { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; height: clamp(280px, 36vh, 430px); overflow: visible; }
 .mc-hero-rail-track { position: relative; width: 100%; height: 100%; }
@@ -726,21 +724,22 @@ html.mc-auth-open .portal-auth-overlay {
     .mc-canvas-layout { grid-template-columns: 1fr; grid-template-areas: "copy" "stage" "caps"; }
     .mc-enterprise-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .mc-resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 981px) and (min-width: 960px) {
-    .mc-hero-top { --mc-banner-gap: 0px; }
+    .mc-hero-top { grid-template-columns: minmax(260px, 34%) minmax(0, 1fr); column-gap: 18px; }
+    .mc-hero-banners { height: 220px; }
 }
 @media (max-width: 959px) {
     .mc-hero-inner { padding: 96px 0 220px; }
-    .mc-hero-top { display: block; }
+    .mc-hero-top { display: block; width: calc(100% - 28px); padding-right: 0; }
     .mc-hero-copy { max-width: 100%; margin-bottom: 18px; padding-top: 8px; }
+    .mc-hero-title { width: min(720px, 92vw); }
     .mc-hero-banner-cluster { width: 100%; margin-left: 0; }
-    .mc-hero-banners { grid-template-columns: minmax(0, 1fr); }
+    .mc-hero-banners { grid-template-columns: minmax(0, 1fr); height: 200px; }
     .mc-hero-banner.is-side { display: none; }
     .mc-hero-banner.is-main { width: 100%; }
     .mc-hero-banner-nav.is-prev { left: 10px; }
     .mc-hero-banner-nav.is-next { right: 10px; }
     .mc-hero-actions { grid-template-columns: 1fr; }
+    .mc-hero-create { min-height: 120px; }
 }
 @media (max-width: 920px) {
     .mc-nav-links { display: none; }

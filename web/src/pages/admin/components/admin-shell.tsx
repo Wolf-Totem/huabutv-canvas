@@ -88,7 +88,7 @@ const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = 
         items: [
             { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" />, permission: "admin.announcements" },
             { path: "/admin/plaza/applications", label: "广场审核", description: "作品上架申请与草稿预览", icon: <Sparkles className="size-4" />, permission: "admin.plaza" },
-            { path: "/admin/plaza/works", label: "广场作品", description: "已上架作品与强制下架", icon: <Sparkles className="size-4" />, permission: "admin.plaza" },
+            { path: "/admin/plaza/works", label: "广场展示", description: "展示地址导入、复制与删除", icon: <Sparkles className="size-4" />, permission: "admin.plaza" },
             { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" />, permission: "admin.agent_lessons" },
             { path: "/admin/payments", label: "支付充值", description: "支付渠道、订单与对账", icon: <CreditCard className="size-4" />, permission: "admin.payments" },
             { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" />, permission: "admin.credits" },
