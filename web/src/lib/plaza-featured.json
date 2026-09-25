@@ -1,5 +1,173 @@
 [
   {
+    "id": "b80035450ead47d6897c5a41220ae899",
+    "projectUuid": "b80035450ead47d6897c5a41220ae899",
+    "publicationKey": "b80035450ead47d6897c5a41220ae899",
+    "name": "办公室深夜",
+    "description": "精选画布，可查看制作过程",
+    "coverUrl": "https://libtv-res.liblib.art/upload-images/5ef327e771bd41dd9256289dd7127f5a/887fad2bd95fc61622816f107e934fc8e66d4f89.png",
+    "previewUrl": "https://libtv-res.liblib.art/upload-images/5ef327e771bd41dd9256289dd7127f5a/8763cd87031647284ba5ffe075b99f350a12a414.mp4",
+    "watchUrl": "https://libtv-res.liblib.art/upload-images/5ef327e771bd41dd9256289dd7127f5a/8763cd87031647284ba5ffe075b99f350a12a414.mp4",
+    "hlsUrl": "",
+    "authorName": "画布TV精选",
+    "authorId": "plaza-demo",
+    "authorAvatar": "/logo.png",
+    "tag": "featured",
+    "tags": [
+      "精选画布"
+    ],
+    "likeCount": 0,
+    "updatedAt": "2026-09-25T08:00:00.000Z",
+    "publicCanvas": true
+  },
+  {
+    "id": "6e53f1be144c4d589f5dccf4a3c13d76",
+    "projectUuid": "6e53f1be144c4d589f5dccf4a3c13d76",
+    "publicationKey": "6e53f1be144c4d589f5dccf4a3c13d76",
+    "name": "一键复刻与服装设定",
+    "description": "精选画布，可查看制作过程",
+    "coverUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/image/d28c5951d0c242eb88d22a63ea3ec66a/929582170_8822f6e61fc7493dbb1e09d7eaecf691.png",
+    "previewUrl": "https://libtv-res.liblib.art/upload-images/d28c5951d0c242eb88d22a63ea3ec66a/97ab7563e48dd4dcdc484c9e33888f583d09714e.mp4",
+    "watchUrl": "https://libtv-res.liblib.art/upload-images/d28c5951d0c242eb88d22a63ea3ec66a/97ab7563e48dd4dcdc484c9e33888f583d09714e.mp4",
+    "hlsUrl": "",
+    "authorName": "画布TV精选",
+    "authorId": "plaza-demo",
+    "authorAvatar": "/logo.png",
+    "tag": "featured",
+    "tags": [
+      "精选画布"
+    ],
+    "likeCount": 0,
+    "updatedAt": "2026-09-25T08:00:00.000Z",
+    "publicCanvas": true
+  },
+  {
+    "id": "7ac08a6b790549a3aab32c5f9e8757cf",
+    "projectUuid": "7ac08a6b790549a3aab32c5f9e8757cf",
+    "publicationKey": "7ac08a6b790549a3aab32c5f9e8757cf",
+    "name": "精选画布",
+    "description": "精选画布，可查看制作过程",
+    "coverUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/image/d19f2365821140308714724b540dbbd2/933790335_629b0207f1f44788ab45769f175b3f29.png",
+    "previewUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/video/d19f2365821140308714724b540dbbd2/0e8067eacfc8c03352b0526a425922b8d30395c6edb78f293e87f331028bc991.mp4",
+    "watchUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/video/d19f2365821140308714724b540dbbd2/0e8067eacfc8c03352b0526a425922b8d30395c6edb78f293e87f331028bc991.mp4",
+    "hlsUrl": "",
+    "authorName": "画布TV精选",
+    "authorId": "plaza-demo",
+    "authorAvatar": "/logo.png",
+    "tag": "featured",
+    "tags": [
+      "精选画布"
+    ],
+    "likeCount": 0,
+    "updatedAt": "2026-09-25T08:00:00.000Z",
+    "publicCanvas": true
+  },
+  {
+    "id": "fb2b48521b324c569c4c60afb33e178c",
+    "projectUuid": "fb2b48521b324c569c4c60afb33e178c",
+    "publicationKey": "fb2b48521b324c569c4c60afb33e178c",
+    "name": "创意片头",
+    "description": "精选画布，可查看制作过程",
+    "coverUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/image/9c9ca63a3fd948e8abb9ab96ade97321/929528933_5b005c0b41a349b1bab89b9c7d1e6a94.png",
+    "previewUrl": "https://libtv-res.liblib.art/upload-images/9c9ca63a3fd948e8abb9ab96ade97321/6f38f0b4db002c942b5a17798fd72ff78019e301.mp4",
+    "watchUrl": "https://libtv-res.liblib.art/upload-images/9c9ca63a3fd948e8abb9ab96ade97321/6f38f0b4db002c942b5a17798fd72ff78019e301.mp4",
+    "hlsUrl": "",
+    "authorName": "画布TV精选",
+    "authorId": "plaza-demo",
+    "authorAvatar": "/logo.png",
+    "tag": "featured",
+    "tags": [
+      "精选画布"
+    ],
+    "likeCount": 0,
+    "updatedAt": "2026-09-25T08:00:00.000Z",
+    "publicCanvas": true
+  },
+  {
+    "id": "96cbadb46bcc4d36a76f7bafede75f7a",
+    "projectUuid": "96cbadb46bcc4d36a76f7bafede75f7a",
+    "publicationKey": "96cbadb46bcc4d36a76f7bafede75f7a",
+    "name": "角色设定",
+    "description": "精选画布，可查看制作过程",
+    "coverUrl": "https://libtv-res.liblib.art/upload-images/beda8103d1a8414aa15aa0eb1db95a07/712c15a65ed0d55a70947c68f329ff68004a7851.png",
+    "previewUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/video/0cabfbb45c1940e1b72a0e25ba61b9b6/02637ad3245e56fcbecfe4f4686958f17fa825f9c464d71d7a6714eaa2edcd59.mp4",
+    "watchUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/video/0cabfbb45c1940e1b72a0e25ba61b9b6/02637ad3245e56fcbecfe4f4686958f17fa825f9c464d71d7a6714eaa2edcd59.mp4",
+    "hlsUrl": "",
+    "authorName": "画布TV精选",
+    "authorId": "plaza-demo",
+    "authorAvatar": "/logo.png",
+    "tag": "featured",
+    "tags": [
+      "精选画布"
+    ],
+    "likeCount": 0,
+    "updatedAt": "2026-09-25T08:00:00.000Z",
+    "publicCanvas": true
+  },
+  {
+    "id": "21637f0b34644ea9a8ab2cb778814a33",
+    "projectUuid": "21637f0b34644ea9a8ab2cb778814a33",
+    "publicationKey": "21637f0b34644ea9a8ab2cb778814a33",
+    "name": "精选画布",
+    "description": "精选画布，可查看制作过程",
+    "coverUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/image/d28c5951d0c242eb88d22a63ea3ec66a/837529143_5fd5f00eefe240bbaf761e3dc9f72b1d.png",
+    "previewUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/video/d28c5951d0c242eb88d22a63ea3ec66a/53399d97de0af52faef7579781cb72a0ed201394913e43c91c08feed0a003aac.mp4",
+    "watchUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/video/d28c5951d0c242eb88d22a63ea3ec66a/53399d97de0af52faef7579781cb72a0ed201394913e43c91c08feed0a003aac.mp4",
+    "hlsUrl": "",
+    "authorName": "画布TV精选",
+    "authorId": "plaza-demo",
+    "authorAvatar": "/logo.png",
+    "tag": "featured",
+    "tags": [
+      "精选画布"
+    ],
+    "likeCount": 0,
+    "updatedAt": "2026-09-25T08:00:00.000Z",
+    "publicCanvas": true
+  },
+  {
+    "id": "ca8391af00524d1badcdcbb02b6fb40e",
+    "projectUuid": "ca8391af00524d1badcdcbb02b6fb40e",
+    "publicationKey": "ca8391af00524d1badcdcbb02b6fb40e",
+    "name": "精选画布",
+    "description": "精选画布，可查看制作过程",
+    "coverUrl": "https://libtv-res.liblib.art/upload-images/0cabfbb45c1940e1b72a0e25ba61b9b6/475d4d07b3a72d6acc332e611e5ea1c220fdee8a.png",
+    "previewUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/video/d28c5951d0c242eb88d22a63ea3ec66a/53399d97de0af52faef7579781cb72a0ed201394913e43c91c08feed0a003aac.mp4",
+    "watchUrl": "https://libtv-res.liblib.art/sd-gen-save-img/genius_playground/video/d28c5951d0c242eb88d22a63ea3ec66a/53399d97de0af52faef7579781cb72a0ed201394913e43c91c08feed0a003aac.mp4",
+    "hlsUrl": "",
+    "authorName": "画布TV精选",
+    "authorId": "plaza-demo",
+    "authorAvatar": "/logo.png",
+    "tag": "featured",
+    "tags": [
+      "精选画布"
+    ],
+    "likeCount": 0,
+    "updatedAt": "2026-09-25T08:00:00.000Z",
+    "publicCanvas": true
+  },
+  {
+    "id": "85bbb8e129574b8ba9a3e859a71af1bb",
+    "projectUuid": "85bbb8e129574b8ba9a3e859a71af1bb",
+    "publicationKey": "85bbb8e129574b8ba9a3e859a71af1bb",
+    "name": "智能剪辑",
+    "description": "精选画布，可查看制作过程",
+    "coverUrl": "",
+    "previewUrl": "https://libtv-res.liblib.art/output/d530a697-1bb8-4bd0-a4e8-e689e7f1d6c3/result.mp4",
+    "watchUrl": "https://libtv-res.liblib.art/output/d530a697-1bb8-4bd0-a4e8-e689e7f1d6c3/result.mp4",
+    "hlsUrl": "",
+    "authorName": "画布TV精选",
+    "authorId": "plaza-demo",
+    "authorAvatar": "/logo.png",
+    "tag": "featured",
+    "tags": [
+      "精选画布"
+    ],
+    "likeCount": 0,
+    "updatedAt": "2026-09-25T08:00:00.000Z",
+    "publicCanvas": true
+  },
+  {
     "id": "40e2b7be0633992b5f3c5ea782005e19",
     "projectUuid": "7d9c4037f51939b315649f9c0ce54269",
     "publicationKey": "40e2b7be0633992b5f3c5ea782005e19",
