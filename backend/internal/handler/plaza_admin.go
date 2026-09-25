@@ -179,6 +179,20 @@ func RegisterPlazaAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"work": work})
 	})
 
+	r.DELETE("/admin/plaza/works/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.HardDeletePlazaWork(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, result)
+	})
+
 	r.POST("/admin/plaza/seed-external", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

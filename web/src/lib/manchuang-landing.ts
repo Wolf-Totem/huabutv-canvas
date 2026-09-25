@@ -4,11 +4,18 @@ export type LandingTextCard = { title: string; text: string; imageUrl?: string }
 export type LandingStep = { step: string; phase: string; title: string; tagline: string; description: string; imageUrl: string; tags: string[] };
 export type LandingRailCard = { id: string; imageUrl: string; previewUrl?: string; label?: string };
 export type LandingPricingTier = { id: string; name: string; tagline: string; price: string; unit: string; note: string; cta: string; featured?: boolean; badge?: string; features: string[] };
-export type LandingHeroBanner = { id: string; title: string; imageUrl: string; previewUrl?: string; href: string; openInNewTab?: boolean; workId?: string };
-export type LandingHeroTile = { id: string; title: string; subtitle: string; badge?: string; href: string; icon?: string };
+export type LandingHeroMedia = {
+    imageUrl?: string;
+    previewUrl?: string;
+    imageResourceId?: string;
+    previewResourceId?: string;
+};
+export type LandingHeroBanner = LandingHeroMedia & { id: string; title: string; imageUrl: string; href: string; openInNewTab?: boolean; workId?: string };
+export type LandingHeroTile = LandingHeroMedia & { id: string; title: string; subtitle: string; badge?: string; href: string; icon?: string };
+export type LandingHeroCreate = LandingHeroMedia & { title: string; subtitle: string; href: string };
 export type LandingHeroShowcase = {
     banners: LandingHeroBanner[];
-    create: { title: string; subtitle: string; href: string };
+    create: LandingHeroCreate;
     tiles: LandingHeroTile[];
 };
 
@@ -129,13 +136,21 @@ export function mergeManchuangLanding(value?: Partial<ManchuangLanding> | null):
         pricingTiers: value.pricingTiers?.length ? value.pricingTiers : base.pricingTiers,
         rail: value.rail?.length ? value.rail : base.rail,
         heroShowcase: {
-            banners: value.heroShowcase?.banners?.length ? value.heroShowcase.banners : base.heroShowcase.banners,
+            banners: value.heroShowcase?.banners?.length ? value.heroShowcase.banners.map((banner) => ({
+                ...banner,
+                href: banner.href?.trim() || "/create",
+            })) : base.heroShowcase.banners,
             create: {
+                ...base.heroShowcase.create,
+                ...value.heroShowcase?.create,
                 title: value.heroShowcase?.create?.title?.trim() || base.heroShowcase.create.title,
                 subtitle: value.heroShowcase?.create?.subtitle?.trim() || base.heroShowcase.create.subtitle,
                 href: value.heroShowcase?.create?.href?.trim() || base.heroShowcase.create.href,
             },
-            tiles: value.heroShowcase?.tiles?.length ? value.heroShowcase.tiles : base.heroShowcase.tiles,
+            tiles: value.heroShowcase?.tiles?.length ? value.heroShowcase.tiles.map((tile) => ({
+                ...tile,
+                href: tile.href?.trim() || "/create",
+            })) : base.heroShowcase.tiles,
         },
         heroVideoUrl: value.heroVideoUrl?.trim() || base.heroVideoUrl,
         heroPosterUrl: value.heroPosterUrl?.trim() || base.heroPosterUrl,

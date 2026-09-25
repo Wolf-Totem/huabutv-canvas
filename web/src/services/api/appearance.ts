@@ -163,3 +163,14 @@ export async function uploadAppearanceAsset(slot: AppearanceAssetSlot, file: Fil
     const result = await http.post<{ resource: AppearanceResource }>(`/admin/settings/appearance/assets/${slot}`, body);
     return result.resource;
 }
+
+export async function uploadAppearanceMedia(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    return http.post<{
+        resource: AppearanceResource;
+        displayUrl: string;
+        originalUrl: string;
+        compression: string;
+    }>("/admin/settings/appearance/media", body);
+}

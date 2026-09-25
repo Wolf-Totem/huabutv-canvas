@@ -2,7 +2,7 @@
 export function ossProcessedImage(url: string | undefined, width = 720) {
     const source = String(url || "").trim();
     if (!source) return "";
-    if (source.startsWith("data:") || source.startsWith("blob:")) return source;
+    if (source.startsWith("data:") || source.startsWith("blob:") || source.startsWith("/api/")) return source;
     if (/x-oss-process=/i.test(source)) return source;
     const host = safeHost(source);
     const aliyun = /aliyuncs\.com$|\.aliyuncs\.com$|cdn\.j11\.net$|liblib\.art$|liblib\.cloud$|oss-cn-/i.test(host);

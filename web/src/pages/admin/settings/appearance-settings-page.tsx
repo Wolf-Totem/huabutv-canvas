@@ -15,7 +15,7 @@ import { HomeNavSetting } from "@/pages/admin/settings/components/home-nav-setti
 import { WelcomeSetting } from "@/pages/admin/settings/components/welcome-setting";
 import { IpLocalePromptSetting } from "@/pages/admin/settings/components/ip-locale-prompt-setting";
 import { deleteAdminResources } from "@/services/api/admin-storage";
-import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, uploadLive2DModel, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
+import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, uploadAppearanceMedia, uploadLive2DModel, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
 import { DEFAULT_CANVAS_APPEARANCE } from "@/lib/canvas/agent-appearance";
 import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
 
@@ -610,21 +610,33 @@ export default function AppearanceSettingsPage() {
                             />
                             <div className="space-y-3">
                                 <strong className="text-sm">首页海报与创作模块</strong>
-                                <p className="text-xs text-foreground/55">对应首页右侧海报轮播、开始创作和四格入口。每条都可以改图片、文案和超链接。</p>
+                                <p className="text-xs text-foreground/55">海报只需图片和关联链接（外链或站内路径）。图片和预览视频可直接上传，按后台对象存储开关保存到 OSS 或本机；链接可留空，保存后回落到 /create。</p>
                                 <Form.Item label="开始创作标题 / 说明 / 链接">
                                     <div className="grid gap-2 sm:grid-cols-3">
                                         <Input value={landing.heroShowcase.create.title} maxLength={24} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, create: { ...current.heroShowcase.create, title: event.target.value } } }))} />
                                         <Input value={landing.heroShowcase.create.subtitle} maxLength={80} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, create: { ...current.heroShowcase.create, subtitle: event.target.value } } }))} />
-                                        <Input value={landing.heroShowcase.create.href} maxLength={300} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, create: { ...current.heroShowcase.create, href: event.target.value } } }))} />
+                                        <Input value={landing.heroShowcase.create.href} maxLength={300} placeholder="可留空，默认 /create" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, create: { ...current.heroShowcase.create, href: event.target.value } } }))} />
                                     </div>
+                                    <LandingMediaFields
+                                        disabled={saving || refreshing || restoring}
+                                        imageUrl={landing.heroShowcase.create.imageUrl}
+                                        previewUrl={landing.heroShowcase.create.previewUrl}
+                                        onUploaded={(patch) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, create: { ...current.heroShowcase.create, ...patch } } }))}
+                                    />
                                 </Form.Item>
                                 {landing.heroShowcase.banners.map((item, index) => (
-                                    <div key={`${item.id}-${index}`} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
-                                        <Input value={item.title} maxLength={40} placeholder="海报标题" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.map((row, rowIndex) => rowIndex === index ? { ...row, title: event.target.value } : row) } }))} />
-                                        <Input value={item.imageUrl} maxLength={500} placeholder="海报图片 URL" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.map((row, rowIndex) => rowIndex === index ? { ...row, imageUrl: event.target.value } : row) } }))} />
-                                        <Input value={item.previewUrl || ""} maxLength={500} placeholder="悬停预览视频 URL" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.map((row, rowIndex) => rowIndex === index ? { ...row, previewUrl: event.target.value } : row) } }))} />
-                                        <Input value={item.href} maxLength={300} placeholder="点击跳转链接" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.map((row, rowIndex) => rowIndex === index ? { ...row, href: event.target.value } : row) } }))} />
-                                        <Button type="text" danger disabled={saving || refreshing || restoring || landing.heroShowcase.banners.length <= 1} onClick={() => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.filter((_, rowIndex) => rowIndex !== index) } }))}>删除</Button>
+                                    <div key={`${item.id}-${index}`} className="grid gap-2 rounded-lg border border-border p-3">
+                                        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                                            <Input value={item.title} maxLength={40} placeholder="海报标题" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.map((row, rowIndex) => rowIndex === index ? { ...row, title: event.target.value } : row) } }))} />
+                                            <Input value={item.href} maxLength={300} placeholder="点击跳转（外链或站内路径，可留空）" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.map((row, rowIndex) => rowIndex === index ? { ...row, href: event.target.value } : row) } }))} />
+                                            <Button type="text" danger disabled={saving || refreshing || restoring || landing.heroShowcase.banners.length <= 1} onClick={() => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.filter((_, rowIndex) => rowIndex !== index) } }))}>删除</Button>
+                                        </div>
+                                        <LandingMediaFields
+                                            disabled={saving || refreshing || restoring}
+                                            imageUrl={item.imageUrl}
+                                            previewUrl={item.previewUrl}
+                                            onUploaded={(patch) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: current.heroShowcase.banners.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row) } }))}
+                                        />
                                     </div>
                                 ))}
                                 <Button size="small" disabled={saving || refreshing || restoring || landing.heroShowcase.banners.length >= 12} onClick={() => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, banners: [...current.heroShowcase.banners, { id: `banner-${Date.now()}`, title: "", imageUrl: "", href: "/create" }] } }))}>添加海报</Button>
@@ -635,8 +647,14 @@ export default function AppearanceSettingsPage() {
                                         <Input value={item.title} maxLength={24} placeholder="入口标题" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, title: event.target.value } : row) } }))} />
                                         <Input value={item.subtitle} maxLength={80} placeholder="入口说明" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, subtitle: event.target.value } : row) } }))} />
                                         <Input value={item.badge || ""} maxLength={12} placeholder="角标" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, badge: event.target.value } : row) } }))} />
-                                        <Input value={item.href} maxLength={300} placeholder="链接" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, href: event.target.value } : row) } }))} />
+                                        <Input value={item.href} maxLength={300} placeholder="链接，可留空" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, href: event.target.value } : row) } }))} />
                                         </div>
+                                        <LandingMediaFields
+                                            disabled={saving || refreshing || restoring}
+                                            imageUrl={item.imageUrl}
+                                            previewUrl={item.previewUrl}
+                                            onUploaded={(patch) => setLanding((current) => ({ ...current, heroShowcase: { ...current.heroShowcase, tiles: current.heroShowcase.tiles.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row) } }))}
+                                        />
                                     </div>
                                 ))}
                                 <div className="rounded-xl border border-border bg-[#111] p-4 text-white">
@@ -1116,4 +1134,59 @@ function validateSkinDrafts(themes: SkinDefinition[], selectedID: string) {
 function formatBytes(bytes: number) {
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function LandingMediaFields({
+    disabled,
+    imageUrl,
+    previewUrl,
+    onUploaded,
+}: {
+    disabled: boolean;
+    imageUrl?: string;
+    previewUrl?: string;
+    onUploaded: (patch: { imageResourceId?: string; previewResourceId?: string }) => void;
+}) {
+    const { message } = App.useApp();
+    const [busy, setBusy] = useState(false);
+    const [localImage, setLocalImage] = useState("");
+    const [localPreview, setLocalPreview] = useState("");
+    const upload = async (file: File, kind: "image" | "video") => {
+        setBusy(true);
+        const objectUrl = URL.createObjectURL(file);
+        if (kind === "image") setLocalImage(objectUrl);
+        else setLocalPreview(objectUrl);
+        try {
+            const result = await uploadAppearanceMedia(file);
+            if (kind === "image") onUploaded({ imageResourceId: result.resource.id });
+            else onUploaded({ previewResourceId: result.resource.id });
+            message.success(kind === "image" ? "图片已上传" : "预览视频已上传");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "上传失败");
+        } finally {
+            setBusy(false);
+        }
+    };
+    return (
+        <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs">
+                <span className="rounded border border-border px-2 py-1">{busy ? "上传中…" : "上传图片"}</span>
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={disabled || busy} onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void upload(file, "image");
+                }} />
+            </label>
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs">
+                <span className="rounded border border-border px-2 py-1">上传预览视频</span>
+                <input type="file" accept="video/mp4,video/webm" className="hidden" disabled={disabled || busy} onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void upload(file, "video");
+                }} />
+            </label>
+            {localImage || imageUrl ? <img src={localImage || imageUrl} alt="" className="h-10 w-16 rounded object-cover" /> : null}
+            {localPreview || previewUrl ? <span className="text-xs text-foreground/55">已有预览视频</span> : null}
+        </div>
+    );
 }

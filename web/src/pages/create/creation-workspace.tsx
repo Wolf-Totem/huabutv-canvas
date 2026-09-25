@@ -39,6 +39,7 @@ import type { Skill } from "@/services/api/skills";
 import { resolveResourceUrl } from "@/services/api/resources";
 import { watchFromPlazaWork, WORK_TAGS, type FeaturedCanvas } from "@/lib/plaza-catalog";
 import { listPlazaWorks } from "@/services/api/plaza";
+import { creationFeaturedWorks } from "./creation-inspirations";
 import "@/pages/plaza/plaza-watch.css";
 import { ossProcessedImage } from "@/lib/oss-image";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
@@ -804,14 +805,25 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
 }
 
 
-export function CreationFeaturedWorks({ onStartPrompt: _onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
-    const { t } = useTranslation("canvas");
+export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
     const navigate = useNavigate();
-    const [filter, setFilter] = useState<"all" | CreationMode | string>("all");
+    const [tab, setTab] = useState<"plaza" | "inspirations">(() => (typeof window !== "undefined" && window.location.hash === "#inspirations" ? "inspirations" : "plaza"));
+    const [filter, setFilter] = useState("all");
     const [limit, setLimit] = useState(16);
     const sentinelRef = useRef<HTMLDivElement>(null);
     const [source, setSource] = useState<FeaturedCanvas[]>([]);
     const tags = WORK_TAGS;
+    const selectTab = (next: "plaza" | "inspirations") => {
+        setTab(next);
+        setLimit(16);
+        const hash = next === "inspirations" ? "#inspirations" : "#plaza";
+        if (window.location.hash !== hash) window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
+    };
+    useEffect(() => {
+        const onHash = () => setTab(window.location.hash === "#inspirations" ? "inspirations" : "plaza");
+        window.addEventListener("hashchange", onHash);
+        return () => window.removeEventListener("hashchange", onHash);
+    }, []);
     useEffect(() => {
         let active = true;
         listPlazaWorks({ page: 1, pageSize: 80, sort: "hot" })
@@ -828,37 +840,54 @@ export function CreationFeaturedWorks({ onStartPrompt: _onStartPrompt }: { onSta
     }, []);
     const filtered = source.filter((item) => {
         if (filter === "all") return true;
-        if (filter === "video" || filter === "image" || filter === "text") return item.mode === filter;
         return item.tag === filter || item.tags.includes(tags.find((tag) => tag.slug === filter)?.name || "");
     });
+    const visible = tab === "inspirations" ? creationFeaturedWorks : filtered.slice(0, limit);
 
     useEffect(() => {
         const node = sentinelRef.current;
-        if (!node) return;
+        if (!node || tab !== "plaza") return;
         const observer = new IntersectionObserver((entries) => {
             if (entries.some((entry) => entry.isIntersecting)) setLimit((count) => (count < filtered.length ? count + 16 : count));
         }, { rootMargin: "320px 0px" });
         observer.observe(node);
         return () => observer.disconnect();
-    }, [filtered.length, filter]);
+    }, [filtered.length, filter, tab]);
 
-    return <section className="plaza-feed" id="plaza" aria-labelledby="creation-featured-title">
+    return <section className="plaza-feed" id={tab === "inspirations" ? "inspirations" : "plaza"} aria-labelledby="creation-featured-title">
         <div className="plaza-feed-head">
-            <h2 id="creation-featured-title">作品广场</h2>
-            <p>{source.length} 个作品</p>
+            <div className="plaza-feed-tabs" role="tablist" aria-label="创作页内容">
+                <button type="button" role="tab" aria-selected={tab === "plaza"} onClick={() => selectTab("plaza")}>作品广场</button>
+                <button type="button" role="tab" aria-selected={tab === "inspirations"} onClick={() => selectTab("inspirations")}>创作灵感</button>
+            </div>
+            <p>{tab === "inspirations" ? `${creationFeaturedWorks.length} 条灵感` : `${source.length} 个作品`}</p>
         </div>
-        <div className="plaza-feed-tags" role="group" aria-label="作品分类">
-            <button type="button" aria-pressed={filter === "all"} onClick={() => { setFilter("all"); setLimit(16); }}>全部作品</button>
-            {tags.map((item) => (
-                <button key={item.slug} type="button" aria-pressed={filter === item.slug} onClick={() => { setFilter(item.slug); setLimit(16); }}>{item.name}</button>
-            ))}
-            {(["video", "image", "text"] as const).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setLimit(16); }}>{t(`mode.${value}`)}</button>)}
-        </div>
+        <h2 id="creation-featured-title" className="sr-only">{tab === "inspirations" ? "创作灵感" : "作品广场"}</h2>
+        {tab === "plaza" ? (
+            <div className="plaza-feed-tags" role="group" aria-label="作品分类">
+                <button type="button" aria-pressed={filter === "all"} onClick={() => { setFilter("all"); setLimit(16); }}>全部作品</button>
+                {tags.map((item) => (
+                    <button key={item.slug} type="button" aria-pressed={filter === item.slug} onClick={() => { setFilter(item.slug); setLimit(16); }}>{item.name}</button>
+                ))}
+            </div>
+        ) : null}
         <div className="plaza-feed-grid">
-            {filtered.slice(0, limit).map((item) => <PlazaFeedCard key={item.slug} item={item} onOpen={(slug) => navigate(`/plaza/${encodeURIComponent(slug)}`)} />)}
+            {tab === "plaza"
+                ? (visible as FeaturedCanvas[]).map((item) => <PlazaFeedCard key={item.slug} item={item} onOpen={(slug) => navigate(`/plaza/${encodeURIComponent(slug)}`)} />)
+                : creationFeaturedWorks.map((item) => (
+                    <button key={item.title} type="button" className="plaza-card" onClick={() => onStartPrompt(item.mode, item.prompt)}>
+                        <div className="plaza-card-media">{item.image ? <img src={item.image} alt="" loading="lazy" /> : null}</div>
+                        <h3>{item.title}</h3>
+                        <p>{item.description}</p>
+                    </button>
+                ))}
         </div>
-        <div ref={sentinelRef} className="plaza-feed-sentinel" aria-hidden />
-        <footer className="creation-inspiration-footer">{limit < filtered.length ? <span>继续下滑加载更多</span> : <span>已展示全部 {filtered.length} 个作品</span>}</footer>
+        {tab === "plaza" ? <div ref={sentinelRef} className="plaza-feed-sentinel" aria-hidden /> : null}
+        <footer className="creation-inspiration-footer">
+            {tab === "inspirations"
+                ? <span>已展示全部 {creationFeaturedWorks.length} 条灵感</span>
+                : limit < filtered.length ? <span>继续下滑加载更多</span> : <span>已展示全部 {filtered.length} 个作品</span>}
+        </footer>
     </section>;
 }
 

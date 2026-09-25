@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"infinite-canvas/backend/internal/service"
@@ -141,6 +142,64 @@ func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"resource": resource})
+	})
+
+	r.POST("/admin/settings/appearance/media", func(c *gin.Context) {
+		actor, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "admin-appearance-media:"+actor.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, (256<<20)+(1<<20))
+		file, err := c.FormFile("file")
+		if err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		uploaded, err := svc.UploadAppearanceMedia(actor, file)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"resource": uploaded.Resource, "displayUrl": uploaded.DisplayURL, "originalUrl": uploaded.OriginalURL, "compression": uploaded.Compression})
+	})
+
+	r.GET("/public/appearance/media/:id", func(c *gin.Context) {
+		width, _ := strconv.Atoi(c.Query("w"))
+		delivery, err := svc.AppearanceMedia(c.Param("id"), c.Query("variant"), width)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "public, max-age=300")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("X-Content-Type-Options", "nosniff")
+		if delivery.RedirectURL != "" {
+			c.Redirect(http.StatusFound, delivery.RedirectURL)
+			return
+		}
+		if delivery.Stream == nil {
+			fail(c, http.StatusNotFound, errors.New("外观资源不存在"))
+			return
+		}
+		stream := delivery.Stream
+		defer stream.Body.Close()
+		resource := stream.Resource
+		mimeType := resource.MimeType
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		c.Header("Accept-Ranges", "bytes")
+		if seeker, available := stream.Body.(io.ReadSeeker); available {
+			c.Header("Content-Type", mimeType)
+			http.ServeContent(c.Writer, c.Request, resource.ID, resource.UpdatedAt, seeker)
+			return
+		}
+		c.DataFromReader(stream.StatusCode, stream.ContentLength, mimeType, stream.Body, nil)
 	})
 	registerLive2DRoutes(r, svc)
 }

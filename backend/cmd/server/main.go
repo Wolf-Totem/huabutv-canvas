@@ -28,10 +28,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if len(os.Args) > 1 && os.Args[1] == "plaza-seed" {
-		if err := runPlazaSeed(ctx); err != nil {
-			log.Fatal(err)
-		}
-		return
+		os.Exit(runPlazaSeed(ctx))
 	}
 	if err := run(ctx); err != nil {
 		log.Fatal(err)

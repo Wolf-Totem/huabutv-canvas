@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
@@ -91,7 +91,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
 
         const glowCards = (event: PointerEvent) => {
             const card = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-                ".mc-enterprise-card, .mc-resource-card, .mc-capability-button, .mc-pricing-card, .mc-flow-step, .mc-canvas-stage",
+                ".mc-hero-create, .mc-enterprise-card, .mc-resource-card, .mc-capability-button, .mc-pricing-card, .mc-flow-step, .mc-canvas-stage",
             );
             if (!card) return;
             const box = card.getBoundingClientRect();
@@ -225,26 +225,28 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                     <span className="mc-hero-media-scrim" />
                 </div>
                 <div className="mc-hero-inner">
-                    <div className="mc-hero-copy">
-                        <p className="mc-kicker"><span />{landing.heroKicker}</p>
-                        <h1 className="mc-hero-title">
-                            <span className="mc-sr-only">绘无限 造未来</span>
-                            <img src="/manchuang/hero-title.webp" alt="" aria-hidden="true" />
-                            <span className="mc-hero-title-ink" aria-hidden="true" />
-                        </h1>
-                        <p className="mc-hero-lead">{landing.heroLead}</p>
+                    <div className="mc-hero-top">
+                        <div className="mc-hero-copy">
+                            <p className="mc-kicker"><span />{landing.heroKicker}</p>
+                            <h1 className="mc-hero-title">
+                                <span className="mc-sr-only">绘无限 造未来</span>
+                                <img src="/manchuang/hero-title.webp" alt="" aria-hidden="true" />
+                                <span className="mc-hero-title-ink" aria-hidden="true" />
+                            </h1>
+                            <p className="mc-hero-lead">{landing.heroLead}</p>
+                        </div>
+                        <HeroShowcase
+                            showcase={landing.heroShowcase}
+                            onOpen={(href) => {
+                                if (!href) return;
+                                if (href.startsWith("http://") || href.startsWith("https://")) {
+                                    window.open(href, "_blank", "noopener,noreferrer");
+                                    return;
+                                }
+                                openWorkspace(href.startsWith("/") ? href : "/create");
+                            }}
+                        />
                     </div>
-                    <HeroShowcase
-                        showcase={landing.heroShowcase}
-                        onOpen={(href) => {
-                            if (!href) return;
-                            if (href.startsWith("http://") || href.startsWith("https://")) {
-                                window.open(href, "_blank", "noopener,noreferrer");
-                                return;
-                            }
-                            openWorkspace(href.startsWith("/") ? href : "/create");
-                        }}
-                    />
                 </div>
                 <HeroRail items={rail} onOpen={(id) => openWorkspace(`/plaza/${encodeURIComponent(id)}`)} />
             </section>
@@ -362,6 +364,16 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
     );
 }
 
+function heroImageSrc(url: string, width: number) {
+    const source = String(url || "").trim();
+    if (!source) return "";
+    if (source.includes("/appearance/media/")) {
+        const join = source.includes("?") ? "&" : "?";
+        return `${source}${join}w=${width}`;
+    }
+    return ossProcessedImage(source, width) || source;
+}
+
 function BannerCard({ item, className, onOpen }: { item: { title: string; imageUrl: string; previewUrl?: string; href: string }; className: string; onOpen: (href: string) => void }) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const playPreview = () => {
@@ -390,7 +402,7 @@ function BannerCard({ item, className, onOpen }: { item: { title: string; imageU
                 stopPreview();
             }}
         >
-            <img src={ossProcessedImage(item.imageUrl, className.includes("is-main") ? 1400 : 800) || item.imageUrl} alt={item.title} />
+            <img src={heroImageSrc(item.imageUrl, className.includes("is-main") ? 1400 : 800)} alt={item.title} />
             {item.previewUrl ? <video ref={videoRef} className="mc-hero-preview" src={item.previewUrl} muted loop playsInline preload="none" /> : null}
             {className.includes("is-main") && item.title ? <span>{item.title}</span> : null}
         </button>
@@ -416,46 +428,118 @@ function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onO
     const next = at(1);
     return (
         <div className="mc-hero-showcase">
-            <div className="mc-hero-banners">
-                {prev && count > 1 ? <BannerCard item={prev} className="is-side is-left" onOpen={onOpen} /> : null}
-                {current ? <BannerCard item={current} className="is-main" onOpen={onOpen} /> : null}
-                {next && count > 1 ? <BannerCard item={next} className="is-side is-right" onOpen={onOpen} /> : null}
+            <div className="mc-hero-banner-cluster">
+                <div className="mc-hero-banners">
+                    {prev && count > 1 ? <BannerCard item={prev} className="is-side is-left" onOpen={onOpen} /> : null}
+                    {current ? <BannerCard item={current} className="is-main" onOpen={onOpen} /> : null}
+                    {next && count > 1 ? <BannerCard item={next} className="is-side is-right" onOpen={onOpen} /> : null}
+                    {count > 1 ? (
+                        <>
+                            <button type="button" className="mc-hero-banner-nav is-prev" aria-label="上一张" onClick={() => go(index - 1)}>‹</button>
+                            <button type="button" className="mc-hero-banner-nav is-next" aria-label="下一张" onClick={() => go(index + 1)}>›</button>
+                        </>
+                    ) : null}
+                </div>
                 {count > 1 ? (
-                    <>
-                        <button type="button" className="mc-hero-banner-nav is-prev" aria-label="上一张" onClick={() => go(index - 1)}>‹</button>
-                        <button type="button" className="mc-hero-banner-nav is-next" aria-label="下一张" onClick={() => go(index + 1)}>›</button>
-                    </>
+                    <div className="mc-hero-banner-dots">
+                        {banners.map((item, dot) => (
+                            <button key={item.id || String(dot)} type="button" className={dot === index ? "is-on" : undefined} aria-label={item.title} onClick={() => setIndex(dot)} />
+                        ))}
+                    </div>
                 ) : null}
             </div>
-            {count > 1 ? (
-                <div className="mc-hero-banner-dots">
-                    {banners.map((item, dot) => (
-                        <button key={item.id || String(dot)} type="button" className={dot === index ? "is-on" : undefined} aria-label={item.title} onClick={() => setIndex(dot)} />
-                    ))}
-                </div>
-            ) : null}
             <div className="mc-hero-actions">
-                <button type="button" className="mc-hero-create" onClick={() => onOpen(showcase.create.href || "/create")}>
+                <HoverMediaButton
+                    className="mc-hero-create"
+                    href={showcase.create.href || "/create"}
+                    previewUrl={showcase.create.previewUrl}
+                    onOpen={onOpen}
+                >
                     <span className="mc-hero-create-plus">+</span>
                     <span>
                         <strong>{showcase.create.title}</strong>
                         <em>{showcase.create.subtitle}</em>
                     </span>
-                </button>
+                </HoverMediaButton>
                 <div className="mc-hero-tiles">
                     {showcase.tiles.map((tile) => (
-                        <button key={tile.id} type="button" className="mc-hero-tile" onClick={() => onOpen(tile.href)}>
-                            {tile.badge ? <b>{tile.badge}</b> : null}
+                        <HoverMediaButton
+                            key={tile.id}
+                            className="mc-hero-tile"
+                            href={tile.href || "/create"}
+                            previewUrl={tile.previewUrl}
+                            onOpen={onOpen}
+                        >
                             <span>
-                                <strong>{tile.title}</strong>
+                                <span className="mc-hero-tile-title">
+                                    <strong>{tile.title}</strong>
+                                    {tile.badge ? <b>{tile.badge}</b> : null}
+                                </span>
                                 <em>{tile.subtitle}</em>
                             </span>
-                            <i className={`mc-hero-tile-icon is-${tile.id}`} aria-hidden="true" />
-                        </button>
+                            <HeroTileIcon id={tile.id} />
+                        </HoverMediaButton>
                     ))}
                 </div>
             </div>
         </div>
+    );
+}
+
+function HoverMediaButton({
+    className,
+    href,
+    previewUrl,
+    onOpen,
+    children,
+}: {
+    className: string;
+    href: string;
+    previewUrl?: string;
+    onOpen: (href: string) => void;
+    children: ReactNode;
+}) {
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    return (
+        <button
+            type="button"
+            className={className}
+            onClick={() => onOpen(href)}
+            onMouseEnter={(event) => {
+                if (!previewUrl) return;
+                event.currentTarget.classList.add("is-playing");
+                const node = videoRef.current;
+                if (node) void node.play().catch(() => undefined);
+            }}
+            onMouseLeave={(event) => {
+                event.currentTarget.classList.remove("is-playing");
+                const node = videoRef.current;
+                if (!node) return;
+                node.pause();
+                node.currentTime = 0;
+            }}
+        >
+            {previewUrl ? <video ref={videoRef} className="mc-hero-preview" src={previewUrl} muted loop playsInline preload="none" /> : null}
+            {children}
+        </button>
+    );
+}
+
+function HeroTileIcon({ id }: { id: string }) {
+    const path =
+        id === "tile-agent"
+            ? "M12 3l1.4 3.8L17 8.2l-3.6 1.4L12 13l-1.4-3.4L7 8.2l3.6-1.4L12 3zm6.5 8.2l.8 2.1 2.2.8-2.2.8-.8 2.1-.8-2.1-2.2-.8 2.2-.8.8-2.1zM5.5 13.2l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z"
+            : id === "tile-director"
+                ? "M4 7.5h5.2L11 5h7.5v14H4V7.5zm3.2 3.2v6.6h9.6V10.7H7.2zm2 1.6h5.6v3.4H9.2v-3.4z"
+                : id === "tile-review"
+                    ? "M4 5.5h5.2v13H4v-13zm6.4 0H20v4.1h-9.6V5.5zm0 5.5H20v7.5h-9.6V11z"
+                    : "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5z";
+    return (
+        <span className={`mc-hero-tile-icon is-${id}`} aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d={path} />
+            </svg>
+        </span>
     );
 }
 

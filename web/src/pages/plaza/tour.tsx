@@ -3,9 +3,8 @@ import { App, Button } from "antd";
 import { useNavigate, useParams } from "react-router";
 
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { featuredBySlug, featuredTourProject } from "@/lib/plaza-catalog";
 import { copyPlazaWork, getPlazaSnapshot, getPlazaWork, recordPlazaEvent } from "@/services/api/plaza";
-import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession } from "@/services/user-data-sync";
+import { hasRemoteUserDataSyncSession } from "@/services/user-data-sync";
 import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -47,19 +46,10 @@ export default function PlazaTourPage() {
             return;
         }
         try {
-            if (workId) {
-                const result = await copyPlazaWork(workId);
-                message.success("已复制到你的画布");
-                navigate(`/canvas/${result.projectId}`);
-                return;
-            }
-            const featured = featuredBySlug(slug);
-            if (!featured) throw new Error("作品不存在");
-            const snapshot = featuredTourProject(featured);
-            const result = await createCanvasProjectWithRemoteSync(featured.title, undefined, { nodes: snapshot.nodes, connections: snapshot.connections });
-            if (result.syncError) message.warning("已复制到本机画布，云端稍后同步");
-            else message.success("已复制到你的画布");
-            navigate(`/canvas/${result.id}`);
+            if (!workId) throw new Error("作品不存在");
+            const result = await copyPlazaWork(workId);
+            message.success("已复制到你的画布");
+            navigate(`/canvas/${result.projectId}`);
         } catch (err) {
             message.error(err instanceof Error ? err.message : "复制失败");
         }

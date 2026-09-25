@@ -271,8 +271,11 @@ func (s *Service) ListWorks(categorySlug, sort, viewerID string, page, pageSize 
 	if page <= 0 {
 		page = 1
 	}
-	if pageSize <= 0 || pageSize > 48 {
+	if pageSize <= 0 {
 		pageSize = 24
+	}
+	if pageSize > 80 {
+		pageSize = 80
 	}
 	categoryID := ""
 	if slug := strings.TrimSpace(categorySlug); slug != "" && slug != "all" {
@@ -730,8 +733,11 @@ func (s *Service) AdminWorks(status string, page, pageSize int) ([]PublicWork, i
 	if page <= 0 {
 		page = 1
 	}
-	if pageSize <= 0 || pageSize > 100 {
+	if pageSize <= 0 {
 		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
 	}
 	items, total, err := s.repo.ListPlazaWorks("", status, "", "new", pageSize, (page-1)*pageSize)
 	if err != nil {

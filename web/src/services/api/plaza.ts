@@ -159,3 +159,7 @@ export function listAdminPlazaWorks(params: { status?: string; page?: number; pa
 export function takeDownPlazaWork(id: string, note: string) {
     return http.post<{ work: PlazaWork }>(`/admin/plaza/works/${encodeURIComponent(id)}/take-down`, { note });
 }
+
+export function deletePlazaWork(id: string) {
+    return http.delete<{ ok: true }>(`/admin/plaza/works/${encodeURIComponent(id)}`);
+}

@@ -13,11 +13,23 @@ import (
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 type memoryHost struct {
-	repo  *repository.Repository
-	blobs map[string][]byte
+	repo   *repository.Repository
+	db     *gorm.DB
+	blobs  map[string][]byte
+	audits []recordedAudit
+}
+
+type recordedAudit struct {
+	action     string
+	targetType string
+	targetID   string
+	summary    string
+	metadata   any
 }
 
 func (h *memoryHost) OpenResource(userID, resourceID string) (*model.Resource, io.ReadCloser, error) {
@@ -58,7 +70,11 @@ func (h *memoryHost) PrepareResourceDelivery(userID string, resource *model.Reso
 	return &assets.ResourceDelivery{Resource: resource}, nil
 }
 
-func (h *memoryHost) RecordAdminAudit(*model.User, string, string, string, string, any) error {
+func (h *memoryHost) RecordAdminAudit(_ *model.User, action, targetType, targetID, summary string, metadata any) error {
+	if h == nil {
+		return nil
+	}
+	h.audits = append(h.audits, recordedAudit{action: action, targetType: targetType, targetID: targetID, summary: summary, metadata: metadata})
 	return nil
 }
 
@@ -95,7 +111,7 @@ func plazaTestService(t *testing.T) (*Service, *repository.Repository, *memoryHo
 		t.Fatal(err)
 	}
 	repo := repository.New(db)
-	host := &memoryHost{repo: repo, blobs: map[string][]byte{}}
+	host := &memoryHost{repo: repo, db: db, blobs: map[string][]byte{}}
 	return New(repo, host), repo, host
 }
 

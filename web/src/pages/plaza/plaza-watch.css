@@ -196,6 +196,22 @@
 .plaza-feed { margin-top: 40px; padding-bottom: 64px; }
 .plaza-feed-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; min-height: 72px; margin-bottom: 18px; }
 .plaza-feed-head h2 { margin: 0; font-size: 16px; font-weight: 500; letter-spacing: -.02em; }
+.plaza-feed-tabs { display: flex; align-items: center; gap: 8px; }
+.plaza-feed-tabs button {
+    height: 40px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--user-ink-muted, #777);
+    font-size: 16px;
+    font-weight: 650;
+    cursor: pointer;
+}
+.plaza-feed-tabs button[aria-selected="true"] {
+    background: color-mix(in srgb, var(--user-ink, #111) 13%, transparent);
+    color: var(--user-ink, #111);
+}
 .plaza-feed-head p { margin: 0; font-size: 13px; color: var(--user-ink-muted, #888); }
 .plaza-feed-tags {
     display: flex;

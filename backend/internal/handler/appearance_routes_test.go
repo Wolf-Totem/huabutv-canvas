@@ -19,6 +19,8 @@ func TestAppearanceRoutesAreRegistered(t *testing.T) {
 		"PATCH /api/admin/settings/appearance":             false,
 		"DELETE /api/admin/settings/appearance":            false,
 		"POST /api/admin/settings/appearance/assets/:slot": false,
+		"POST /api/admin/settings/appearance/media":        false,
+		"GET /api/public/appearance/media/:id":             false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path

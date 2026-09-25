@@ -236,6 +236,11 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 	if err != nil {
 		return nil, err
 	}
+	normalizedLanding, landingErr := normalizeAppearanceLanding(value.Landing)
+	if landingErr != nil {
+		return nil, landingErr
+	}
+	value.Landing = normalizedLanding
 	if rawCanvas == (CanvasAppearance{}) {
 		value.Canvas = before.Canvas
 	}
@@ -376,6 +381,7 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 		{resourceID: value.DarkLogoResourceID, title: "深色模式品牌 Logo"},
 		{resourceID: value.AuthVideoResourceID, title: "登录页品牌视频"},
 		{resourceID: value.AuthVideoPosterResourceID, title: "登录页视频封面"},
+		{resourceID: value.LandingVideoResourceID, title: "首页背景视频"},
 	}
 	wanted := make(map[string]struct{}, len(resourceIDs))
 	for _, resourceID := range resourceIDs {
@@ -387,6 +393,26 @@ func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string]
 		}
 		if _, exists := wanted[candidate.resourceID]; exists {
 			result[candidate.resourceID] = appendUniqueAdminResourceReference(result[candidate.resourceID], AdminResourceReferenceView{Kind: "外观", ID: appearanceSettingKey, Title: candidate.title})
+		}
+	}
+	landingIDs, landingErr := landingHeroResourceIDs(value.Landing)
+	if landingErr != nil {
+		for _, resourceID := range resourceIDs {
+			result[resourceID] = []AdminResourceReferenceView{{Kind: "外观", ID: appearanceSettingKey, Title: "外观配置无法读取"}}
+		}
+		return result
+	}
+	for resourceID := range landingIDs {
+		if _, exists := wanted[resourceID]; exists {
+			result[resourceID] = appendUniqueAdminResourceReference(result[resourceID], AdminResourceReferenceView{Kind: "外观", ID: appearanceSettingKey, Title: "首页海报与创作模块"})
+		}
+	}
+	holds, holdErr := s.readAppearanceMediaHolds()
+	if holdErr == nil {
+		for resourceID := range appearanceMediaHoldIDs(holds, time.Now()) {
+			if _, exists := wanted[resourceID]; exists {
+				result[resourceID] = appendUniqueAdminResourceReference(result[resourceID], AdminResourceReferenceView{Kind: "外观", ID: appearanceMediaHoldsKey, Title: "未保存的首页媒体"})
+			}
 		}
 	}
 	return result
@@ -705,7 +731,7 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		HomeNavItems:        value.HomeNavItems,
 		HomeCtaLabel:        value.HomeCtaLabel,
 		HomeCtaHref:         value.HomeCtaHref,
-		Landing:             value.Landing,
+		Landing:             projectPublicLanding(append(json.RawMessage(nil), value.Landing...)),
 		Canvas:              normalizePublicCanvas(value.Canvas),
 		Configured:          setting != nil,
 		Revision:            revision,

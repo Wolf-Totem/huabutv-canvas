@@ -203,3 +203,14 @@ func (s *Service) TakeDownPlazaWork(actor *model.User, id, note string) (*PlazaP
 	}
 	return s.plazaDomain().TakeDown(actor, id, note)
 }
+
+func (s *Service) HardDeletePlazaWork(actor *model.User, id string) (*plaza.HardDeleteResult, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	return s.plazaDomain().HardDelete(actor, id)
+}
+
+func (s *Service) DeletePlazaWorksExcept(keepID string) (int, error) {
+	return s.plazaDomain().DeleteExcept(keepID)
+}
