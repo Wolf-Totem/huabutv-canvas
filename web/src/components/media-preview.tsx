@@ -1,6 +1,7 @@
 import { ImageOff } from "lucide-react";
 import { useState } from "react";
 
+import { mediaThumbUrl } from "@/lib/media-thumb";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_UNAVAILABLE_LABEL = "预览不可用，素材可能已删除";
@@ -48,8 +49,21 @@ export function MediaPreview({
     }
 
     if (kind === "video") {
-        return <video src={src} width={width} height={height} muted={!controls} playsInline controls={controls} preload="metadata" className={className} onError={handleUnavailable} />;
+        if (controls) {
+            return <video src={src} width={width} height={height} muted={false} playsInline controls preload="metadata" className={className} onError={handleUnavailable} />;
+        }
+        const poster = mediaThumbUrl({ kind: "video", originalUrl: src, width: width && width > 0 ? width : 480 });
+        if (!poster) {
+            return (
+                <span className={cn("media-unavailable", fallbackClassName)} role="img" aria-label={fallbackLabel} title={fallbackLabel}>
+                    <ImageOff aria-hidden="true" />
+                    <span>{fallbackLabel}</span>
+                </span>
+            );
+        }
+        return <img src={poster} alt={alt} width={width} height={height} loading={loading} className={className} onError={handleUnavailable} />;
     }
 
-    return <img src={src} alt={alt} width={width} height={height} loading={loading} className={className} onError={handleUnavailable} />;
+    const thumb = mediaThumbUrl({ kind: "image", originalUrl: src, width: width && width > 0 ? Math.max(width, 480) : 720 }) || src;
+    return <img src={thumb} alt={alt} width={width} height={height} loading={loading} className={className} onError={handleUnavailable} />;
 }

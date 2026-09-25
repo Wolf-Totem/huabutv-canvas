@@ -9,6 +9,7 @@ import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
+import { mediaThumbUrl } from "@/lib/media-thumb";
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { CanvasFolderPreview } from "@/components/canvas/canvas-folder-preview";
@@ -697,8 +698,12 @@ function MediaAssetCard({ asset, personalAsset, folderItems, onOpen, onMove, onC
 function ProjectAssetMedia({ asset, personalAsset }: { asset: ProjectAsset; personalAsset?: Asset }) {
     if (personalAsset) return <AssetMediaPreview asset={personalAsset} alt={asset.title} className="h-full w-full bg-black object-cover" fallback={<div className="grid h-full place-items-center text-foreground/25"><MediaIcon kind={asset.mediaType} /></div>} />;
     const remoteUrl = projectAssetRemoteUrl(asset);
-    if (asset.mediaType === "image" && remoteUrl) return <img src={remoteUrl} alt={asset.title} className="h-full w-full bg-black object-cover" />;
-    if (asset.mediaType === "video" && remoteUrl) return <video src={remoteUrl} muted preload="metadata" className="h-full w-full bg-black object-cover" />;
+    if (asset.mediaType === "image" && remoteUrl) return <img src={mediaThumbUrl({ kind: "image", originalUrl: remoteUrl, width: 480 }) || remoteUrl} alt={asset.title} className="h-full w-full bg-black object-cover" loading="lazy" decoding="async" />;
+    if (asset.mediaType === "video" && remoteUrl) {
+        const thumb = mediaThumbUrl({ kind: "video", originalUrl: remoteUrl, width: 480 });
+        if (thumb) return <img src={thumb} alt={asset.title} className="h-full w-full bg-black object-cover" loading="lazy" decoding="async" />;
+        return <div className="grid h-full place-items-center text-foreground/25"><MediaIcon kind={asset.mediaType} /></div>;
+    }
     if (asset.mediaType === "text" && asset.previewText) return <p className="line-clamp-6 h-full overflow-hidden p-4 text-left text-xs leading-5 text-foreground/62">{asset.previewText}</p>;
     return <div className="grid h-full place-items-center text-foreground/25"><MediaIcon kind={asset.mediaType} /></div>;
 }

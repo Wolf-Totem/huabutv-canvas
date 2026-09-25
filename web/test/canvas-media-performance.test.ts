@@ -70,10 +70,11 @@ describe("large canvas media rendering", () => {
     });
 
     test("keeps inactive video nodes on a viewport-gated static first frame", () => {
-        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?\n}\n\nfunction VideoPreviewPlayButton/)?.[0] || "";
+        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?function VideoPreviewPlayButton/)?.[0] || "";
         expect(canvasNodeContentSource).toContain("if (previewUrl || !nearViewport || !node.metadata?.content || !updateMetadataRef.current)");
         expect(canvasNodeContentSource).not.toContain("hydrateMediaPreview");
         expect(inactivePreviewSource).not.toContain("<video");
+        expect(inactivePreviewSource).not.toContain("bindCanvasVideoHoverPreview");
         expect(inactivePreviewSource).toContain("<VideoPreviewPlayButton");
         expect(canvasNodeContentSource).toContain("useVideoPlaybackUrl(node, mediaActive)");
         expect(canvasNodeContentSource).toContain("onMediaPlayRequest?.(node.id)");
@@ -285,12 +286,11 @@ function writeFourcc(bytes: Uint8Array, offset: number, value: string) {
 }
 
 describe("passive video previews", () => {
-    test("素材引用菜单使用被动视频首帧回退，而不是视频图标", () => {
-        expect(canvasMentionSource).toContain('muted playsInline preload="metadata"');
-        expect(canvasMentionSource).toContain("onloadedmetadata = () => primeVideoPreviewFrame(media)");
-        expect(canvasMentionSource).toContain("onLoadedMetadata={(event) => primeVideoPreviewFrame(event.currentTarget)}");
-        expect(canvasMentionSource).toContain("video.currentTime = Math.min(0.001, video.duration)");
-        expect(canvasMentionSource).toContain("reference.kind === \"video\" && reference.previewUrl");
+    test("素材引用菜单未激活时只用压缩预览图，不挂原视频", () => {
+        expect(canvasMentionSource).not.toContain('muted playsInline preload="metadata"');
+        expect(canvasMentionSource).not.toContain("primeVideoPreviewFrame");
+        expect(canvasMentionSource).toContain("mediaThumbUrl");
+        expect(canvasMentionSource).toContain('reference.kind === "video"');
     });
 
     test("persists uploaded posters in video node metadata and prefers them over legacy previews", () => {

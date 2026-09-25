@@ -87,6 +87,15 @@ describe("asset picker media kind", () => {
         // 角色卡、3D 模型这类条目没有媒体类型，媒体筛选生效时不应被当成图片留在列表里。
         expect(pickerItemMediaKind(base)).toBeUndefined();
     });
+
+    test("素材选择器远端未就绪时不渲染本地全库，本地回退也按页切片", () => {
+        const source = readFileSync(resolve(import.meta.dir, "../src/components/assets/asset-library-picker-modal.tsx"), "utf8");
+        expect(source).toContain("blockingRemote");
+        expect(source).toContain("pagedVisibleItems");
+        expect(source).toContain("visibleItems.slice");
+        expect(source).not.toContain("visibleItems.map((item) => <PickerCard");
+        expect(source).toContain("pagedVisibleItems.map((item) => <PickerCard");
+    });
 });
 
 describe("canvas context menu motion", () => {

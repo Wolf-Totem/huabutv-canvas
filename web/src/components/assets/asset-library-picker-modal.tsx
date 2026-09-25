@@ -9,6 +9,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { AssetLibraryCard } from "@/components/assets/asset-library-card";
 import { CachedResourceImage } from "@/components/cached-resource-image";
+import { MediaThumb } from "@/components/media-thumb";
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { cn } from "@/lib/utils";
 import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
@@ -127,6 +128,8 @@ export function AssetLibraryPickerModal({
     const sessionHydrated = useUserStore((state) => state.hydrated);
     const [remotePage, setRemotePage] = useState(1);
     const [remotePageSize, setRemotePageSize] = useState(40);
+    const [localPage, setLocalPage] = useState(1);
+    const [localPageSize, setLocalPageSize] = useState(40);
     const [remoteKeyword, setRemoteKeyword] = useState("");
     const remoteEnabled = remoteLibrary && Boolean(userId) && source === "local";
     useEffect(() => {
@@ -134,6 +137,7 @@ export function AssetLibraryPickerModal({
         return () => window.clearTimeout(timer);
     }, [keyword]);
     useEffect(() => setRemotePage(1), [category, mediaKind, remoteKeyword, open]);
+    useEffect(() => setLocalPage(1), [category, mediaKind, keyword, folderId, open, source]);
     // remoteKind 是调用方写死的能力约束；媒体类型筛选只在没有该约束时参与服务端查询。
     const remoteQueryKind = remoteKind || (mediaKind === "all" ? undefined : mediaKind);
     const remoteQuery = useQuery({
@@ -163,7 +167,10 @@ export function AssetLibraryPickerModal({
     const preferLocalUnsynced = remoteReady && remoteTotal === 0 && localItems.length > 0;
     const remoteEntityOnlyPage = remoteReady && remoteItems.length === 0 && remoteTotal > 0;
     const useRemoteItems = remoteReady && !preferLocalUnsynced && !remoteEntityOnlyPage && (remoteItems.length > 0 || remoteTotal === 0);
-    const effectivePagination = useRemoteItems ? { current: remotePage, pageSize: remotePageSize, total: remoteTotal, onChange: (page: number, pageSize: number) => { setRemotePage(page); setRemotePageSize(pageSize); } } : pagination;
+    const remotePagination = { current: remotePage, pageSize: remotePageSize, total: remoteTotal, onChange: (page: number, pageSize: number) => { setRemotePage(page); setRemotePageSize(pageSize); } };
+    const localPagination = pagination || { current: localPage, pageSize: localPageSize, total: 0, onChange: (page: number, pageSize: number) => { setLocalPage(pageSize !== localPageSize ? 1 : page); setLocalPageSize(pageSize); } };
+    const effectivePagination = useRemoteItems ? remotePagination : localPagination;
+    const blockingRemote = remoteEnabled && sessionHydrated && !remoteQuery.isSuccess && !remoteQuery.isError;
     const pluginItems = useMemo(() => allItems.filter((item) => Boolean(item.external)), [allItems]);
     const hasPluginSource = useMemo(() => Object.keys(categoryLabels).some((value) => value.startsWith("external:")) || pluginItems.some((item) => item.category.startsWith("external:")), [categoryLabels, pluginItems]);
     // 媒体类型在分类之前收窄数据源，让左侧分类计数、网格和分页始终描述同一批素材。
@@ -193,6 +200,13 @@ export function AssetLibraryPickerModal({
             return useRemoteItems || !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
         });
     }, [category, folderId, keyword, sourceItems, useRemoteItems]);
+    const pagedVisibleItems = useMemo(() => {
+        if (useRemoteItems) return visibleItems;
+        const pageSize = effectivePagination?.pageSize || localPageSize;
+        const current = effectivePagination?.current || localPage;
+        const start = Math.max(0, (current - 1) * pageSize);
+        return visibleItems.slice(start, start + pageSize);
+    }, [effectivePagination, localPage, localPageSize, useRemoteItems, visibleItems]);
     const selectedIds = useMemo(
         () =>
             Array.from(selected).filter((id) => {
@@ -433,7 +447,7 @@ export function AssetLibraryPickerModal({
                         <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索素材名称或标签" aria-label="搜索素材" />
                     </label>
                     <span className="asset-picker-count">
-                        已选 {selectedIds.length} · {effectivePagination ? effectivePagination.total : visibleItems.length} 个素材
+                        已选 {selectedIds.length} · {useRemoteItems ? remoteTotal : visibleItems.length} 个素材
                     </span>
                 </header>
                 <div className="asset-picker-body">
@@ -488,14 +502,14 @@ export function AssetLibraryPickerModal({
                     </nav>
                     <div className="asset-picker-grid-wrap">
                         <div className="asset-picker-grid">
-                            {remoteEnabled && remoteQuery.isError ? <div role="alert">素材读取失败<Button onClick={() => void remoteQuery.refetch()}>重试</Button></div> : loading || (useRemoteItems && remoteQuery.isFetching) ? (
+                            {remoteEnabled && remoteQuery.isError && !visibleItems.length ? <div role="alert">素材读取失败<Button onClick={() => void remoteQuery.refetch()}>重试</Button></div> : loading || blockingRemote ? (
                                 <div className="asset-picker-empty">
                                     <LoaderCircle className="animate-spin" />
                                     <strong>正在读取素材</strong>
                                     <span>素材会按页加载，不会一次下载整个项目库。</span>
                                 </div>
-                            ) : visibleItems.length ? (
-                                visibleItems.map((item) => <PickerCard key={item.id} item={item} selected={selected.has(item.id)} onToggle={() => toggle(item)} />)
+                            ) : pagedVisibleItems.length ? (
+                                pagedVisibleItems.map((item) => <PickerCard key={item.id} item={item} selected={selected.has(item.id)} onToggle={() => toggle(item)} />)
                             ) : (
                                 <div className="asset-picker-empty">
                                     <FolderOpen />
@@ -504,7 +518,7 @@ export function AssetLibraryPickerModal({
                                 </div>
                             )}
                         </div>
-                        {effectivePagination ? <PaginationBar alwaysShow current={effectivePagination.current} pageSize={effectivePagination.pageSize} total={effectivePagination.total} itemLabel="项" pageSizeOptions={[20, 40, 80]} onChange={effectivePagination.onChange} /> : null}
+                        {effectivePagination ? <PaginationBar alwaysShow current={effectivePagination.current} pageSize={effectivePagination.pageSize} total={useRemoteItems ? effectivePagination.total : visibleItems.length} itemLabel="项" pageSizeOptions={[20, 40, 80]} onChange={effectivePagination.onChange} /> : null}
                     </div>
                 </div>
                 <footer className={cn("asset-picker-footer", !activeUpload && "is-compact")}>
@@ -584,18 +598,19 @@ function PickerCard({ item, selected, onToggle }: { item: AssetLibraryPickerItem
         <AssetLibraryCard selected={selected} className={cn("asset-picker-card", disabled && "is-disabled")}>
             <button type="button" className="asset-picker-card-action" onClick={onToggle} disabled={disabled} aria-pressed={selected} title={item.disabledReason || item.title}>
                 <div className="assets-cover asset-picker-card-media">
-                    {item.imageUrl || item.imageStorageKey ? (
-                        <CachedResourceImage
-                            storageKey={item.imageStorageKey}
-                            src={item.imageUrl}
+                    {item.asset ? (
+                        <AssetMediaPreview asset={item.asset} alt={item.title} className={item.imageFit === "contain" ? "is-contain" : undefined} fallback={<div className="assets-cover-fallback">{kindIcon(item.kindLabel)}</div>} />
+                    ) : item.imageUrl || item.imageStorageKey ? (
+                        <MediaThumb
+                            kind={pickerItemMediaKind(item)}
+                            coverUrl={item.imageUrl}
+                            originalUrl={item.imageUrl}
                             alt={item.title}
-                            loading="lazy"
-                            decoding="async"
                             className={item.imageFit === "contain" ? "is-contain" : undefined}
-                            fallback={<div className="assets-cover-fallback">{kindIcon(item.kindLabel)}</div>}
+                            fallback={item.imageStorageKey ? <CachedResourceImage storageKey={item.imageStorageKey} src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" fallback={<div className="assets-cover-fallback">{kindIcon(item.kindLabel)}</div>} /> : <div className="assets-cover-fallback">{kindIcon(item.kindLabel)}</div>}
                         />
                     ) : (
-                        <AssetMediaPreview asset={item.asset} alt={item.title} fallback={<div className="assets-cover-fallback">{kindIcon(item.kindLabel)}</div>} />
+                        <div className="assets-cover-fallback">{kindIcon(item.kindLabel)}</div>
                     )}
                     <span className="assets-cover-vignette" aria-hidden="true" />
                     <span className="assets-cover-badges" aria-hidden="true">

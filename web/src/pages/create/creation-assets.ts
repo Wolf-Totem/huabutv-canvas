@@ -122,7 +122,7 @@ export function creationAttachmentFromVideo(file: File, uploaded: UploadedFile):
         width: uploaded.width,
         height: uploaded.height,
         durationMs: uploaded.durationMs,
-        previewUrl: uploaded.url,
+        previewUrl: uploaded.preview?.url || canvasVideoAssetPreviewUrl(uploaded.url, uploaded.preview?.url),
     };
 }
 
@@ -178,7 +178,7 @@ export function creationAttachmentFromVideoAsset(asset: Extract<Asset, { kind: "
         width: asset.data.width,
         height: asset.data.height,
         durationMs: asset.data.durationMs,
-        previewUrl: asset.coverUrl || asset.data.url,
+        previewUrl: canvasVideoAssetPreviewUrl(asset.data.url, asset.coverUrl),
     };
 }
 

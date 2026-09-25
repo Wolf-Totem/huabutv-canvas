@@ -13,8 +13,8 @@ describe("canvas resource mention editor", () => {
         expect(unchangedTextBranch).toContain("syncInlineMentionPreviews(editor, activeReferences)");
         const sync = component.slice(component.indexOf("function syncInlineMentionPreviews("), component.indexOf("function MentionMenu("));
         expect(sync).toContain('byId.get(chip.dataset.mentionReferenceId || "")');
-        expect(sync).toContain('preview.getAttribute("src") !== src');
-        expect(sync).toContain("preview.replaceWith(createInlinePreview(reference))");
+        expect(sync).toContain('preview.getAttribute("src") !== next.getAttribute("src")');
+        expect(sync).toContain("preview.replaceWith(next)");
         expect(sync).not.toContain("replaceChildren");
         expect(sync).not.toContain("onChange(");
     });
