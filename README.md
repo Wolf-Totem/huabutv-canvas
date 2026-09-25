@@ -7,7 +7,7 @@
 <p align="center">AI 影视与短剧创作工作台 · 绘无限 造未来</p>
 
 <p align="center">
-  <a href="https://github.com/hyc0122/huabutv-canvas">GitHub</a> ·
+  <a href="https://github.com/Wolf-Totem/huabutv-canvas">GitHub</a> ·
   <a href="https://canvas.j11.net">官网</a> ·
   <a href="docs/content/docs/overview/features.mdx">功能</a> ·
   <a href="docs/content/docs/overview/quick-start.mdx">文档</a>
@@ -44,7 +44,7 @@
 ### 宿主机启动
 
 ```bash
-git clone https://github.com/hyc0122/huabutv-canvas.git
+git clone https://github.com/Wolf-Totem/huabutv-canvas.git
 cd huabutv-canvas
 
 # 使用 Git 忽略的目录保存本地开发数据和缓存

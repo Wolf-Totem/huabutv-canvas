@@ -216,7 +216,7 @@ export default function PlazaWorkPage() {
                 <div className="plaza-watch-bar">
                     <div className="plaza-watch-actions">
                         <button type="button" className="is-play" onClick={playLoud}><Play size={16} /> 立即观看</button>
-                        <button type="button" className="is-ghost" onClick={() => void openTour()}><Clapperboard size={16} /> 查看制作过程</button>
+                        {(!apiWork || apiWork.allowProcessView) ? <button type="button" className="is-ghost" onClick={() => void openTour()}><Clapperboard size={16} /> 查看制作过程</button> : null}
                         <button type="button" className={`is-icon ${liked ? "is-liked" : ""}`} aria-label={`点赞，当前 ${likes}`} onClick={() => void like()}><Heart size={16} fill={liked ? "currentColor" : "none"} /></button>
                         <button type="button" className="is-icon" aria-label="复制链接" onClick={() => void share()}><Share2 size={16} /></button>
                     </div>

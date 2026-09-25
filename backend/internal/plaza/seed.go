@@ -17,8 +17,10 @@ type ExternalSeedItem struct {
 	Subtitle   string
 	CategoryID string
 	AuthorID   string
-	CoverURL   string
-	WatchURL   string
+	CoverURL         string
+	WatchURL         string
+	AllowProcessView bool
+	AllowCopy        bool
 }
 
 func (s *Service) SaveImportedDocument(item ExternalSeedItem, doc map[string]any) error {
@@ -62,8 +64,8 @@ func (s *Service) SaveImportedDocument(item ExternalSeedItem, doc map[string]any
 	work.CategoryID = item.CategoryID
 	work.Status = model.PlazaWorkListed
 	work.AllowWatch = true
-	work.AllowProcessView = true
-	work.AllowCopy = true
+	work.AllowProcessView = item.AllowProcessView
+	work.AllowCopy = item.AllowCopy
 	if work.BadgesJSON == "" {
 		work.BadgesJSON = "[]"
 	}

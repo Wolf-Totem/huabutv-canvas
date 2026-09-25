@@ -339,6 +339,41 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
     );
 }
 
+function BannerCard({ item, className, onOpen }: { item: { title: string; imageUrl: string; previewUrl?: string; href: string }; className: string; onOpen: (href: string) => void }) {
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const playPreview = () => {
+        const node = videoRef.current;
+        if (!node || !item.previewUrl) return;
+        node.classList.add("is-ready");
+        void node.play().catch(() => undefined);
+    };
+    const stopPreview = () => {
+        const node = videoRef.current;
+        if (!node) return;
+        node.pause();
+        node.currentTime = 0;
+    };
+    return (
+        <button
+            type="button"
+            className={`mc-hero-banner ${className}${item.previewUrl ? "" : ""}`}
+            onClick={() => onOpen(item.href)}
+            onMouseEnter={(event) => {
+                event.currentTarget.classList.add("is-playing");
+                playPreview();
+            }}
+            onMouseLeave={(event) => {
+                event.currentTarget.classList.remove("is-playing");
+                stopPreview();
+            }}
+        >
+            <img src={ossProcessedImage(item.imageUrl, className.includes("is-main") ? 1400 : 800) || item.imageUrl} alt={item.title} />
+            {item.previewUrl ? <video ref={videoRef} src={item.previewUrl} muted loop playsInline preload="none" /> : null}
+            {className.includes("is-main") && item.title ? <span>{item.title}</span> : null}
+        </button>
+    );
+}
+
 function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onOpen: (href: string) => void }) {
     const banners = showcase.banners || [];
     const [index, setIndex] = useState(0);
@@ -349,9 +384,9 @@ function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onO
     };
     useEffect(() => {
         if (count < 2) return;
-        const timer = window.setInterval(() => go(index + 1), 5000);
+        const timer = window.setInterval(() => setIndex((current) => (current + 1) % count), 5200);
         return () => window.clearInterval(timer);
-    }, [count, index]);
+    }, [count]);
     const at = (offset: number) => (count ? banners[((index + offset) % count + count) % count] : null);
     const prev = at(-1);
     const current = at(0);
@@ -359,22 +394,9 @@ function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onO
     return (
         <div className="mc-hero-showcase">
             <div className="mc-hero-banners">
-                {prev && count > 1 ? (
-                    <button type="button" className="mc-hero-banner is-side is-left" onClick={() => onOpen(prev.href)}>
-                        <img src={ossProcessedImage(prev.imageUrl, 720) || prev.imageUrl} alt="" />
-                    </button>
-                ) : null}
-                {current ? (
-                    <button type="button" className="mc-hero-banner is-main" onClick={() => onOpen(current.href)}>
-                        <img src={ossProcessedImage(current.imageUrl, 1200) || current.imageUrl} alt={current.title} />
-                        {current.title ? <span>{current.title}</span> : null}
-                    </button>
-                ) : null}
-                {next && count > 1 ? (
-                    <button type="button" className="mc-hero-banner is-side is-right" onClick={() => onOpen(next.href)}>
-                        <img src={ossProcessedImage(next.imageUrl, 720) || next.imageUrl} alt="" />
-                    </button>
-                ) : null}
+                {prev && count > 1 ? <BannerCard item={prev} className="is-side is-left" onOpen={onOpen} /> : null}
+                {current ? <BannerCard item={current} className="is-main" onOpen={onOpen} /> : null}
+                {next && count > 1 ? <BannerCard item={next} className="is-side is-right" onOpen={onOpen} /> : null}
                 {count > 1 ? (
                     <>
                         <button type="button" className="mc-hero-banner-nav is-prev" aria-label="上一张" onClick={() => go(index - 1)}>‹</button>

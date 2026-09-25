@@ -264,6 +264,28 @@ func (r *Repository) FirstAdmin() (*model.User, error) {
 	return &user, nil
 }
 
+func (r *Repository) WipeCanvasAndPlaza() error {
+	return r.Transaction(func(tx *Repository) error {
+		for _, stmt := range []string{
+			`DELETE FROM plaza_likes`,
+			`DELETE FROM plaza_events`,
+			`DELETE FROM plaza_work_tags`,
+			`DELETE FROM plaza_snapshot_assets`,
+			`DELETE FROM plaza_snapshots`,
+			`DELETE FROM plaza_works`,
+			`DELETE FROM plaza_applications`,
+			`DELETE FROM canvas_shares`,
+			`DELETE FROM canvas_unit_links`,
+			`DELETE FROM canvas_projects`,
+		} {
+			if err := tx.db.Exec(stmt).Error; err != nil && !strings.Contains(strings.ToLower(err.Error()), "does not exist") {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (r *Repository) DeleteImportedPlazaWorks() (int, error) {
 	var works []model.PlazaWork
 	if err := r.db.Where("source_project_id LIKE ?", "ext:%").Find(&works).Error; err != nil {

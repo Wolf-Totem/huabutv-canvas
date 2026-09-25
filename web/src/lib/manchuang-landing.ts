@@ -4,7 +4,7 @@ export type LandingTextCard = { title: string; text: string; imageUrl?: string }
 export type LandingStep = { step: string; phase: string; title: string; tagline: string; description: string; imageUrl: string; tags: string[] };
 export type LandingRailCard = { id: string; imageUrl: string; previewUrl?: string; label?: string };
 export type LandingPricingTier = { id: string; name: string; tagline: string; price: string; unit: string; note: string; cta: string; featured?: boolean; badge?: string; features: string[] };
-export type LandingHeroBanner = { id: string; title: string; imageUrl: string; href: string; openInNewTab?: boolean; workId?: string };
+export type LandingHeroBanner = { id: string; title: string; imageUrl: string; previewUrl?: string; href: string; openInNewTab?: boolean; workId?: string };
 export type LandingHeroTile = { id: string; title: string; subtitle: string; badge?: string; href: string; icon?: string };
 export type LandingHeroShowcase = {
     banners: LandingHeroBanner[];
@@ -55,6 +55,7 @@ const defaultHeroShowcase = (): LandingHeroShowcase => {
         id: item.id,
         title: item.label || "精选画布",
         imageUrl: item.imageUrl,
+        previewUrl: item.previewUrl,
         href: `/plaza/${encodeURIComponent(item.id)}`,
         workId: item.id,
     }));

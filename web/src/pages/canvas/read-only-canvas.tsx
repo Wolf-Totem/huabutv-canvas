@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { App, Button } from "antd";
 import { Clapperboard, Eye, FileText, Image as ImageIcon, LockKeyhole, Send, Share2, Video } from "lucide-react";
 import { Link } from "react-router";
@@ -171,7 +171,7 @@ export function ReadOnlyCanvasView({
             k: scale,
         });
     };
-    const resetViewport = () => {
+    const resetViewport = useCallback(() => {
         const container = containerRef.current;
         if (!container || !nodes.length) return onViewportChange({ x: 0, y: 0, k: 1 });
         const rect = container.getBoundingClientRect();
@@ -181,7 +181,10 @@ export function ReadOnlyCanvasView({
         const bottom = Math.max(...nodes.map((node) => node.position.y + node.height));
         const scale = Math.min(1, Math.max(0.05, Math.min((rect.width - 120) / Math.max(right - left, 1), (rect.height - 140) / Math.max(bottom - top, 1))));
         onViewportChange({ x: rect.width / 2 - ((left + right) / 2) * scale, y: rect.height / 2 - ((top + bottom) / 2) * scale, k: scale });
-    };
+    }, [nodes, onViewportChange]);
+    useLayoutEffect(() => {
+        resetViewport();
+    }, [project.id, resetViewport]);
     const openContextMenu = (event: ReactMouseEvent, nodeId?: string) => {
         event.preventDefault();
         event.stopPropagation();

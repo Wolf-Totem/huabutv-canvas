@@ -4,7 +4,7 @@
 |---|---|
 | 状态 | 已定方案，实施中 |
 | 日期 | 2026-09-25 |
-| 当前版本 | 本地 / 现网 `v1.5.32`，仓库 `hyc0122/huabutv-canvas` |
+| 当前版本 | 本地 / 现网 `v1.5.33`，仓库 `Wolf-Totem/huabutv-canvas` |
 | 上游对照 | [ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas) 正式 `v1.5.7`，预览 `v1.5.7.1` |
 | 现网 schema | **41** |
 | 原则 | 用户可见文案与 CHANGELOG 不出现第三方站名；密钥不入库；发完推 GitHub |
