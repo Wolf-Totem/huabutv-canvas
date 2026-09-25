@@ -809,6 +809,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
     const navigate = useNavigate();
     const [tab, setTab] = useState<"plaza" | "inspirations">(() => (typeof window !== "undefined" && window.location.hash === "#inspirations" ? "inspirations" : "plaza"));
     const [filter, setFilter] = useState("all");
+    const [modeFilter, setModeFilter] = useState<"all" | CreationMode>("all");
     const [limit, setLimit] = useState(16);
     const sentinelRef = useRef<HTMLDivElement>(null);
     const [source, setSource] = useState<FeaturedCanvas[]>([]);
@@ -816,6 +817,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
     const selectTab = (next: "plaza" | "inspirations") => {
         setTab(next);
         setLimit(16);
+        setModeFilter("all");
         const hash = next === "inspirations" ? "#inspirations" : "#plaza";
         if (window.location.hash !== hash) window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
     };
@@ -842,7 +844,8 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
         if (filter === "all") return true;
         return item.tag === filter || item.tags.includes(tags.find((tag) => tag.slug === filter)?.name || "");
     });
-    const visible = tab === "inspirations" ? creationFeaturedWorks : filtered.slice(0, limit);
+    const inspirations = creationFeaturedWorks.filter((item) => modeFilter === "all" || item.mode === modeFilter);
+    const visible = tab === "inspirations" ? inspirations : filtered.slice(0, limit);
 
     useEffect(() => {
         const node = sentinelRef.current;
@@ -860,7 +863,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
                 <button type="button" role="tab" aria-selected={tab === "plaza"} onClick={() => selectTab("plaza")}>作品广场</button>
                 <button type="button" role="tab" aria-selected={tab === "inspirations"} onClick={() => selectTab("inspirations")}>创作灵感</button>
             </div>
-            <p>{tab === "inspirations" ? `${creationFeaturedWorks.length} 条灵感` : `${source.length} 个作品`}</p>
+            <p>{tab === "inspirations" ? `${inspirations.length} 条灵感` : `${source.length} 个作品`}</p>
         </div>
         <h2 id="creation-featured-title" className="sr-only">{tab === "inspirations" ? "创作灵感" : "作品广场"}</h2>
         {tab === "plaza" ? (
@@ -870,11 +873,18 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
                     <button key={item.slug} type="button" aria-pressed={filter === item.slug} onClick={() => { setFilter(item.slug); setLimit(16); }}>{item.name}</button>
                 ))}
             </div>
-        ) : null}
+        ) : (
+            <div className="plaza-feed-tags" role="group" aria-label="灵感类型">
+                <button type="button" aria-pressed={modeFilter === "all"} onClick={() => setModeFilter("all")}>全部</button>
+                {(["video", "image", "text"] as const).map((value) => (
+                    <button key={value} type="button" aria-pressed={modeFilter === value} onClick={() => setModeFilter(value)}>{modeLabels[value]}</button>
+                ))}
+            </div>
+        )}
         <div className="plaza-feed-grid">
             {tab === "plaza"
                 ? (visible as FeaturedCanvas[]).map((item) => <PlazaFeedCard key={item.slug} item={item} onOpen={(slug) => navigate(`/plaza/${encodeURIComponent(slug)}`)} />)
-                : creationFeaturedWorks.map((item) => (
+                : inspirations.map((item) => (
                     <button key={item.title} type="button" className="plaza-card" onClick={() => onStartPrompt(item.mode, item.prompt)}>
                         <div className="plaza-card-media">{item.image ? <img src={item.image} alt="" loading="lazy" /> : null}</div>
                         <h3>{item.title}</h3>
@@ -885,7 +895,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
         {tab === "plaza" ? <div ref={sentinelRef} className="plaza-feed-sentinel" aria-hidden /> : null}
         <footer className="creation-inspiration-footer">
             {tab === "inspirations"
-                ? <span>已展示全部 {creationFeaturedWorks.length} 条灵感</span>
+                ? <span>已展示全部 {inspirations.length} 条灵感</span>
                 : limit < filtered.length ? <span>继续下滑加载更多</span> : <span>已展示全部 {filtered.length} 个作品</span>}
         </footer>
     </section>;

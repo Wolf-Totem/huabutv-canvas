@@ -52,7 +52,7 @@ func (s *Service) AdminSeedPlazaExternal(actor *model.User, items []PlazaExterna
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	return s.SeedPlazaExternal(items, plazaExternalSeedHTTPLimit, "")
+	return s.SeedPlazaExternal(items, plazaExternalSeedHTTPLimit, "", 0, 0)
 }
 
 // seedPublicGraph is the public-canvas fetch used by seeding. Tests replace it
@@ -67,9 +67,15 @@ var seedPublicGraph = func(s *Service, uuid string) (*auth.LibTVImportResult, er
 // SeedPlazaExternal imports up to limit usable public canvases.
 // skipUUID, when set, is not updated. Authors missing from users are remapped to FirstAdmin.
 // HTTP seeding passes limit 80 and an empty skipUUID, and cannot delete works.
-func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem, limit int, skipUUID string) (*PlazaSeedReport, error) {
+func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem, limit int, skipUUID string, minNodes, minConns int) (*PlazaSeedReport, error) {
 	if limit <= 0 {
 		limit = plazaExternalSeedHTTPLimit
+	}
+	if minNodes <= 0 {
+		minNodes = 3
+	}
+	if minConns <= 0 {
+		minConns = 1
 	}
 	skipUUID = strings.ToLower(strings.TrimSpace(skipUUID))
 	report := &PlazaSeedReport{}
@@ -105,8 +111,8 @@ func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem, limit int, sk
 			report.Errors = append(report.Errors, item.Slug+": 缺少 uuid/slug/title")
 			continue
 		}
-		imported, err := s.fetchSeedCanvas(item)
-		if err != nil || imported == nil || imported.ImportedConnectionCount < 1 || imported.ImportedNodeCount < 3 {
+		imported, err := s.fetchSeedCanvas(item, minNodes, minConns)
+		if err != nil || imported == nil || imported.ImportedConnectionCount < minConns || imported.ImportedNodeCount < minNodes {
 			report.Failed++
 			if err != nil {
 				report.Errors = append(report.Errors, item.Slug+": "+seedFailureText(err))
@@ -164,7 +170,7 @@ func (s *Service) resolveSeedAuthor(authorID, adminID string, cache map[string]s
 	return resolved, nil
 }
 
-func (s *Service) fetchSeedCanvas(item PlazaExternalSeedItem) (*auth.LibTVImportResult, error) {
+func (s *Service) fetchSeedCanvas(item PlazaExternalSeedItem, minNodes, minConns int) (*auth.LibTVImportResult, error) {
 	tried := map[string]struct{}{}
 	var lastErr error
 	for _, uuid := range []string{item.UUID, item.ProjectUUID} {
@@ -177,7 +183,7 @@ func (s *Service) fetchSeedCanvas(item PlazaExternalSeedItem) (*auth.LibTVImport
 		}
 		tried[uuid] = struct{}{}
 		imported, err := seedPublicGraph(s, uuid)
-		if err == nil && imported != nil && imported.ImportedNodeCount >= 3 && imported.ImportedConnectionCount >= 1 {
+		if err == nil && imported != nil && imported.ImportedNodeCount >= minNodes && imported.ImportedConnectionCount >= minConns {
 			return imported, nil
 		}
 		if err != nil {

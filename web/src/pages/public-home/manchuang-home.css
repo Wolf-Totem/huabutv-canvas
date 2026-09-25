@@ -66,7 +66,7 @@ html.mc-auth-open .portal-auth-overlay {
     gap: 22px;
     width: min(1240px, calc(100% - 28px));
     min-height: 88px;
-    margin: 0 auto;
+    margin: 10px auto 0;
     padding: 14px 16px 14px 22px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 999px;
@@ -96,11 +96,13 @@ html.mc-auth-open .portal-auth-overlay {
 .mc-nav-start { margin-right: 4px; min-height: 48px; padding: 0 22px; font-size: 18px; }
 .mc-btn-ghost { color: #eef3e6; background: rgba(20, 22, 16, 0.5); border-color: rgba(190, 242, 74, 0.34); }
 .mc-btn-primary { color: #16240a; background: linear-gradient(135deg, #caf75a, #a3e028); }
+.mc-btn-register { color: #f4f4f5; background: #111; border-color: #111; }
 .mc-btn:hover { transform: translateY(-1px); }
 .mc-hero-cta-pin .mc-btn:hover { transform: none; }
 
 .mc-hero { position: relative; overflow: hidden; min-height: 100svh; }
 .mc-hero-media, .mc-hero-video, .mc-hero-media-scrim { position: absolute; inset: 0; }
+.mc-hero-media { top: 0; }
 .mc-hero-video { width: 100%; height: 100%; object-fit: cover; }
 .mc-hero-media-scrim {
     background: linear-gradient(180deg, rgba(8, 8, 10, 0.22), transparent 32%, rgba(8, 8, 10, 0.42) 72%, #0c0d10);
@@ -110,10 +112,10 @@ html.mc-auth-open .portal-auth-overlay {
     position: relative;
     z-index: 2;
     display: block;
-    min-height: 100svh;
+    min-height: 0;
     width: 100%;
     margin: 0 auto;
-    padding: 72px 0 280px;
+    padding: 8px 0 280px;
 }
 .mc-hero-top {
     display: grid;
@@ -302,8 +304,9 @@ html.mc-auth-open .portal-auth-overlay {
 }
 .mc-hero-tile-icon svg { width: 28px; height: 28px; display: block; }
 .mc-hero-card { cursor: pointer; }
-.mc-hero-rail { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; height: clamp(280px, 36vh, 430px); overflow: visible; }
-.mc-hero-rail-track { position: relative; width: 100%; height: 100%; }
+.mc-hero-rail { position: absolute; left: 0; width: 100vw; right: auto; bottom: 0; z-index: 3; height: clamp(280px, 36vh, 430px); overflow: visible; pointer-events: none; }
+.mc-hero-rail-track { position: relative; width: 100%; height: 100%; overflow: visible; }
+.mc-hero-card { pointer-events: auto; }
 .mc-hero-card {
     position: absolute; left: 0; bottom: 0;
     width: clamp(150px, 13vw, 190px); height: clamp(214px, 18.6vw, 272px);

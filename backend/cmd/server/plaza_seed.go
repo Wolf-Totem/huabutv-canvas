@@ -31,6 +31,8 @@ type plazaSeedFlags struct {
 	keepSlugSet   bool
 	deleteOthers  bool
 	limit         int
+	minNodes      int
+	minConns      int
 	resetImported bool
 	wipe          bool
 }
@@ -41,7 +43,7 @@ type plazaSeedSession interface {
 	ResetImported() (int, error)
 	WorkBySlug(slug string) (id string, status string, found bool, err error)
 	DeleteExcept(keepID string) (int, error)
-	Seed(items []app.PlazaExternalSeedItem, limit int, skip string) (*app.PlazaSeedReport, error)
+	Seed(items []app.PlazaExternalSeedItem, limit int, skip string, minNodes, minConns int) (*app.PlazaSeedReport, error)
 }
 
 type plazaSeedDeps struct {
@@ -110,6 +112,28 @@ func parsePlazaSeedFlags(args []string) (plazaSeedFlags, error) {
 			}
 			flags.limit = parsed
 			i = next
+		case arg == "--min-nodes" || strings.HasPrefix(arg, "--min-nodes="):
+			value, next, err := takeFlagValue(args, i, "--min-nodes")
+			if err != nil {
+				return flags, err
+			}
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed < 0 {
+				return flags, errors.New("--min-nodes 必须是整数")
+			}
+			flags.minNodes = parsed
+			i = next
+		case arg == "--min-conns" || strings.HasPrefix(arg, "--min-conns="):
+			value, next, err := takeFlagValue(args, i, "--min-conns")
+			if err != nil {
+				return flags, err
+			}
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed < 0 {
+				return flags, errors.New("--min-conns 必须是整数")
+			}
+			flags.minConns = parsed
+			i = next
 		default:
 			return flags, fmt.Errorf("未知参数: %s", arg)
 		}
@@ -158,7 +182,7 @@ func runLegacyPlazaSeed(flags plazaSeedFlags, stdin io.Reader, stdout, stderr io
 		fmt.Fprintf(stderr, "读取导入清单失败: %v\n", err)
 		return 1
 	}
-	report, err := session.Seed(items, flags.limit, "")
+	report, err := session.Seed(items, flags.limit, "", flags.minNodes, flags.minConns)
 	if err != nil {
 		fmt.Fprintf(stderr, "导入失败: %v\n", err)
 		return 1
@@ -190,7 +214,7 @@ func runKeepSlugPlazaSeed(flags plazaSeedFlags, stdin io.Reader, stdout, stderr 
 		return 1
 	}
 	defer session.Close()
-	report, err := session.Seed(items, flags.limit, flags.keepSlug)
+	report, err := session.Seed(items, flags.limit, flags.keepSlug, flags.minNodes, flags.minConns)
 	if err != nil {
 		fmt.Fprintf(stderr, "导入失败: %v\n", err)
 		return 1
@@ -254,7 +278,7 @@ func runDeleteOthersPlazaSeed(flags plazaSeedFlags, stdin io.Reader, stdout, std
 		fmt.Fprintf(stderr, "删除广场作品失败: %v\n", err)
 		return 1
 	}
-	report, err := session.Seed(deduped, flags.limit, flags.keepSlug)
+	report, err := session.Seed(deduped, flags.limit, flags.keepSlug, flags.minNodes, flags.minConns)
 	if err != nil {
 		fmt.Fprintf(stderr, "导入失败: %v\n", err)
 		return 1
@@ -399,6 +423,6 @@ func (s *dbPlazaSeedSession) DeleteExcept(keepID string) (int, error) {
 	return s.svc.DeletePlazaWorksExcept(keepID)
 }
 
-func (s *dbPlazaSeedSession) Seed(items []app.PlazaExternalSeedItem, limit int, skip string) (*app.PlazaSeedReport, error) {
-	return s.svc.SeedPlazaExternal(items, limit, skip)
+func (s *dbPlazaSeedSession) Seed(items []app.PlazaExternalSeedItem, limit int, skip string, minNodes, minConns int) (*app.PlazaSeedReport, error) {
+	return s.svc.SeedPlazaExternal(items, limit, skip, minNodes, minConns)
 }

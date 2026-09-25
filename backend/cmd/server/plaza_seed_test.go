@@ -258,7 +258,7 @@ func (f *fakePlazaSeedSession) DeleteExcept(keepID string) (int, error) {
 	return 0, nil
 }
 
-func (f *fakePlazaSeedSession) Seed(items []app.PlazaExternalSeedItem, limit int, skip string) (*app.PlazaSeedReport, error) {
+func (f *fakePlazaSeedSession) Seed(items []app.PlazaExternalSeedItem, limit int, skip string, _, _ int) (*app.PlazaSeedReport, error) {
 	if f != nil && f.seedFn != nil {
 		return f.seedFn(items, limit, skip)
 	}

@@ -5,7 +5,7 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { LANDING_NAV, mergeManchuangLanding, type LandingHeroShowcase, type LandingRailCard } from "@/lib/manchuang-landing";
 import { listPlazaWorks } from "@/services/api/plaza";
 import { ossProcessedImage } from "@/lib/oss-image";
-import { DEFAULT_HOME_CTA_HREF, DEFAULT_HOME_CTA_LABEL } from "@/lib/home-navigation";
+
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -23,8 +23,6 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
     const openAuth = useAuthDialogStore((state) => state.openAuth);
     const user = useUserStore((state) => state.user);
     const brand = appearance.brandName || "漫创";
-    const ctaLabel = appearance.homeCtaLabel?.trim() || DEFAULT_HOME_CTA_LABEL;
-    const ctaHref = appearance.homeCtaHref?.trim() || DEFAULT_HOME_CTA_HREF;
     const openWorkspace = (path: string) => {
         const target = path.startsWith("/") ? path : "/create";
         if (document.documentElement.dataset.publicShell === "1") {
@@ -183,40 +181,6 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
 
     return (
         <div className="mc-gate" ref={gateRef}>
-            <header className={solidNav ? "mc-nav is-solid" : "mc-nav"}>
-                <a className="mc-brand" href="#top" onClick={(event) => { event.preventDefault(); go("#top"); }}>
-                    <BrandLogo theme="dark" className="mc-brand-mark" alt="" fallback={<img src="/manchuang/logo.png" alt="" className="mc-brand-mark" />} />
-                    <span className="mc-brand-text">
-                        <strong>{brand}</strong>
-                        <em>CANVAS</em>
-                    </span>
-                </a>
-                <nav className="mc-nav-links" aria-label="官网导航">
-                    <button type="button" className="mc-btn mc-btn-primary mc-nav-start" onClick={() => openWorkspace(ctaHref.startsWith("/") ? ctaHref : "/create")}>{ctaLabel}</button>
-                    <a href="/create#plaza" onClick={(event) => { event.preventDefault(); openWorkspace("/create#plaza"); }}>作品</a>
-                    {LANDING_NAV.map((item) => (
-                        <a
-                            key={item.id}
-                            href={`#${item.id}`}
-                            className={activeSection === item.id ? "is-current" : undefined}
-                            onClick={(event) => { event.preventDefault(); go(`#${item.id}`); }}
-                        >
-                            {item.label}
-                        </a>
-                    ))}
-                </nav>
-                <div className="mc-nav-actions">
-                    {user ? (
-                        <button type="button" className="mc-btn mc-btn-primary" onClick={() => openWorkspace("/create")}>进入工作台</button>
-                    ) : (
-                        <>
-                            <button type="button" className="mc-btn mc-btn-ghost" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openAuth({ tab: "login" }); }}>登录</button>
-                            <button type="button" className="mc-btn mc-btn-primary" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openAuth({ tab: "register" }); }}>注册</button>
-                        </>
-                    )}
-                </div>
-            </header>
-
             <section className="mc-hero" id="top">
                 <div className="mc-hero-media" aria-hidden="true">
                     <video key={landing.heroVideoUrl} className="mc-hero-video" autoPlay muted loop playsInline preload="metadata" poster={landing.heroPosterUrl || undefined}>
@@ -224,6 +188,38 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                     </video>
                     <span className="mc-hero-media-scrim" />
                 </div>
+                <header className={solidNav ? "mc-nav is-solid" : "mc-nav"}>
+                    <a className="mc-brand" href="#top" onClick={(event) => { event.preventDefault(); go("#top"); }}>
+                        <BrandLogo theme="dark" className="mc-brand-mark" alt="" fallback={<img src="/manchuang/logo.png" alt="" className="mc-brand-mark" />} />
+                        <span className="mc-brand-text">
+                            <strong>{brand}</strong>
+                            <em>CANVAS</em>
+                        </span>
+                    </a>
+                    <nav className="mc-nav-links" aria-label="官网导航">
+                        <a href="/create#plaza" onClick={(event) => { event.preventDefault(); openWorkspace("/create#plaza"); }}>作品</a>
+                        {LANDING_NAV.map((item) => (
+                            <a
+                                key={item.id}
+                                href={`#${item.id}`}
+                                className={activeSection === item.id ? "is-current" : undefined}
+                                onClick={(event) => { event.preventDefault(); go(`#${item.id}`); }}
+                            >
+                                {item.label}
+                            </a>
+                        ))}
+                    </nav>
+                    <div className="mc-nav-actions">
+                        {user ? (
+                            <button type="button" className="mc-btn mc-btn-ghost" onClick={() => openWorkspace(`/u/${encodeURIComponent(user.id)}`)}>个人中心</button>
+                        ) : (
+                            <>
+                                <button type="button" className="mc-btn mc-btn-ghost" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openAuth({ tab: "login" }); }}>登录</button>
+                                <button type="button" className="mc-btn mc-btn-register" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openAuth({ tab: "register" }); }}>注册</button>
+                            </>
+                        )}
+                    </div>
+                </header>
                 <div className="mc-hero-inner">
                     <div className="mc-hero-top">
                         <div className="mc-hero-copy">
@@ -554,7 +550,11 @@ function neighborLift(index: number, hover: number) {
 
 function HeroRail({ items, onOpen }: { items: LandingRailCard[]; onOpen?: (id: string) => void }) {
     const track = useRef<HTMLDivElement>(null);
-    const looped = useMemo(() => [0, 1, 2].flatMap((copy) => items.map((item) => ({ ...item, key: `${copy}-${item.id}` }))), [items]);
+    const copies = Math.max(8, Math.ceil(36 / Math.max(items.length, 1)));
+    const looped = useMemo(
+        () => Array.from({ length: copies }, (_, copy) => items.map((item) => ({ ...item, key: `${copy}-${item.id}` }))).flat(),
+        [copies, items],
+    );
 
     useEffect(() => {
         const root = track.current;
@@ -623,9 +623,11 @@ function HeroRail({ items, onOpen }: { items: LandingRailCard[]; onOpen?: (id: s
                 let x = (index * step + offset) % total;
                 if (x < 0) x += total;
                 x -= step;
+                if (x > view + step) x -= total;
+                if (x + width < -step) x += total;
                 const mid = x + width / 2;
-                const p = Math.max(-1.5, Math.min(1.5, (mid - center) / (view * 0.6)));
-                const arc = 132 * (1 - p * p);
+                const p = Math.max(-1.15, Math.min(1.15, (mid - center) / Math.max(view * 0.52, 1)));
+                const arc = 118 * Math.max(0, 1 - p * p);
                 const target = neighborLift(index, hover);
                 lifts[index] += (target - lifts[index]) * 0.18;
                 const lift = lifts[index];

@@ -59,7 +59,7 @@ func TestSeedPlazaExternalRemapsUnknownAuthorAndSkipsUUID(t *testing.T) {
 		seedItem("44444444444444444444444444444444", ""),
 		seedItem("55555555555555555555555555555555", externalAuthor),
 	}
-	report, err := svc.SeedPlazaExternal(items, 4, keep)
+	report, err := svc.SeedPlazaExternal(items, 4, keep, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestSeedPlazaExternalSkipsUnusableGraph(t *testing.T) {
 		graph.Connections = nil
 		return graph, nil
 	})
-	report, err := svc.SeedPlazaExternal([]PlazaExternalSeedItem{seedItem(uuid, "4feba512bfa52a601ce593358b0fbd78")}, 80, "")
+	report, err := svc.SeedPlazaExternal([]PlazaExternalSeedItem{seedItem(uuid, "4feba512bfa52a601ce593358b0fbd78")}, 80, "", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestSeedPlazaExternalLeavesForeignCanvas(t *testing.T) {
 	useSeedGraph(t, func(id string) (*auth.LibTVImportResult, error) {
 		return usableSeedGraph(id), nil
 	})
-	report, err := svc.SeedPlazaExternal([]PlazaExternalSeedItem{seedItem(uuid, "admin-1")}, 80, "")
+	report, err := svc.SeedPlazaExternal([]PlazaExternalSeedItem{seedItem(uuid, "admin-1")}, 80, "", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestSeedFailureTextStripsUpstreamNames(t *testing.T) {
 	useSeedGraph(t, func(string) (*auth.LibTVImportResult, error) {
 		return nil, errors.New("Get https://api.liblib.tv/canvas failed HTTP 404")
 	})
-	report, err := svc.SeedPlazaExternal([]PlazaExternalSeedItem{seedItem("abababababababababababababababab", "nobody")}, 1, "")
+	report, err := svc.SeedPlazaExternal([]PlazaExternalSeedItem{seedItem("abababababababababababababababab", "nobody")}, 1, "", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
