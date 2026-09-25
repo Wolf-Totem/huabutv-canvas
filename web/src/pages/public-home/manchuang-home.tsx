@@ -6,6 +6,7 @@ import { LANDING_NAV, mergeManchuangLanding, type LandingHeroShowcase, type Land
 import { listPlazaWorks } from "@/services/api/plaza";
 import { ossProcessedImage } from "@/lib/oss-image";
 
+import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -211,7 +212,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                     </nav>
                     <div className="mc-nav-actions">
                         {user ? (
-                            <button type="button" className="mc-btn mc-btn-ghost" onClick={() => openWorkspace(`/u/${encodeURIComponent(user.id)}`)}>个人中心</button>
+                            <WorkspaceAccountMenu trigger={<button type="button" className="mc-btn mc-btn-ghost">个人中心</button>} />
                         ) : (
                             <>
                                 <button type="button" className="mc-btn mc-btn-ghost" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openAuth({ tab: "login" }); }}>登录</button>

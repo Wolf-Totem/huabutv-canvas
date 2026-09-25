@@ -99,6 +99,21 @@ html.mc-auth-open .portal-auth-overlay {
 .mc-btn-ghost { color: #eef3e6; background: rgba(20, 22, 16, 0.5); border-color: rgba(190, 242, 74, 0.34); }
 .mc-btn-primary { color: #16240a; background: linear-gradient(135deg, #caf75a, #a3e028); }
 .mc-btn-register { color: #f4f4f5; background: #111; border-color: #111; }
+html.mc-public-home .workspace-account-popover {
+    --user-surface: #1c1c1f;
+    --user-surface-raised: #222226;
+    --user-surface-muted: #26262a;
+    --user-surface-hover: #303036;
+    --user-ink: #f3f3f5;
+    --user-ink-muted: #b4b4bc;
+    --user-ink-soft: #9797a1;
+    --user-accent: #a69cff;
+    --user-accent-soft: rgba(126, 113, 255, 0.16);
+    --user-border: rgba(255, 255, 255, 0.09);
+    --user-motion: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    --product-accent-blue: #6ea8ff;
+    z-index: 90;
+}
 .mc-btn:hover { transform: translateY(-1px); }
 .mc-hero-cta-pin .mc-btn:hover { transform: none; }
 

@@ -12,6 +12,14 @@ import { useUserStore } from "@/stores/use-user-store";
 import { UserAvatar } from "./user-avatar";
 import "./workspace-account-card.css";
 
+function followAccountLink(event: { preventDefault: () => void }, path: string, onNavigate: () => void) {
+    onNavigate();
+    if (document.documentElement.dataset.publicShell === "1") {
+        event.preventDefault();
+        window.location.assign(path);
+    }
+}
+
 /** 同一账户卡片用于顶部和侧栏；余额与退出均复用真实服务。 */
 export function WorkspaceAccountCard({ onWallet, onNavigate }: { onWallet: () => void; onNavigate: () => void }) {
     const { t, i18n } = useTranslation("common");
@@ -34,9 +42,9 @@ export function WorkspaceAccountCard({ onWallet, onNavigate }: { onWallet: () =>
             <button type="button" onClick={onWallet}>{t("account.subscribe")}<ArrowUpRight /></button>
         </div>}
         <nav className="workspace-account-card-actions" aria-label={t("account.actions")}>
-            <Link to="/settings" onClick={onNavigate}><Settings /><span>{t("account.settings")}</span><ArrowUpRight /></Link>
+            <Link to="/settings" onClick={(event) => followAccountLink(event, "/settings", onNavigate)}><Settings /><span>{t("account.settings")}</span><ArrowUpRight /></Link>
             {hasPermission(user.role, permissions, PERMISSIONS.agentConsole) ? <a href={agentConsoleURL()} onClick={onNavigate}><ShieldCheck /><span>代理后台</span><ArrowUpRight /></a> : null}
-            {canAccessAdmin(user.role, permissions) ? <Link to="/admin" onClick={onNavigate}><ShieldCheck /><span>{t("account.adminConsole")}</span><ArrowUpRight /></Link> : null}
+            {canAccessAdmin(user.role, permissions) ? <Link to="/admin" onClick={(event) => followAccountLink(event, "/admin", onNavigate)}><ShieldCheck /><span>{t("account.adminConsole")}</span><ArrowUpRight /></Link> : null}
             <Button danger type="text" icon={<LogOut />} loading={loggingOut} onClick={() => void handleLogout()}>{t("action.logout")}</Button>
         </nav>
     </section>;
