@@ -5,8 +5,7 @@ import { Switch } from "@/components/ui/base/switch";
 import { Captions, FileDown, FileUp, ListPlus, LoaderCircle, Plus, Scissors, Sparkles, Trash2 } from "lucide-react";
 import { saveAs } from "file-saver";
 
-import { canvasThemes } from "@/lib/canvas-theme";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { cacheResourceObjectUrl } from "@/services/resource-blob-cache";
@@ -30,7 +29,7 @@ type CanvasSubtitleDialogProps = {
 
 export function CanvasSubtitleDialog({ node, open, projectId, config, onClose, onSave }: CanvasSubtitleDialogProps) {
     const { message, modal } = App.useApp();
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const [entries, setEntries] = useState<SrtEntry[]>([]);
     const [highlights, setHighlights] = useState<SubtitleHighlight[]>([]);

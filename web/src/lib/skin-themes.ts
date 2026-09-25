@@ -1,3 +1,5 @@
+import { CINEMATIC_PALETTES, CINEMATIC_SKINS, isCinematicSkinID, type CinematicPalette, type CinematicSkinID } from "@/lib/cinematic-skins";
+
 export type SkinThemeMode = "light" | "dark";
 export type SkinShadowStyle = "none" | "soft" | "strong";
 
@@ -86,6 +88,10 @@ export type SkinDefinition = {
     description: string;
     locked: boolean;
     tokens: SkinTokens;
+    film?: string;
+    poster?: string;
+    fx?: string;
+    hue?: number;
 };
 
 export type SkinAntOverrides = {
@@ -393,6 +399,84 @@ export const DEFAULT_CLASSIC_SKIN: SkinDefinition = {
     },
 };
 
+export function tintSkinMode(base: SkinModeTokens, palette: CinematicPalette): SkinModeTokens {
+    return {
+        ...base,
+        canvas: palette.canvas,
+        surface: palette.surface,
+        surfaceSubtle: palette.surface,
+        surfaceRaised: palette.surface,
+        overlay: palette.surface,
+        text: palette.text,
+        textMuted: palette.muted,
+        border: palette.muted,
+        control: palette.surface,
+        controlHover: palette.surface,
+        controlActive: palette.surface,
+        controlBorder: palette.muted,
+        controlFocus: palette.primary,
+        controlDisabledBackground: palette.surface,
+        controlDisabledForeground: palette.muted,
+        switchChecked: palette.primary,
+        switchCheckedHover: palette.primary,
+        switchCheckedHandle: palette.onPrimary,
+        switchUnchecked: palette.muted,
+        switchUncheckedHover: palette.muted,
+        switchUncheckedHandle: palette.text,
+        primary: palette.primary,
+        primaryHover: palette.primary,
+        primaryActive: palette.primary,
+        primaryForeground: palette.onPrimary,
+        selected: palette.surface,
+        selectedHover: palette.surface,
+        selectedActive: palette.surface,
+        selectedForeground: palette.text,
+        icon: palette.text,
+        iconMuted: palette.muted,
+        iconActive: palette.primary,
+        info: palette.primary,
+        workspace: palette.surface,
+        workspaceGrid: palette.muted,
+        adminBackground: palette.canvas,
+        adminSurface: palette.surface,
+        adminSubtle: palette.surface,
+        adminStrong: palette.surface,
+        authBackground: palette.canvas,
+        authPanel: palette.surface,
+        authCard: palette.surface,
+        authAccent: palette.primary,
+        authMuted: palette.muted,
+        dangerForeground: palette.onPrimary,
+    };
+}
+
+export function cinematicSkinDefinition(id: CinematicSkinID): SkinDefinition {
+    const meta = CINEMATIC_SKINS.find((skin) => skin.id === id) || CINEMATIC_SKINS[0];
+    const palettes = CINEMATIC_PALETTES[meta.id];
+    return {
+        id: meta.id,
+        name: meta.nameZh,
+        description: meta.name,
+        locked: true,
+        film: meta.film,
+        poster: meta.poster,
+        fx: meta.fx,
+        hue: meta.hue,
+        tokens: {
+            light: tintSkinMode(DEFAULT_CLASSIC_SKIN.tokens.light, palettes.light),
+            dark: tintSkinMode(DEFAULT_CLASSIC_SKIN.tokens.dark, palettes.dark),
+            components: {
+                ...DEFAULT_CLASSIC_SKIN.tokens.components,
+                buttonRadius: 8,
+                inputRadius: 8,
+                cardRadius: 14,
+                overlayRadius: 16,
+                menuRadius: 10,
+            },
+        },
+    };
+}
+
 const HEX_COLOR = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
 const MANAGED_VARIABLES = [
     "--background",
@@ -450,6 +534,24 @@ const MANAGED_VARIABLES = [
     "--workspace-grid-line",
     "--workspace-accent",
     "--workspace-accent-soft",
+    "--user-page-bg",
+    "--user-surface",
+    "--user-surface-raised",
+    "--user-surface-muted",
+    "--user-surface-hover",
+    "--user-border",
+    "--user-border-strong",
+    "--user-ink",
+    "--user-ink-muted",
+    "--user-ink-soft",
+    "--user-accent",
+    "--user-accent-soft",
+    "--user-accent-foreground",
+    "--user-action-gradient",
+    "--user-action-gradient-hover",
+    "--user-action-foreground",
+    "--user-control-pressed",
+    "--skin-hue",
     "--skin-admin-layer-0",
     "--skin-admin-layer-1",
     "--skin-admin-layer-2",
@@ -495,21 +597,39 @@ export function normalizeSkinDefinition(value: unknown, fallback: SkinDefinition
     if (!value || typeof value !== "object") return cloneSkinDefinition(fallback);
     const candidate = value as Partial<SkinDefinition>;
     const id = typeof candidate.id === "string" && /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(candidate.id) ? candidate.id : fallback.id;
+    const resolvedFallback = isCinematicSkinID(id) ? cinematicSkinDefinition(id) : fallback;
     const modes = candidate.tokens;
-    const light = normalizeSkinMode(modes?.light, fallback.tokens.light);
-    const dark = normalizeSkinMode(modes?.dark, fallback.tokens.dark);
-    if (!modes || !light || !dark || !isSkinComponents(modes.components)) return cloneSkinDefinition(fallback);
-    return {
+    const light = normalizeSkinMode(modes?.light, resolvedFallback.tokens.light);
+    const dark = normalizeSkinMode(modes?.dark, resolvedFallback.tokens.dark);
+    if (!modes || !light || !dark || !isSkinComponents(modes.components)) return cloneSkinDefinition(resolvedFallback);
+    const normalized = {
         id,
         name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 40) : fallback.name,
         description: typeof candidate.description === "string" ? candidate.description.trim().slice(0, 100) : fallback.description,
-        locked: id === "classic",
+        locked: id === "classic" || isCinematicSkinID(id),
         tokens: { light, dark, components: { ...modes.components } },
+        film: typeof candidate.film === "string" ? candidate.film.trim() : fallback.film,
+        poster: typeof candidate.poster === "string" ? candidate.poster.trim() : fallback.poster,
+        fx: typeof candidate.fx === "string" ? candidate.fx.trim() : fallback.fx,
+        hue: typeof candidate.hue === "number" && Number.isFinite(candidate.hue) ? candidate.hue : fallback.hue,
+    };
+    if (!isCinematicSkinID(id)) return normalized;
+    const official = cinematicSkinDefinition(id);
+    return {
+        ...normalized,
+        name: official.name,
+        description: official.description,
+        locked: true,
+        tokens: official.tokens,
+        film: official.film,
+        poster: official.poster,
+        fx: official.fx,
+        hue: official.hue,
     };
 }
 
 export function cloneSkinDefinition(source: SkinDefinition): SkinDefinition {
-    return { ...source, tokens: cloneSkinTokens(source.tokens) };
+    return { ...source, tokens: cloneSkinTokens(source.tokens), film: source.film, poster: source.poster, fx: source.fx, hue: source.hue };
 }
 
 export function createSkinThemeID(existingIDs: Iterable<string>) {
@@ -725,6 +845,24 @@ export function skinCSSVariables(skin: SkinDefinition, mode: SkinThemeMode): Rec
         "--workspace-grid-line": color.workspaceGrid,
         "--workspace-accent": color.primary,
         "--workspace-accent-soft": `color-mix(in srgb, ${color.primary} 12%, transparent)`,
+        "--user-page-bg": color.canvas,
+        "--user-surface": color.surface,
+        "--user-surface-raised": color.surfaceRaised,
+        "--user-surface-muted": color.surfaceSubtle,
+        "--user-surface-hover": color.controlHover,
+        "--user-border": color.border,
+        "--user-border-strong": color.controlBorder,
+        "--user-ink": color.text,
+        "--user-ink-muted": color.textMuted,
+        "--user-ink-soft": color.iconMuted,
+        "--user-accent": color.primary,
+        "--user-accent-soft": `color-mix(in srgb, ${color.primary} 14%, transparent)`,
+        "--user-accent-foreground": color.primaryForeground,
+        "--user-action-gradient": `linear-gradient(115deg, ${color.primary}, ${color.primaryHover})`,
+        "--user-action-gradient-hover": `linear-gradient(115deg, ${color.primaryHover}, ${color.primaryActive})`,
+        "--user-action-foreground": color.primaryForeground,
+        "--user-control-pressed": color.controlActive,
+        "--skin-hue": String(Number.isFinite(skin.hue) ? skin.hue : 38),
         "--skin-admin-layer-0": color.adminBackground,
         "--skin-admin-layer-1": color.adminSurface,
         "--skin-admin-layer-2": color.adminSubtle,

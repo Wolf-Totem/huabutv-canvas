@@ -22,6 +22,8 @@ type (
 	PasswordResetRequest       = auth.PasswordResetRequest
 	EmailSettingRequest        = auth.EmailSettingRequest
 	PublicEmailSetting         = auth.PublicEmailSetting
+	SMSSettingRequest          = auth.SMSSettingRequest
+	PublicSMSSetting           = auth.PublicSMSSetting
 	LinuxDOSettingRequest      = auth.LinuxDOSettingRequest
 	PublicLinuxDOSetting       = auth.PublicLinuxDOSetting
 	LinuxDOCallbackResult      = auth.LinuxDOCallbackResult
@@ -110,6 +112,27 @@ func (h authHost) RequestRetryAfter(ctx context.Context, key string, window time
 	return h.svc.RequestRetryAfter(ctx, key, window)
 }
 
+func (h authHost) StreamerByHost(host string) (*model.Streamer, error) {
+	if h.svc == nil {
+		return nil, nil
+	}
+	return h.svc.ResolveStreamerByHost(host)
+}
+
+func (h authHost) ActiveStreamerByInvite(code string) (*model.Streamer, error) {
+	if h.svc == nil {
+		return nil, nil
+	}
+	return h.svc.ActiveStreamerByInvite(code)
+}
+
+func (h authHost) BindUserStreamerInvite(userID, streamerID string) error {
+	if h.svc == nil {
+		return nil
+	}
+	return h.svc.BindUserStreamerInvite(userID, streamerID)
+}
+
 func (s *Service) authDomain() *auth.Service {
 	if s == nil {
 		return auth.New(nil, nil, nil)
@@ -120,8 +143,8 @@ func (s *Service) authDomain() *auth.Service {
 	return auth.New(s.repo, authHost{svc: s}, nil)
 }
 
-func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
-	return s.authDomain().PublicAuthSettings()
+func (s *Service) PublicAuthSettings(host string) (*PublicAuthSettings, error) {
+	return s.authDomain().PublicAuthSettings(host)
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
@@ -156,8 +179,8 @@ func (s *Service) RegistrationEnabled() (bool, error) {
 	return s.authDomain().RegistrationEnabled()
 }
 
-func (s *Service) SendPasswordResetEmailCode(rawEmail string) error {
-	return s.authDomain().SendPasswordResetEmailCode(rawEmail)
+func (s *Service) SendPasswordResetEmailCode(rawEmail string, locale string) error {
+	return s.authDomain().SendPasswordResetEmailCode(rawEmail, locale)
 }
 
 func (s *Service) ResetPassword(req PasswordResetRequest) error {
@@ -176,8 +199,32 @@ func (s *Service) EmailEnabled() (bool, error) {
 	return s.authDomain().EmailEnabled()
 }
 
-func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
-	return s.authDomain().SendRegistrationEmailCode(rawEmail)
+func (s *Service) SendRegistrationEmailCode(rawEmail string, locale string, host string) error {
+	return s.authDomain().SendRegistrationEmailCode(rawEmail, locale, host)
+}
+
+func (s *Service) AdminSendTestVerificationEmail(actor *model.User, email string, locale string) error {
+	return s.authDomain().AdminSendTestVerificationEmail(actor, email, locale)
+}
+
+func (s *Service) AdminSMSSetting(actor *model.User) (*PublicSMSSetting, error) {
+	return s.authDomain().AdminSMSSetting(actor)
+}
+
+func (s *Service) UpdateSMSSetting(actor *model.User, req SMSSettingRequest) (*PublicSMSSetting, error) {
+	return s.authDomain().UpdateSMSSetting(actor, req)
+}
+
+func (s *Service) SMSEnabled() (bool, error) {
+	return s.authDomain().SMSEnabled()
+}
+
+func (s *Service) SendRegistrationSMSCode(phone string) error {
+	return s.authDomain().SendRegistrationSMSCode(phone)
+}
+
+func (s *Service) AdminSendTestSMS(actor *model.User, phone string) error {
+	return s.authDomain().AdminSendTestSMS(actor, phone)
 }
 
 func (s *Service) VerifyRegistrationEmailCode(email string, rawCode string) (*model.EmailVerificationCode, error) {

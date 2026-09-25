@@ -50,6 +50,7 @@ const (
 	TaskStatusTextReplay TaskStatus = "text_replay"
 
 	UserRoleAdmin UserRole = "admin"
+	UserRoleAgent UserRole = "agent"
 	UserRoleUser  UserRole = "user"
 
 	UserStatusActive   UserStatus = "active"
@@ -109,15 +110,16 @@ const (
 	ProviderCancelStatusConfirmed ProviderCancelStatus = "confirmed"
 	ProviderCancelStatusUncertain ProviderCancelStatus = "uncertain"
 
-	CreditLedgerRedeem       CreditLedgerType = "redeem"
-	CreditLedgerAdminGrant   CreditLedgerType = "admin_grant"
-	CreditLedgerReserve      CreditLedgerType = "reserve"
-	CreditLedgerConsume      CreditLedgerType = "consume"
-	CreditLedgerRefund       CreditLedgerType = "refund"
-	CreditLedgerAdminAdjust  CreditLedgerType = "admin_adjustment"
-	CreditLedgerSignupBonus  CreditLedgerType = "signup_bonus"
-	CreditLedgerCheckinBonus CreditLedgerType = "checkin_bonus"
-	CreditLedgerPaymentTopup CreditLedgerType = "payment_topup"
+	CreditLedgerRedeem         CreditLedgerType = "redeem"
+	CreditLedgerAdminGrant     CreditLedgerType = "admin_grant"
+	CreditLedgerReserve        CreditLedgerType = "reserve"
+	CreditLedgerConsume        CreditLedgerType = "consume"
+	CreditLedgerRefund         CreditLedgerType = "refund"
+	CreditLedgerAdminAdjust    CreditLedgerType = "admin_adjustment"
+	CreditLedgerSignupBonus    CreditLedgerType = "signup_bonus"
+	CreditLedgerCheckinBonus   CreditLedgerType = "checkin_bonus"
+	CreditLedgerPaymentTopup   CreditLedgerType = "payment_topup"
+	CreditLedgerStreamerRebate CreditLedgerType = "streamer_rebate"
 
 	RedeemCodeUnused   RedeemCodeStatus = "unused"
 	RedeemCodeRedeemed RedeemCodeStatus = "redeemed"

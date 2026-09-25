@@ -1,13 +1,12 @@
 import { Button, Modal } from "antd";
 import { Check, Star } from "lucide-react";
 
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 export function CanvasVersionCompareModal({ open, versions, onClose, onSetPrimary, onFocus }: { open: boolean; versions: CanvasNodeData[]; onClose: () => void; onSetPrimary: (nodeId: string) => void; onFocus: (nodeId: string) => void }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const modalWidth = Math.min(1180, Math.max(440, 112 + versions.length * 340));
     return (
         <Modal title="版本对比" open={open} footer={null} width={modalWidth} centered onCancel={onClose} styles={{ body: { overflow: "hidden" } }}>

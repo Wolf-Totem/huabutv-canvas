@@ -12,7 +12,6 @@ import (
 	"infinite-canvas/backend/internal/kernel"
 	"log"
 	"math/big"
-	"mime"
 	"net"
 	"net/mail"
 	"net/smtp"
@@ -27,6 +26,7 @@ import (
 
 const emailSettingKey = "email"
 const registrationEmailPurpose = "registration"
+const adminSMTPTestPurpose = "admin_smtp_test"
 const registrationCodeTTL = 10 * time.Minute
 
 var defaultRegistrationEmailDomains = []string{
@@ -142,7 +142,57 @@ func (s *Service) EmailEnabled() (bool, error) {
 	return value.Enabled && value.Host != "" && value.Port > 0 && value.FromEmail != "", nil
 }
 
-func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
+func (s *Service) AdminSendTestVerificationEmail(actor *model.User, rawEmail string, localeCode string) error {
+	if err := s.host.RequireAdmin(actor); err != nil {
+		return err
+	}
+	email := NormalizeEmail(rawEmail)
+	if err := ValidateEmail(email); err != nil {
+		return err
+	}
+	_, setting, err := s.readEmailSetting()
+	if err != nil {
+		return err
+	}
+	if !setting.Enabled {
+		return kernel.Forbidden("请先保存并启用邮件服务")
+	}
+	if err := validateEmailSetting(setting); err != nil {
+		return err
+	}
+	s.emailCodeMu.Lock()
+	defer s.emailCodeMu.Unlock()
+	if latest, err := s.repo.LatestEmailVerificationCode(email, adminSMTPTestPurpose); err == nil && time.Since(latest.CreatedAt) < time.Minute {
+		seconds := max(1, int((time.Until(latest.CreatedAt.Add(time.Minute))+time.Second-1)/time.Second))
+		return &EmailCodeCooldownError{Seconds: seconds}
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	code, err := randomNumericCode(6)
+	if err != nil {
+		return err
+	}
+	codeHash, err := s.emailVerificationCodeHash(adminSMTPTestPurpose, email, code)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	record := model.EmailVerificationCode{ID: kernel.NewID(), Email: email, CodeHash: codeHash, Purpose: adminSMTPTestPurpose, ExpiresAt: now.Add(registrationCodeTTL), CreatedAt: now}
+	if err := s.repo.Create(&record); err != nil {
+		return err
+	}
+	setting = resolveEmailSender(setting, s.host.BrandName())
+	if err := s.deliverVerificationEmail(setting, email, adminSMTPTestPurpose, localeCode, code); err != nil {
+		cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID)
+		if cleanupErr != nil {
+			return errors.Join(mailSendFailed(err), fmt.Errorf("清理失效测试邮件失败：%w", cleanupErr))
+		}
+		return mailSendFailed(err)
+	}
+	return nil
+}
+
+func (s *Service) SendRegistrationEmailCode(rawEmail string, localeCode string, host string) error {
 	email := NormalizeEmail(rawEmail)
 	if err := ValidateEmail(email); err != nil {
 		return err
@@ -154,11 +204,11 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 	if count == 0 {
 		return kernel.BadAuthRequest("首个管理员账号不需要邮箱验证码")
 	}
-	registrationEnabled, err := s.RegistrationEnabled()
+	allowed, _, err := s.registrationAllowed(host, "")
 	if err != nil {
 		return err
 	}
-	if !registrationEnabled {
+	if !allowed {
 		return kernel.Forbidden("管理员未开放新用户注册")
 	}
 	if _, err := s.repo.UserByEmail(email); err == nil {
@@ -198,15 +248,12 @@ func (s *Service) SendRegistrationEmailCode(rawEmail string) error {
 		return err
 	}
 	setting = resolveEmailSender(setting, s.host.BrandName())
-	if err := s.deliverEmail(setting, email, setting.FromName+"注册验证码", registrationEmailBody(setting.FromName, code)); err != nil {
+	if err := s.deliverVerificationEmail(setting, email, registrationEmailPurpose, localeCode, code); err != nil {
 		cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID)
 		if cleanupErr != nil {
-			return errors.Join(
-				fmt.Errorf("发送注册邮件失败：%w", err),
-				fmt.Errorf("清理失效验证码失败：%w", cleanupErr),
-			)
+			return errors.Join(mailSendFailed(err), fmt.Errorf("清理失效验证码失败：%w", cleanupErr))
 		}
-		return fmt.Errorf("发送注册邮件失败：%w", err)
+		return mailSendFailed(err)
 	}
 	if cleanupErr := s.repo.DeleteExpiredEmailVerificationCodes(now.Add(-24 * time.Hour)); cleanupErr != nil {
 		log.Printf("expired registration code cleanup failed: error=%v", cleanupErr)
@@ -410,20 +457,62 @@ func resolveEmailSender(value EmailSettingValue, brandName string) EmailSettingV
 	return value
 }
 
-func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, body string) error {
+func mailSendFailed(err error) error {
+	log.Printf("smtp send failed: %v", err)
+	message := "邮件发送失败，请稍后重试。"
+	if err != nil && strings.Contains(err.Error(), "535") {
+		message = "邮件发送失败：Cloudflare 拒绝了 SMTP 认证。请到后台「邮件服务」把用户名设为 api_token，并把 Email Sending API Token 重新填入 SMTP 密码后保存。"
+	}
+	return kernel.WrapAppError(400, message, err)
+}
+
+// implicitTLSPlainAuth is AUTH PLAIN for SMTPS (port 465).
+// net/smtp.PlainAuth refuses these connections because Client.tls stays false
+// when the socket is already wrapped by tls.Dial.
+type implicitTLSPlainAuth struct {
+	identity, username, password, host string
+}
+
+func (a implicitTLSPlainAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	if server == nil {
+		return "", nil, errors.New("missing smtp server info")
+	}
+	if server.Name != a.host {
+		return "", nil, errors.New("wrong host name")
+	}
+	resp := []byte(a.identity + "\x00" + a.username + "\x00" + a.password)
+	return "PLAIN", resp, nil
+}
+
+func (a implicitTLSPlainAuth) Next(_ []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, errors.New("unexpected smtp challenge")
+	}
+	return nil, nil
+}
+
+func smtpAuth(setting EmailSettingValue) smtp.Auth {
+	if setting.Encryption == "tls" {
+		return implicitTLSPlainAuth{username: setting.Username, password: setting.Password, host: setting.Host}
+	}
+	return smtp.PlainAuth("", setting.Username, setting.Password, setting.Host)
+}
+
+func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, body string, htmlBody string) error {
 	address := net.JoinHostPort(setting.Host, strconv.Itoa(setting.Port))
 	tlsConfig := &tls.Config{ServerName: setting.Host, MinVersion: tls.VersionTLS12}
 	dialer := &net.Dialer{Timeout: 12 * time.Second}
+	network := "tcp4"
 	var client *smtp.Client
 	var err error
 	if setting.Encryption == "tls" {
-		connection, dialErr := tls.DialWithDialer(dialer, "tcp", address, tlsConfig)
+		connection, dialErr := tls.DialWithDialer(dialer, network, address, tlsConfig)
 		if dialErr != nil {
 			return dialErr
 		}
 		client, err = smtp.NewClient(connection, setting.Host)
 	} else {
-		connection, dialErr := dialer.Dial("tcp", address)
+		connection, dialErr := dialer.Dial(network, address)
 		if dialErr != nil {
 			return dialErr
 		}
@@ -437,7 +526,7 @@ func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, b
 	}
 	defer client.Close()
 	if setting.Username != "" {
-		if err := client.Auth(smtp.PlainAuth("", setting.Username, setting.Password, setting.Host)); err != nil {
+		if err := client.Auth(smtpAuth(setting)); err != nil {
 			return err
 		}
 	}
@@ -452,8 +541,8 @@ func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, b
 		return err
 	}
 	from := mail.Address{Name: setting.FromName, Address: setting.FromEmail}
-	message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", from.String(), recipient, mime.QEncoding.Encode("UTF-8", subject), body)
-	if _, err := wc.Write([]byte(message)); err != nil {
+	message := composeEmailMessage(from, recipient, subject, body, htmlBody)
+	if _, err := wc.Write(message); err != nil {
 		_ = wc.Close()
 		return err
 	}
@@ -464,10 +553,19 @@ func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, b
 }
 
 func (s *Service) deliverEmail(setting EmailSettingValue, recipient string, subject string, body string) error {
+	return s.deliverHTMLEmail(setting, recipient, subject, body, "")
+}
+
+func (s *Service) deliverHTMLEmail(setting EmailSettingValue, recipient string, subject string, body string, htmlBody string) error {
 	if s.mailSender != nil {
 		return s.mailSender(setting, recipient, subject, body)
 	}
-	return sendSMTPMail(setting, recipient, subject, body)
+	return sendSMTPMail(setting, recipient, subject, body, htmlBody)
+}
+
+func (s *Service) deliverVerificationEmail(setting EmailSettingValue, recipient, purpose, localeCode, code string) error {
+	copy := verificationEmailCopy(purpose, localeCode, setting.FromName, recipient)
+	return s.deliverHTMLEmail(setting, recipient, copy.Subject, verificationEmailText(copy, code), verificationEmailHTML(copy, setting.FromName, code))
 }
 
 func randomNumericCode(length int) (string, error) {
@@ -477,8 +575,4 @@ func randomNumericCode(length int) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%0*d", length, value.Int64()), nil
-}
-
-func registrationEmailBody(brandName string, code string) string {
-	return "你正在注册" + brandName + "。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件。"
 }

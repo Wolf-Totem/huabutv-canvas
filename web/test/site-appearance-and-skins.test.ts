@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { applySkinTheme, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, getSkinAntOverrides, normalizeSkinDefinition, skinSwatches, SKIN_COLOR_GROUPS, SKIN_COMPONENT_NUMBER_FIELDS } from "../src/lib/skin-themes";
+import { applySkinTheme, cinematicSkinDefinition, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, getSkinAntOverrides, normalizeSkinDefinition, skinSwatches, SKIN_COLOR_GROUPS, SKIN_COMPONENT_NUMBER_FIELDS } from "../src/lib/skin-themes";
 import { normalizePublicAppearance } from "../src/stores/use-appearance-store";
 
 describe("site appearance and editable skin library", () => {
@@ -67,7 +67,34 @@ describe("site appearance and editable skin library", () => {
         expect(assigned.get("--icon-active")).toBe("#abcdef");
         expect(assigned.get("--button-radius")).toBe("14px");
         expect(assigned.get("--motion-state")).toBe("260ms");
+        expect(assigned.get("--user-accent")).toBe("#123456");
+        expect(assigned.get("--user-page-bg")).toBe(custom.tokens.light.canvas);
         expect(getSkinAntOverrides(custom, "light")).toMatchObject({ primary: "#123456", switchChecked: "#17864b", danger: "#c0262d", dangerHover: "#9f1f25", buttonRadius: 14, motionNormal: 260 });
+    });
+
+    test("cinematic skins paint workspace user tokens instead of sharing classic colors", () => {
+        const prism = cinematicSkinDefinition("prism");
+        const ember = cinematicSkinDefinition("ember");
+        expect(prism.tokens.dark.canvas).toBe("#0e0a18");
+        expect(prism.tokens.dark.primary).toBe("#c4b5ff");
+        expect(ember.tokens.dark.canvas).toBe("#140c08");
+        expect(ember.tokens.dark.primary).toBe("#e08a4a");
+        expect(prism.tokens.dark.primary).not.toBe(ember.tokens.dark.primary);
+
+        const assigned = new Map<string, string>();
+        const target = {
+            documentElement: {
+                dataset: {} as Record<string, string>,
+                style: { removeProperty: () => undefined, setProperty: (key: string, value: string) => assigned.set(key, value) },
+            },
+        } as unknown as Document;
+        applySkinTheme(prism, "dark", target);
+        expect(assigned.get("--background")).toBe("#0e0a18");
+        expect(assigned.get("--user-page-bg")).toBe("#0e0a18");
+        expect(assigned.get("--user-accent")).toBe("#c4b5ff");
+        expect(assigned.get("--primary")).toBe("#c4b5ff");
+        expect(assigned.get("--skin-hue")).toBe("268");
+        expect(target.documentElement.dataset.skin).toBe("prism");
     });
 
     test("legacy custom themes backfill new switch and destructive interaction colors", () => {
@@ -140,9 +167,19 @@ describe("site appearance and editable skin library", () => {
 
         expect(storeSource).toContain('setMeta(targetDocument, "name", "description"');
         expect(storeSource).toContain('setMeta(targetDocument, "property", "og:title"');
+        expect(storeSource).toContain('setMeta(targetDocument, "property", "og:image"');
         expect(footerSource).toContain("https://beian.miit.gov.cn/");
         expect(footerSource).toContain('rel="noopener noreferrer"');
-        expect(pageSource).toContain('title="5. 皮肤主题"');
+        expect(pageSource).toContain('label: "皮肤主题"');
+        expect(pageSource).toContain('title="站点首页"');
+        expect(pageSource).toContain("<HomeNavSetting");
+        expect(pageSource).toContain("<IpLocalePromptSetting");
+        expect(pageSource).toContain("影策欢迎页");
+        expect(pageSource).toContain("漫创未登录首页");
+        expect(pageSource).toContain("className=\"admin-appearance-tabs\"");
+        expect(pageSource).toContain("加载页动态主题");
+        expect(pageSource).not.toContain("<SkinThemeEditor");
+        expect(pageSource).not.toContain("从默认新建");
         expect(editorSource).toContain("从默认新建");
         expect(editorSource).toContain("复制当前");
         expect(editorSource).toContain("删除这套主题");
@@ -159,8 +196,12 @@ describe("site appearance and editable skin library", () => {
         expect(globalStyles).toContain("--ant-tooltip-overlay-color: var(--popover-foreground) !important");
         expect(globalStyles).toContain(":where(.ant-tooltip-container, .ant-tooltip-inner)");
         expect(globalStyles).toContain("color: var(--popover-foreground) !important");
-        expect(adminStyles).toContain("--admin-status-warning: var(--palette-status-warning)");
+        expect(adminStyles).toContain("var(--admin-status-warning)");
         expect(adminStyles).toContain("border-radius: var(--menu-radius);");
+        expect(adminStyles).toContain(".admin-homepage-picker");
+        expect(adminStyles).toContain(".admin-homepage-card.is-selected");
+        expect(pageSource).toContain("加载页动态主题");
+        expect(pageSource).toContain("enabledSkins");
     });
 });
 

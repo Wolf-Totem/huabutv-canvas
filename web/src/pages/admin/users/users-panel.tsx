@@ -159,7 +159,7 @@ export default function UsersPanel({ onUserChanged }: { onUserChanged?: (user: L
                             aria-label="筛选用户角色"
                             className="w-32"
                             value={state.role}
-                            options={[{ value: "all", label: "全部角色" }, { value: "admin", label: "管理员" }, { value: "user", label: "普通用户" }]}
+                            options={[{ value: "all", label: "全部角色" }, { value: "admin", label: "管理员" }, { value: "agent", label: "代理" }, { value: "user", label: "普通用户" }]}
                             onChange={(role) => update({ role, page: 1 })}
                         />
                         <Select

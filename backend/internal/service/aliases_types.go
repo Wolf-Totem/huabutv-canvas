@@ -3,6 +3,7 @@ package service
 import "infinite-canvas/backend/internal/app"
 
 type (
+	LocaleRecommendation                   = app.LocaleRecommendation
 	CloudAgentRequest                      = app.CloudAgentRequest
 	CloudAgentMediaSettings                = app.CloudAgentMediaSettings
 	CloudAgentCapabilitySet                = app.CloudAgentCapabilitySet
@@ -86,6 +87,16 @@ type (
 	CanvasProjectsSyncRequest              = app.CanvasProjectsSyncRequest
 	CanvasShareRequest                     = app.CanvasShareRequest
 	CanvasShareStatus                      = app.CanvasShareStatus
+	PlazaSettings                          = app.PlazaSettings
+	PlazaApplyRequest                      = app.PlazaApplyRequest
+	PlazaRejectRequest                     = app.PlazaRejectRequest
+	PlazaEventRequest                      = app.PlazaEventRequest
+	PlazaCopyResult                        = app.PlazaCopyResult
+	PlazaPublicWork                        = app.PlazaPublicWork
+	PlazaWorkList                          = app.PlazaWorkList
+	PlazaApplicationView                   = app.PlazaApplicationView
+	PlazaExternalSeedItem                  = app.PlazaExternalSeedItem
+	PlazaSeedReport                        = app.PlazaSeedReport
 	CapabilityMatch                        = app.CapabilityMatch
 	CapabilitySpec                         = app.CapabilitySpec
 	ChannelModelCatalogDefaultParameters   = app.ChannelModelCatalogDefaultParameters
@@ -106,6 +117,9 @@ type (
 	CompiledPrompt                         = app.CompiledPrompt
 	ConfirmProjectAssetCandidateRequest    = app.ConfirmProjectAssetCandidateRequest
 	CreateAdminUserRequest                 = app.CreateAdminUserRequest
+	CreateStreamerRequest                  = app.CreateStreamerRequest
+	UpdateStreamerRequest                  = app.UpdateStreamerRequest
+	UpdateRolePermissionsRequest           = app.UpdateRolePermissionsRequest
 	CreateAnnouncementRequest              = app.CreateAnnouncementRequest
 	CreateAssetCandidatesRequest           = app.CreateAssetCandidatesRequest
 	CreateAssetFolderRequest               = app.CreateAssetFolderRequest
@@ -142,6 +156,7 @@ type (
 	EagleLibrary                           = app.EagleLibrary
 	EmailCodeCooldownError                 = app.EmailCodeCooldownError
 	EmailSettingRequest                    = app.EmailSettingRequest
+	SMSSettingRequest                      = app.SMSSettingRequest
 	ErrorReason                            = app.ErrorReason
 	FeatureAvailability                    = app.FeatureAvailability
 	ImageCapabilityConfig                  = app.ImageCapabilityConfig
@@ -233,6 +248,7 @@ type (
 	PublicRegistrationSetting              = app.PublicRegistrationSetting
 	PublicRuntimeLimits                    = app.PublicRuntimeLimits
 	PublicRuntimePolicySetting             = app.PublicRuntimePolicySetting
+	PublicSiteSkin                         = app.PublicSiteSkin
 	RedeemBatchPage                        = app.RedeemBatchPage
 	RegisterRequest                        = app.RegisterRequest
 	RegisterTaskOutputRequest              = app.RegisterTaskOutputRequest
@@ -276,6 +292,19 @@ type (
 	SkillPackageFileItem                   = app.SkillPackageFileItem
 	SkillShowcaseMedia                     = app.SkillShowcaseMedia
 	StorageMigrationSummary                = app.StorageMigrationSummary
+	StreamerAdminView                      = app.StreamerAdminView
+	StreamerConsoleMe                      = app.StreamerConsoleMe
+	StreamerConsoleSummary                 = app.StreamerConsoleSummary
+	StreamerConsoleUser                    = app.StreamerConsoleUser
+	StreamerConsoleUserPage                = app.StreamerConsoleUserPage
+	StreamerConsoleRebate                  = app.StreamerConsoleRebate
+	StreamerConsoleRebatePage              = app.StreamerConsoleRebatePage
+	CreateStreamerPayoutRequest            = app.CreateStreamerPayoutRequest
+	StreamerPayoutView                     = app.StreamerPayoutView
+	StreamerPayoutPage                     = app.StreamerPayoutPage
+	AgentShareModelView                    = app.AgentShareModelView
+	UpdateAgentShareRequest                = app.UpdateAgentShareRequest
+	RejectStreamerPayoutRequest            = app.RejectStreamerPayoutRequest
 	StyleProfileFavoriteRequest            = app.StyleProfileFavoriteRequest
 	StyleProfileRequest                    = app.StyleProfileRequest
 	SystemPerformanceCacheGroup            = app.SystemPerformanceCacheGroup
@@ -302,6 +331,7 @@ type (
 	TimelineTranscriptionCreateRequest     = app.TimelineTranscriptionCreateRequest
 	TopupProductRequest                    = app.TopupProductRequest
 	UpdateAnnouncementRequest              = app.UpdateAnnouncementRequest
+	UpdateStreamerSkinRequest              = app.UpdateStreamerSkinRequest
 	UpdateAssetFolderRequest               = app.UpdateAssetFolderRequest
 	UpdateManager                          = app.UpdateManager
 	UpdatePaymentProviderConfigRequest     = app.UpdatePaymentProviderConfigRequest
@@ -325,6 +355,13 @@ type (
 	VideoReferenceConfig                   = app.VideoReferenceConfig
 	VoiceProfileSummary                    = app.VoiceProfileSummary
 	WalletSummary                          = app.WalletSummary
+	MembershipPublicView                   = app.MembershipPublicView
+	UpdateMembershipProductRequest         = app.UpdateMembershipProductRequest
+	AdminStorageQuotaRequest               = app.AdminStorageQuotaRequest
+	AdminMembershipGrantRequest            = app.AdminMembershipGrantRequest
+	CommerceMethods                        = app.CommerceMethods
+	SupportContactSetting                  = app.SupportContactSetting
+	RedeemOutcome                          = app.RedeemOutcome
 	WorkflowField                          = app.WorkflowField
 )
 

@@ -29,6 +29,7 @@ import {
     type PaymentReconciliationRun,
     type TopupProduct,
 } from "@/services/api/payments";
+import { getAdminCommerceMethods, listAdminMembershipProducts, updateAdminCommerceMethods, updateAdminMembershipProduct, type CommerceMethods, type MembershipProduct } from "@/services/api/membership";
 
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
@@ -74,6 +75,8 @@ export default function AdminPaymentsPage() {
     const [activeTab, setActiveTab] = useState("providers");
     const [providers, setProviders] = useState<AdminPaymentProvider[]>([]);
     const [products, setProducts] = useState<TopupProduct[]>([]);
+    const [membershipProducts, setMembershipProducts] = useState<MembershipProduct[]>([]);
+    const [commerceMethods, setCommerceMethods] = useState<CommerceMethods>({ onlinePaymentEnabled: true, redeemEnabled: true });
     const [loading, setLoading] = useState(true);
 
     const [providerDrawer, setProviderDrawer] = useState<AdminPaymentProvider>();
@@ -83,6 +86,9 @@ export default function AdminPaymentsPage() {
     const [productDrawer, setProductDrawer] = useState<TopupProduct | null | undefined>();
     const [productSaving, setProductSaving] = useState(false);
     const [productForm] = Form.useForm<ProductFormValues>();
+    const [membershipDrawer, setMembershipDrawer] = useState<MembershipProduct | null>(null);
+    const [membershipSaving, setMembershipSaving] = useState(false);
+    const [membershipForm] = Form.useForm<{ name: string; description?: string; amountYuan: number; enabled: boolean; sortOrder: number }>();
 
     const [orders, setOrders] = useState<AdminPaymentOrder[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -115,9 +121,11 @@ export default function AdminPaymentsPage() {
     const loadBase = async () => {
         setLoading(true);
         try {
-            const [providerResult, productResult] = await Promise.all([listAdminPaymentProviders(), listAdminTopupProducts()]);
+            const [providerResult, productResult, membershipResult, methodsResult] = await Promise.all([listAdminPaymentProviders(), listAdminTopupProducts(), listAdminMembershipProducts(), getAdminCommerceMethods()]);
             setProviders(providerResult.providers);
             setProducts(productResult.products);
+            setMembershipProducts(membershipResult.products);
+            setCommerceMethods(methodsResult);
             setBillProviderId((current) => current || providerResult.providers.find((item) => item.configured)?.id || providerResult.providers[0]?.id || "");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取支付配置失败");
@@ -529,6 +537,45 @@ export default function AdminPaymentsPage() {
                         children: <AdminDataTable table={{ rowKey: "id", loading, columns: providerColumns, dataSource: providers, pagination: false, scroll: { x: 980 } }} empty={<AdminTableEmpty title="没有发现支付渠道插件" />} />,
                     },
                     {
+                        key: "membership",
+                        label: "订阅商品",
+                        children: (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap items-center gap-4 rounded-md border border-border p-3">
+                                    <span className="text-sm">在线支付</span>
+                                    <Switch checked={commerceMethods.onlinePaymentEnabled} onChange={(onlinePaymentEnabled) => {
+                                        void updateAdminCommerceMethods({ ...commerceMethods, onlinePaymentEnabled }).then(setCommerceMethods).catch((error) => message.error(error instanceof Error ? error.message : "保存失败"));
+                                    }} />
+                                    <span className="text-sm">兑换码</span>
+                                    <Switch checked={commerceMethods.redeemEnabled} onChange={(redeemEnabled) => {
+                                        void updateAdminCommerceMethods({ ...commerceMethods, redeemEnabled }).then(setCommerceMethods).catch((error) => message.error(error instanceof Error ? error.message : "保存失败"));
+                                    }} />
+                                </div>
+                                <AdminDataTable
+                                    table={{
+                                        rowKey: "id",
+                                        loading,
+                                        pagination: false,
+                                        dataSource: membershipProducts,
+                                        columns: [
+                                            { title: "SKU", dataIndex: "sku", width: 160 },
+                                            { title: "名称", dataIndex: "name" },
+                                            { title: "售价", dataIndex: "amountFen", width: 120, render: (value: number) => value > 0 ? `¥ ${(value / 100).toFixed(2)}` : "未定价" },
+                                            { title: "状态", dataIndex: "enabled", width: 100, render: (value: boolean) => <AdminStatusBadge label={value ? "销售中" : "未上架"} tone={value ? "success" : "neutral"} /> },
+                                            { title: "操作", key: "actions", width: 90, render: (_: unknown, product: MembershipProduct) => (
+                                                <Button size="small" onClick={() => {
+                                                    setMembershipDrawer(product);
+                                                    membershipForm.setFieldsValue({ name: product.name, description: product.description, amountYuan: product.amountFen / 100, enabled: product.enabled, sortOrder: product.sortOrder });
+                                                }}>编辑</Button>
+                                            ) },
+                                        ],
+                                    }}
+                                    empty={<AdminTableEmpty title="还没有订阅商品" />}
+                                />
+                            </div>
+                        ),
+                    },
+                    {
                         key: "products",
                         label: "充值商品",
                         children: (
@@ -679,6 +726,55 @@ export default function AdminPaymentsPage() {
                         })}
                     </Form>
                 ) : null}
+            </Drawer>
+
+            <Drawer
+                title={membershipDrawer ? `编辑订阅 · ${membershipDrawer.sku}` : "编辑订阅"}
+                width={520}
+                open={Boolean(membershipDrawer)}
+                destroyOnHidden
+                onClose={() => setMembershipDrawer(null)}
+                extra={
+                    <Button type="primary" loading={membershipSaving} onClick={() => {
+                        if (!membershipDrawer) return;
+                        void membershipForm.validateFields().then((values) => {
+                            setMembershipSaving(true);
+                            return updateAdminMembershipProduct(membershipDrawer.id, {
+                                name: values.name,
+                                description: values.description,
+                                amountFen: Math.round(Number(values.amountYuan) * 100),
+                                enabled: values.enabled,
+                                sortOrder: values.sortOrder,
+                            }).then((result) => {
+                                setMembershipProducts((current) => current.map((item) => item.id === result.product.id ? result.product : item));
+                                setMembershipDrawer(null);
+                                message.success("已更新订阅商品");
+                            });
+                        }).catch((error) => {
+                            if (error instanceof Error) message.error(error.message);
+                        }).finally(() => setMembershipSaving(false));
+                    }}>
+                        保存
+                    </Button>
+                }
+            >
+                <Form form={membershipForm} layout="vertical">
+                    <Form.Item name="name" label="名称" rules={[{ required: true, max: 120 }]}>
+                        <Input />
+                    </Form.Item>
+                    <Form.Item name="description" label="说明" rules={[{ max: 500 }]}>
+                        <Input.TextArea rows={3} />
+                    </Form.Item>
+                    <Form.Item name="amountYuan" label="售价（元，0 表示未定价）" rules={[{ required: true, type: "number", min: 0 }]}>
+                        <InputNumber min={0} precision={2} className="w-full" />
+                    </Form.Item>
+                    <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
+                        <InputNumber precision={0} className="w-full" />
+                    </Form.Item>
+                    <Form.Item name="enabled" label="上架销售" valuePropName="checked">
+                        <Switch />
+                    </Form.Item>
+                </Form>
             </Drawer>
 
             <Drawer

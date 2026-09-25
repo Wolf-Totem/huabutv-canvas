@@ -78,7 +78,10 @@ type BillingOrder struct {
 
 type RedeemBatch struct {
 	ID                 string     `json:"id" gorm:"primaryKey;size:36"`
+	Kind               string     `json:"kind" gorm:"size:24;index"`
+	PlanSKU            string     `json:"planSku" gorm:"size:32"`
 	AmountMicrocredits int64      `json:"amountMicrocredits"`
+	StorageQuotaBytes  int64      `json:"storageQuotaBytes"`
 	Count              int        `json:"count"`
 	Note               string     `json:"note" gorm:"size:500"`
 	CreatedBy          string     `json:"createdBy" gorm:"index;size:36"`
@@ -94,9 +97,12 @@ type RedeemBatch struct {
 type RedeemCode struct {
 	ID                 string           `json:"id" gorm:"primaryKey;size:36"`
 	BatchID            string           `json:"batchId" gorm:"index;size:36;index:idx_redeem_codes_batch_status,priority:1;index:idx_redeem_codes_batch_created,priority:1"`
+	Kind               string           `json:"kind" gorm:"size:24;index"`
+	PlanSKU            string           `json:"planSku" gorm:"size:32"`
 	CodeHash           string           `json:"-" gorm:"uniqueIndex;size:64"`
 	CodeSuffix         string           `json:"codeSuffix" gorm:"size:4"`
 	AmountMicrocredits int64            `json:"amountMicrocredits"`
+	StorageQuotaBytes  int64            `json:"storageQuotaBytes"`
 	Status             RedeemCodeStatus `json:"status" gorm:"index;size:24;index:idx_redeem_codes_batch_status,priority:2"`
 	RedeemedBy         string           `json:"redeemedBy,omitempty" gorm:"index;size:36"`
 	RedeemedAt         *time.Time       `json:"redeemedAt"`

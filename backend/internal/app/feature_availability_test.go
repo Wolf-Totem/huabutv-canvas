@@ -23,7 +23,7 @@ func TestFeatureAvailabilityDefaultsToDisableFrontendModels(t *testing.T) {
 	if !setting.WelcomeEnabled {
 		t.Fatal("welcome should be enabled by default")
 	}
-	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers {
+	if setting.Configured || !setting.ShortDramaEnabled || !setting.TaskCenterEnabled || !setting.CreditsEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers || setting.CloudAgentEnabled || setting.IPLocalePromptEnabled {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
 	}
 }
@@ -39,7 +39,7 @@ func TestFeatureAvailabilityLegacySettingKeepsCustomChannelsEnabled(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if setting.ShortDramaEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers {
+	if setting.ShortDramaEnabled || !setting.CustomChannelsEnabled || setting.FrontendModelsEnabled || !setting.PluginCenterEnabled || !setting.SystemPluginsVisibleToUsers || setting.CloudAgentEnabled || setting.IPLocalePromptEnabled {
 		t.Fatalf("FeatureAvailability() = %#v", setting)
 	}
 	if !setting.WelcomeEnabled {
@@ -63,6 +63,50 @@ func TestWelcomeAvailabilityCanBeDisabledAndReenabled(t *testing.T) {
 		if setting.WelcomeEnabled != enabled {
 			t.Fatalf("welcomeEnabled = %v, want %v", setting.WelcomeEnabled, enabled)
 		}
+	}
+}
+
+func TestIPLocalePromptCanBeEnabled(t *testing.T) {
+	svc, _ := newFeatureAvailabilityTestService(t)
+	actor := &model.User{ID: "admin-locale-prompt", Role: model.UserRoleAdmin}
+	value := platform.DefaultFeatureAvailability()
+	value.IPLocalePromptEnabled = true
+	if _, err := svc.UpdateFeatureAvailability(actor, value); err != nil {
+		t.Fatal(err)
+	}
+	setting, err := svc.FeatureAvailability()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !setting.IPLocalePromptEnabled {
+		t.Fatal("ip locale prompt should turn on when saved")
+	}
+	value.IPLocalePromptEnabled = false
+	if _, err := svc.UpdateFeatureAvailability(actor, value); err != nil {
+		t.Fatal(err)
+	}
+	setting, err = svc.FeatureAvailability()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if setting.IPLocalePromptEnabled {
+		t.Fatal("ip locale prompt should turn off when saved")
+	}
+}
+
+func TestCloudAgentAvailabilityCanBeEnabled(t *testing.T) {
+	svc, _ := newFeatureAvailabilityTestService(t)
+	actor := &model.User{ID: "admin-agent", Role: model.UserRoleAdmin}
+	if err := svc.RequireFeature(FeatureCloudAgent); err == nil {
+		t.Fatal("cloud agent should be off by default")
+	}
+	value := platform.DefaultFeatureAvailability()
+	value.CloudAgentEnabled = true
+	if _, err := svc.UpdateFeatureAvailability(actor, value); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RequireFeature(FeatureCloudAgent); err != nil {
+		t.Fatalf("RequireFeature(cloudAgent) = %v", err)
 	}
 }
 
@@ -140,21 +184,21 @@ func TestCustomChannelTaskInputRequiresFeature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.requireCustomChannelsForTaskInput(customInput); err == nil {
+	if err := svc.requireCustomChannelsForTaskInput("user-1", customInput); err == nil {
 		t.Fatal("custom channel task must be rejected when the feature is disabled")
 	}
 	systemInput, err := normalizeTaskInput(map[string]any{"config": providerConfig{ChannelID: "system-1", BaseURL: "/api/ai/system/system-1", APIKey: "system", Model: "text-model"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.requireCustomChannelsForTaskInput(systemInput); err != nil {
+	if err := svc.requireCustomChannelsForTaskInput("user-1", systemInput); err != nil {
 		t.Fatalf("system channel task error = %v", err)
 	}
 	legacySystemInput, err := normalizeTaskInput(map[string]any{"config": providerConfig{BaseURL: "/api/ai/system/system-1", APIKey: "system", Model: "text-model"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.requireCustomChannelsForTaskInput(legacySystemInput); err != nil {
+	if err := svc.requireCustomChannelsForTaskInput("user-1", legacySystemInput); err != nil {
 		t.Fatalf("legacy system proxy task error = %v", err)
 	}
 }

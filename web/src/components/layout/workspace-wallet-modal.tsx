@@ -1,4 +1,4 @@
-import { App, Button, Input, Skeleton } from "antd";
+import { App, Button, Input, Skeleton, type InputRef } from "antd";
 import { Check, ChevronLeft, ChevronRight, CircleAlert, Coins, CreditCard, History, RefreshCw, TicketCheck, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
@@ -8,24 +8,30 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
+import { getMembership, listMembershipProducts } from "@/services/api/membership";
+import { invalidateAuthSessionCache } from "@/services/api/auth";
 import { cn } from "@/lib/utils";
+import { defaultMembership, formatMembershipStorage, membershipPurchaseBlocked, type MembershipProduct, type MembershipStatus } from "@/lib/membership";
 import { openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
+import { useTranslation } from "react-i18next";
 import { useUserStore } from "@/stores/use-user-store";
 
 type WalletModalTab = "topup" | "history";
 
 export function WorkspaceWalletHost() {
-    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const { pathname, search } = useLocation();
     const navigate = useNavigate();
     const [open, setOpen] = useState(false);
     const [pendingPaymentOrderId, setPendingPaymentOrderId] = useState("");
     const [paymentInvalid, setPaymentInvalid] = useState(false);
+    const [initialTab, setInitialTab] = useState<WalletModalTab>("topup");
+    const [focusRedeem, setFocusRedeem] = useState(false);
 
     const applyOpen = (detail: WorkspaceWalletOpenDetail = {}) => {
-        if (!useUserStore.getState().features.creditsEnabled) return;
         setPendingPaymentOrderId(detail.paymentOrderId || "");
         setPaymentInvalid(Boolean(detail.paymentInvalid));
+        setInitialTab(detail.tab === "history" ? "history" : "topup");
+        setFocusRedeem(Boolean(detail.focusRedeem));
         setOpen(true);
     };
 
@@ -47,16 +53,18 @@ export function WorkspaceWalletHost() {
         navigate("/", { replace: true });
     }, [navigate, pathname, search]);
 
-    if (!creditsEnabled) return null;
     return (
         <WorkspaceWalletModal
             open={open}
             pendingPaymentOrderId={pendingPaymentOrderId}
             paymentInvalid={paymentInvalid}
+            initialTab={initialTab}
+            focusRedeem={focusRedeem}
             onClose={() => {
                 setOpen(false);
                 setPendingPaymentOrderId("");
                 setPaymentInvalid(false);
+                setFocusRedeem(false);
             }}
         />
     );
@@ -67,14 +75,26 @@ export function WorkspaceWalletModal({
     onClose,
     pendingPaymentOrderId,
     paymentInvalid,
+    initialTab = "topup",
+    focusRedeem = false,
 }: {
     open: boolean;
     onClose: () => void;
     pendingPaymentOrderId?: string;
     paymentInvalid?: boolean;
+    initialTab?: WalletModalTab;
+    focusRedeem?: boolean;
 }) {
-    const { message } = App.useApp();
-    const [tab, setTab] = useState<WalletModalTab>("topup");
+    const { message, modal } = App.useApp();
+    const { t } = useTranslation("setting");
+    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    const [tab, setTab] = useState<WalletModalTab>(initialTab);
+    const redeemSectionRef = useRef<HTMLElement | null>(null);
+    const redeemInputRef = useRef<InputRef>(null);
+    const [membership, setMembership] = useState<MembershipStatus>(defaultMembership);
+    const [membershipProducts, setMembershipProducts] = useState<MembershipProduct[]>([]);
+    const [selectedMembershipId, setSelectedMembershipId] = useState("");
+    const membershipIdempotencyKey = useRef("");
     const [wallet, setWallet] = useState<WalletSummary | null>(null);
     const [walletLoading, setWalletLoading] = useState(false);
     const [walletError, setWalletError] = useState("");
@@ -114,19 +134,53 @@ export function WorkspaceWalletModal({
 
     useEffect(() => {
         if (!open) return;
+        setTab(initialTab);
         setPage(1);
-        void reloadWallet(1);
+        if (creditsEnabled) void reloadWallet(1);
         setPaymentsLoading(true);
-        Promise.all([listTopupProducts(), listPaymentProviders()])
-            .then(([productResult, providerResult]) => {
-                setProducts(productResult.products.filter((item) => item.enabled));
-                setProviders(providerResult.providers.filter((item) => item.enabled && item.pluginEnabled && item.configured));
-                setSelectedProductId((current) => current || productResult.products.find((item) => item.enabled)?.id || "");
-                setSelectedProviderId((current) => current || providerResult.providers.find((item) => item.enabled && item.pluginEnabled && item.configured)?.id || "");
-            })
-            .catch((error) => message.error(error instanceof Error ? error.message : "读取充值配置失败"))
-            .finally(() => setPaymentsLoading(false));
-    }, [open]);
+        void (async () => {
+            const [productResult, providerResult, membershipResult, membershipProductResult] = await Promise.allSettled([
+                creditsEnabled ? listTopupProducts() : Promise.resolve({ products: [] as TopupProduct[] }),
+                listPaymentProviders(),
+                getMembership(),
+                listMembershipProducts(),
+            ]);
+            const fail = (result: PromiseSettledResult<unknown>, fallback: string) => {
+                if (result.status === "rejected") message.error(result.reason instanceof Error ? result.reason.message : fallback);
+            };
+            fail(productResult, "读取积分商品失败");
+            fail(providerResult, "读取支付渠道失败");
+            fail(membershipResult, "读取订阅状态失败");
+            fail(membershipProductResult, "读取订阅商品失败");
+            if (productResult.status === "fulfilled") {
+                setProducts(productResult.value.products.filter((item) => item.enabled));
+                setSelectedProductId((current) => current || productResult.value.products.find((item) => item.enabled)?.id || "");
+            }
+            if (providerResult.status === "fulfilled") {
+                setProviders(providerResult.value.providers.filter((item) => item.enabled && item.pluginEnabled && item.configured));
+                setSelectedProviderId((current) => current || providerResult.value.providers.find((item) => item.enabled && item.pluginEnabled && item.configured)?.id || "");
+            }
+            if (membershipResult.status === "fulfilled") {
+                setMembership({ ...defaultMembership, ...membershipResult.value });
+                useUserStore.getState().setMembership(membershipResult.value);
+            }
+            if (membershipProductResult.status === "fulfilled") {
+                setMembershipProducts(membershipProductResult.value.products.filter((item) => item.enabled));
+                setSelectedMembershipId((current) => current || membershipProductResult.value.products.find((item) => item.enabled)?.id || "");
+            }
+            setPaymentsLoading(false);
+        })();
+    }, [open, creditsEnabled, initialTab]);
+
+    useEffect(() => {
+        if (!open || !focusRedeem) return;
+        setTab("topup");
+        const timer = window.setTimeout(() => {
+            redeemSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            redeemInputRef.current?.focus();
+        }, 80);
+        return () => window.clearTimeout(timer);
+    }, [open, focusRedeem]);
 
     useEffect(() => {
         if (!open || !paymentInvalid) return;
@@ -155,7 +209,15 @@ export function WorkspaceWalletModal({
         if (orderId && completedOrderId.current === orderId) return;
         if (orderId) completedOrderId.current = orderId;
         setPage(1);
-        await reloadWallet(1);
+        if (creditsEnabled) await reloadWallet(1);
+        invalidateAuthSessionCache();
+        try {
+            const next = await getMembership();
+            setMembership({ ...defaultMembership, ...next });
+            useUserStore.getState().setMembership(next);
+        } catch {
+            /* session refresh is best-effort */
+        }
         window.dispatchEvent(new CustomEvent("wallet:updated"));
     };
 
@@ -178,15 +240,58 @@ export function WorkspaceWalletModal({
         }
         setRedeeming(true);
         try {
-            await redeemCredits(normalized);
+            const outcome = await redeemCredits(normalized);
             setCode("");
             await announceWalletUpdated();
-            message.success("兑换成功，积分已到账");
+            if (outcome.granted?.kind === "membership" && outcome.granted.planSku === "permanent") message.success("已开通永久订阅");
+            else if (outcome.granted?.kind === "membership") message.success("订阅已开通");
+            else if (outcome.granted?.kind === "storage") message.success(`容量已增加 ${formatMembershipStorage(outcome.granted.storageQuotaBytes || 0)}`);
+            else message.success("兑换成功，积分已到账");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "兑换失败");
         } finally {
             setRedeeming(false);
         }
+    };
+
+    const startMembershipPayment = async (product: MembershipProduct) => {
+        if (!selectedProvider) {
+            message.error("请选择支付方式");
+            return;
+        }
+        const blocked = membershipPurchaseBlocked(membership, product.sku);
+        if (blocked.disabled) {
+            message.error(blocked.reason);
+            return;
+        }
+        const pay = async () => {
+            setPaymentCreating(true);
+            try {
+                if (!membershipIdempotencyKey.current) membershipIdempotencyKey.current = crypto.randomUUID();
+                const result = await createPaymentOrder({ productId: product.id, providerId: selectedProvider.id, idempotencyKey: membershipIdempotencyKey.current, productKind: "membership" });
+                membershipIdempotencyKey.current = "";
+                setPaymentOrder(result.order);
+                if (result.order.status === "credited") await announceWalletUpdated(result.order.id);
+                if (result.order.checkout.mode === "redirect" && result.order.checkout.url) {
+                    window.location.assign(result.order.checkout.url);
+                    return;
+                }
+                setPaymentOpen(true);
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "创建订阅订单失败");
+            } finally {
+                setPaymentCreating(false);
+            }
+        };
+        if (membership.advancedRemainingSeconds > 0 && membership.advancedRemainingSeconds <= 30 * 24 * 3600 && product.sku.startsWith("advanced_")) {
+            modal.confirm({
+                title: "确认改买订阅",
+                content: "将从到期日叠加时长；平台容量改为所选套餐额度（改买月卡则变为 1GiB）。",
+                onOk: () => pay(),
+            });
+            return;
+        }
+        await pay();
     };
 
     const startPayment = async () => {
@@ -221,7 +326,7 @@ export function WorkspaceWalletModal({
             setPaymentOrder(result.order);
             if (result.order.status === "credited") {
                 await announceWalletUpdated(result.order.id);
-                if (!silent) message.success("支付已确认，积分已到账");
+                if (!silent) message.success(result.order.productKind === "membership" && result.order.planSku === "permanent" ? "已开通永久订阅" : result.order.productKind === "membership" ? "订阅已开通" : "支付已确认，积分已到账");
             } else if (!silent && result.order.status === "closed") message.warning("订单已关闭，未产生积分充值");
             else if (!silent) message.info("渠道尚未确认支付，请稍后再试");
         } catch (error) {
@@ -265,63 +370,110 @@ export function WorkspaceWalletModal({
 
     return (
         <>
-            <AppModal flush open={open} title={null} footer={null} centered width="min(880px, calc(100vw - 28px))" onCancel={onClose} rootClassName="workspace-wallet-modal">
+            <AppModal
+                flush
+                open={open}
+                title={null}
+                footer={null}
+                centered
+                width="min(880px, calc(100vw - 28px))"
+                onCancel={onClose}
+                rootClassName="workspace-wallet-modal"
+                classNames={{ root: "workspace-wallet-modal", wrapper: "workspace-wallet-modal", container: "workspace-wallet-modal", body: "workspace-wallet-modal-body" }}
+                styles={{
+                    root: { background: "var(--user-page-bg, #f8f8fa)", backdropFilter: "none", opacity: 1 },
+                    container: { background: "var(--user-page-bg, #f8f8fa)", backdropFilter: "none", opacity: 1 },
+                    body: { background: "var(--user-page-bg, #f8f8fa)" },
+                }}
+            >
                 <div className="workspace-wallet-shell">
                     <header className="workspace-wallet-header">
                         <div>
-                            <span className="workspace-wallet-kicker"><Coins />积分中心</span>
-                            <h2>充值、兑换与消费记录</h2>
-                            <p>为下一次创作补充积分，随时查看每一笔收支。</p>
+                            <span className="workspace-wallet-kicker"><Coins />{creditsEnabled ? t("wallet.creditsCenter") : t("wallet.subscribeCenter")}</span>
+                            <h2>{creditsEnabled ? t("wallet.titleCredits") : t("wallet.titleSubscribe")}</h2>
+                            <p>{creditsEnabled ? t("wallet.leadCredits") : t("wallet.leadSubscribe")}</p>
                         </div>
-                        <div className="workspace-wallet-balance">
-                            <span>可用积分</span>
+                        {creditsEnabled ? <div className="workspace-wallet-balance">
+                            <span>{t("wallet.available")}</span>
                             <strong>{wallet ? formatCredits(available, 6) : "--"}</strong>
-                            <small>冻结 {wallet ? formatCredits(wallet.account.reservedMicrocredits, 6) : "--"}</small>
-                        </div>
+                            <small>{t("wallet.frozen", { value: wallet ? formatCredits(wallet.account.reservedMicrocredits, 6) : "--" })}</small>
+                        </div> : <div className="workspace-wallet-balance">
+                            <span>{t("wallet.status")}</span>
+                            <strong>{membership.permanentActive ? t("sku.permanent") : membership.advancedPlanSku ? membership.advancedPlanSku : t("wallet.none")}</strong>
+                            <small>{membership.personalStorageAllowed ? t("wallet.personalOn") : t("wallet.personalOff")}</small>
+                        </div>}
                     </header>
 
-                    <div className="workspace-wallet-tabs" role="tablist" aria-label="积分中心">
-                        <button type="button" role="tab" aria-selected={tab === "topup"} onClick={() => setTab("topup")}><WalletCards />充值 / 兑换</button>
-                        <button type="button" role="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}><History />积分消耗历史</button>
+                    <div className="workspace-wallet-tabs" role="tablist" aria-label={t("wallet.tabs")}>
+                        <button type="button" role="tab" aria-selected={tab === "topup"} onClick={() => setTab("topup")}><WalletCards />{creditsEnabled ? t("wallet.tabTopup") : t("wallet.tabSubscribe")}</button>
+                        {creditsEnabled ? <button type="button" role="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}><History />{t("wallet.tabHistory")}</button> : null}
                     </div>
 
                     {tab === "topup" ? (
                         <div className="workspace-wallet-content is-topup">
                             <section className="workspace-wallet-section">
-                                <div className="workspace-wallet-section-heading"><div><h3>在线充值</h3><p>选择积分套餐和支付方式。</p></div><CreditCard /></div>
+                                <div className="workspace-wallet-section-heading"><div><h3>{t("wallet.plans")}</h3><p>{t("wallet.plansLead")}</p></div><WalletCards /></div>
+                                {paymentsLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : membershipProducts.length ? <>
+                                    {membership.hasOpenMembershipOrder ? <div className="workspace-wallet-inline-state"><CircleAlert /><div><strong>{t("wallet.openOrder")}</strong><span>{t("wallet.openOrderLead")}</span></div><Button onClick={() => { if (membership.openMembershipOrderId) { void getPaymentOrder(membership.openMembershipOrderId).then(({ order }) => { setPaymentOrder(order); setPaymentOpen(true); }); } }}>{t("wallet.continuePay")}</Button></div> : null}
+                                    <div className="workspace-wallet-products">
+                                        {membershipProducts.map((product) => {
+                                            const blocked = membershipPurchaseBlocked(membership, product.sku);
+                                            const unpriced = product.amountFen <= 0;
+                                            return <button key={product.id} type="button" className={cn("workspace-wallet-product", selectedMembershipId === product.id && "is-selected")} aria-pressed={selectedMembershipId === product.id} disabled={blocked.disabled || unpriced || !membership.onlinePaymentEnabled} onClick={() => setSelectedMembershipId(product.id)}>
+                                                <span>{t(`sku.${product.sku}`, { defaultValue: product.name })}</span>
+                                                <strong>{product.amountFen > 0 ? `¥ ${(product.amountFen / 100).toFixed(2)}` : t("wallet.unpriced")}</strong>
+                                                <small>{product.sku === "permanent" ? t("sku.permanentHint") : t("sku.termHint", { days: product.durationDays, credits: formatCredits(product.creditsMicrocredits, 0), storage: formatMembershipStorage(product.storageQuotaBytes) })}</small>
+                                                {blocked.disabled ? <em>{blocked.reasonKey ? t(blocked.reasonKey) : blocked.reason}</em> : selectedMembershipId === product.id ? <Check /> : null}
+                                            </button>;
+                                        })}
+                                    </div>
+                                    <div className="workspace-wallet-provider-row">
+                                        <div className="workspace-wallet-providers" role="radiogroup" aria-label={t("wallet.payMethod")}>
+                                            {providers.map((provider) => <button key={provider.id} type="button" role="radio" aria-checked={selectedProviderId === provider.id} className={selectedProviderId === provider.id ? "is-selected" : ""} onClick={() => setSelectedProviderId(provider.id)}><CreditCard />{provider.name}</button>)}
+                                        </div>
+                                        <Button type="primary" size="large" loading={paymentCreating} disabled={!selectedMembershipId || !selectedProvider || !membership.onlinePaymentEnabled || (membershipProducts.find((item) => item.id === selectedMembershipId)?.amountFen || 0) <= 0 || membershipPurchaseBlocked(membership, membershipProducts.find((item) => item.id === selectedMembershipId)?.sku || "").disabled} onClick={() => { const product = membershipProducts.find((item) => item.id === selectedMembershipId); if (product) void startMembershipPayment(product); }}>{t("wallet.buy")}</Button>
+                                    </div>
+                                </> : <div className="workspace-wallet-inline-state"><CircleAlert /><div><strong>{t("wallet.unlisted")}</strong><span>{t("wallet.unlistedLead")}</span></div></div>}
+                            </section>
+                            <section className="workspace-wallet-section">
+                                <div className="workspace-wallet-section-heading"><div><h3>{t("wallet.storage")}</h3><p>{t("wallet.storageLead", { size: formatMembershipStorage(membership.effectiveStoredFileBytes) })}{membership.storageBonusBytes ? t("wallet.storageBonus", { size: formatMembershipStorage(membership.storageBonusBytes) }) : ""}</p></div></div>
+                                {membership.supportTicketUrl ? <a href={membership.supportTicketUrl} target="_blank" rel="noreferrer">{t("wallet.ticket")}</a> : membership.supportQq ? <span>{t("wallet.supportQq", { id: membership.supportQq })}</span> : null}
+                            </section>
+                            {creditsEnabled ? <section className="workspace-wallet-section">
+                                <div className="workspace-wallet-section-heading"><div><h3>{t("wallet.online")}</h3><p>{t("wallet.onlineLead")}</p></div><CreditCard /></div>
                                 {paymentsLoading ? <Skeleton active paragraph={{ rows: 4 }} /> : products.length && providers.length ? <>
                                     <div className="workspace-wallet-products">
                                         {products.map((product) => <button key={product.id} type="button" className={cn("workspace-wallet-product", selectedProductId === product.id && "is-selected")} aria-pressed={selectedProductId === product.id} onClick={() => setSelectedProductId(product.id)}>
-                                            <span>{product.name}</span><strong>{formatCredits(product.creditsMicrocredits, 6)} 积分</strong><small>¥ {(product.amountFen / 100).toFixed(2)}{product.description ? ` · ${product.description}` : ""}</small>{selectedProductId === product.id ? <Check /> : null}
+                                            <span>{product.name}</span><strong>{formatCredits(product.creditsMicrocredits, 6)} {t("wallet.creditsUnit")}</strong><small>¥ {(product.amountFen / 100).toFixed(2)}{product.description ? ` · ${product.description}` : ""}</small>{selectedProductId === product.id ? <Check /> : null}
                                         </button>)}
                                     </div>
                                     <div className="workspace-wallet-provider-row">
-                                        <div className="workspace-wallet-providers" role="radiogroup" aria-label="支付方式">
+                                        <div className="workspace-wallet-providers" role="radiogroup" aria-label={t("wallet.payMethod")}>
                                             {providers.map((provider) => <button key={provider.id} type="button" role="radio" aria-checked={selectedProviderId === provider.id} className={selectedProviderId === provider.id ? "is-selected" : ""} onClick={() => setSelectedProviderId(provider.id)}><CreditCard />{provider.name}</button>)}
                                         </div>
-                                        <Button type="primary" size="large" loading={paymentCreating} disabled={!selectedProduct || !selectedProvider} onClick={() => void startPayment()}>立即充值</Button>
+                                        <Button type="primary" size="large" loading={paymentCreating} disabled={!selectedProduct || !selectedProvider} onClick={() => void startPayment()}>{t("wallet.payNow")}</Button>
                                     </div>
-                                </> : <div className="workspace-wallet-inline-state"><CircleAlert /><div><strong>在线充值暂不可用</strong><span>当前没有已启用的充值商品或支付渠道，请使用兑换码或联系管理员。</span></div></div>}
-                            </section>
+                                </> : <div className="workspace-wallet-inline-state"><CircleAlert /><div><strong>{t("wallet.onlineOff")}</strong><span>{t("wallet.onlineOffLead")}</span></div></div>}
+                            </section> : null}
 
-                            <section className="workspace-wallet-section is-redeem">
-                                <div className="workspace-wallet-section-heading"><div><h3>兑换码</h3><p>输入兑换码，将积分存入当前账户。</p></div><TicketCheck /></div>
+                            {membership.redeemEnabled !== false ? <section ref={redeemSectionRef} className="workspace-wallet-section is-redeem">
+                                <div className="workspace-wallet-section-heading"><div><h3>{t("wallet.redeem")}</h3><p>{t("wallet.redeemLead")}</p></div><TicketCheck /></div>
                                 <div className="workspace-wallet-redeem-row">
-                                    <Input size="large" value={code} maxLength={32} placeholder="输入 32 位兑换码" onChange={(event) => setCode(event.target.value.replace(/\s/g, ""))} onPressEnter={() => void redeem()} />
-                                    <Button size="large" loading={redeeming} disabled={code.trim().length !== 32} onClick={() => void redeem()}>确认兑换</Button>
+                                    <Input ref={redeemInputRef} size="large" value={code} maxLength={32} placeholder={t("wallet.redeemPlaceholder")} onChange={(event) => setCode(event.target.value.replace(/\s/g, ""))} onPressEnter={() => void redeem()} />
+                                    <Button size="large" loading={redeeming} disabled={code.trim().length !== 32} onClick={() => void redeem()}>{t("wallet.redeemConfirm")}</Button>
                                 </div>
-                            </section>
+                            </section> : null}
                         </div>
                     ) : (
                         <div className="workspace-wallet-content is-history">
-                            <div className="workspace-wallet-history-toolbar"><div><h3>积分消耗历史</h3><p>包含充值、兑换、生成消费、冻结与退款。</p></div><Button type="text" icon={<RefreshCw />} loading={walletLoading} onClick={() => void reloadWallet(page)}>刷新</Button></div>
+                            <div className="workspace-wallet-history-toolbar"><div><h3>{t("wallet.tabHistory")}</h3><p>{t("wallet.historyLead")}</p></div><Button type="text" icon={<RefreshCw />} loading={walletLoading} onClick={() => void reloadWallet(page)}>{t("wallet.refresh")}</Button></div>
                             <div className="workspace-wallet-history-scroll">
-                                {walletError ? <div className="workspace-wallet-inline-state is-error"><CircleAlert /><div><strong>记录加载失败</strong><span>{walletError}</span></div><Button onClick={() => void reloadWallet(page)}>重试</Button></div> : walletLoading && !wallet ? <Skeleton active paragraph={{ rows: 6 }} /> : wallet?.entries.length ? <div className="workspace-wallet-ledger">
+                                {walletError ? <div className="workspace-wallet-inline-state is-error"><CircleAlert /><div><strong>{t("wallet.loadFailed")}</strong><span>{walletError}</span></div><Button onClick={() => void reloadWallet(page)}>{t("wallet.retry")}</Button></div> : walletLoading && !wallet ? <Skeleton active paragraph={{ rows: 6 }} /> : wallet?.entries.length ? <div className="workspace-wallet-ledger">
                                     {wallet.entries.map((entry) => <WalletLedgerRow key={entry.id} entry={entry} />)}
-                                </div> : <div className="workspace-wallet-empty"><History /><strong>还没有积分记录</strong><span>完成充值、兑换或生成任务后，记录会显示在这里。</span></div>}
+                                </div> : <div className="workspace-wallet-empty"><History /><strong>{t("wallet.emptyHistory")}</strong><span>{t("wallet.emptyHistoryLead")}</span></div>}
                             </div>
                             <div className="workspace-wallet-pagination">
-                                <span>第 {page} / {totalPages} 页</span>
+                                <span>{t("wallet.page", { page, total: totalPages })}</span>
                                 <button type="button" disabled={page <= 1 || walletLoading} aria-label="上一页" onClick={() => { const next = page - 1; setPage(next); void reloadWallet(next); }}><ChevronLeft /></button>
                                 <button type="button" disabled={page >= totalPages || walletLoading} aria-label="下一页" onClick={() => { const next = page + 1; setPage(next); void reloadWallet(next); }}><ChevronRight /></button>
                             </div>
@@ -330,11 +482,11 @@ export function WorkspaceWalletModal({
                 </div>
             </AppModal>
 
-            <AppModal open={paymentOpen} title={paymentOrder?.status === "credited" ? "充值完成" : paymentOrder?.checkout.mode === "qr_code" ? "扫码支付" : "确认支付结果"} centered width={430} onCancel={() => setPaymentOpen(false)} footer={paymentFooter(paymentOrder, paymentQuerying, () => setPaymentOpen(false), cancelPayment, refreshPaymentStatus, retryCheckout)}>
+            <AppModal open={paymentOpen} title={paymentOrder?.status === "credited" ? (paymentOrder.productKind === "membership" ? "订阅完成" : "充值完成") : paymentOrder?.checkout.mode === "qr_code" ? "扫码支付" : "确认支付结果"} centered width={430} onCancel={() => setPaymentOpen(false)} footer={paymentFooter(paymentOrder, paymentQuerying, () => setPaymentOpen(false), cancelPayment, refreshPaymentStatus, retryCheckout)}>
                 {paymentOrder ? <div className="workspace-wallet-payment">
                     <span className="workspace-wallet-payment-icon"><CreditCard /></span>
                     <strong>¥ {(paymentOrder.amountFen / 100).toFixed(2)}</strong>
-                    <p>{paymentOrder.productName} · {formatCredits(paymentOrder.creditsMicrocredits, 6)} 积分</p>
+                    <p>{paymentOrder.productKind === "membership" && paymentOrder.planSku === "permanent" ? `${paymentOrder.productName} · 永久订阅` : paymentOrder.productKind === "membership" ? paymentOrder.productName : `${paymentOrder.productName} · ${formatCredits(paymentOrder.creditsMicrocredits, 6)} 积分`}</p>
                     {paymentOrder.status === "pending" && paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? <><PaymentCheckoutCode value={paymentOrder.checkout.value} /><span>请使用支付应用扫码完成支付</span></> : null}
                     <PaymentStatus order={paymentOrder} now={clock} />
                 </div> : null}
@@ -344,14 +496,15 @@ export function WorkspaceWalletModal({
 }
 
 function WalletLedgerRow({ entry }: { entry: CreditLedgerEntry }) {
+    const { t, i18n } = useTranslation("setting");
     const positive = entry.amountMicrocredits > 0;
-    const title = entry.type === "consume" ? "模型调用" : entry.type === "refund" ? "消费退款" : entry.type === "payment_topup" ? "在线充值" : entry.type === "redeem" ? "兑换码充值" : entry.note || "积分调整";
-    return <article className="workspace-wallet-ledger-row"><span className={cn("workspace-wallet-ledger-icon", positive ? "is-income" : "is-consume")}>{positive ? <Coins /> : <CreditCard />}</span><div><strong>{title}</strong><span>{[entry.scene, entry.model, entry.note].filter(Boolean).join(" · ") || "积分账户变动"}</span></div><time>{new Date(entry.createdAt).toLocaleString("zh-CN", { hour12: false })}</time><b className={positive ? "is-income" : "is-consume"}>{positive ? "+" : ""}{formatCredits(entry.amountMicrocredits, 6)}</b></article>;
+    const title = entry.type === "consume" ? t("wallet.ledger.consume") : entry.type === "refund" ? t("wallet.ledger.refund") : entry.type === "payment_topup" ? t("wallet.ledger.topup") : entry.type === "redeem" ? t("wallet.ledger.redeem") : entry.note || t("wallet.ledger.adjust");
+    return <article className="workspace-wallet-ledger-row"><span className={cn("workspace-wallet-ledger-icon", positive ? "is-income" : "is-consume")}>{positive ? <Coins /> : <CreditCard />}</span><div><strong>{title}</strong><span>{[entry.scene, entry.model, entry.note].filter(Boolean).join(" · ") || t("wallet.ledger.change")}</span></div><time>{new Date(entry.createdAt).toLocaleString(i18n.language === "zh" ? "zh-CN" : i18n.language, { hour12: false })}</time><b className={positive ? "is-income" : "is-consume"}>{positive ? "+" : ""}{formatCredits(entry.amountMicrocredits, 6)}</b></article>;
 }
 
 function PaymentStatus({ order, now }: { order: PaymentOrder; now: number }) {
-    if (order.status === "credited") return <div className="workspace-wallet-payment-status is-success">支付已确认，积分已经到账</div>;
-    if (order.status === "closed") return <div className="workspace-wallet-payment-status">订单已关闭，未产生积分充值</div>;
+    if (order.status === "credited") return <div className="workspace-wallet-payment-status is-success">{order.productKind === "membership" && order.planSku === "permanent" ? "已开通永久订阅" : order.productKind === "membership" ? "订阅已开通" : "支付已确认，积分已经到账"}</div>;
+    if (order.status === "closed") return <div className="workspace-wallet-payment-status">订单已关闭，未产生入账</div>;
     if (order.status === "create_failed") return <div className="workspace-wallet-payment-status is-error">支付入口创建失败，请重新生成支付入口。</div>;
     const remaining = Math.max(0, Math.floor((new Date(order.expiresAt).getTime() - now) / 1000));
     const hours = Math.floor(remaining / 3600);

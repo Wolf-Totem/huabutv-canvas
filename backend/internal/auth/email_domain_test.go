@@ -23,7 +23,7 @@ func TestRegistrationDomainPolicyChecksSendingAndRegistration(t *testing.T) {
 		deliveredCode = codeFromEmailBody(body)
 		return nil
 	})
-	if err := svc.SendRegistrationEmailCode("member@blocked.example"); err == nil || !strings.Contains(err.Error(), "白名单") {
+	if err := svc.SendRegistrationEmailCode("member@blocked.example", "", ""); err == nil || !strings.Contains(err.Error(), "白名单") {
 		t.Fatalf("blocked domain must not receive registration code: %v", err)
 	}
 	var codes int64
@@ -33,7 +33,7 @@ func TestRegistrationDomainPolicyChecksSendingAndRegistration(t *testing.T) {
 	if sends != 0 || codes != 0 {
 		t.Fatalf("blocked send created side effects: sends=%d codes=%d", sends, codes)
 	}
-	if err := svc.SendRegistrationEmailCode("member@example.com"); err != nil {
+	if err := svc.SendRegistrationEmailCode("member@example.com", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if deliveredCode == "" || sends != 1 {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CloudUpload, Coins, CopyPlus, Focus, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, CloudDownload, CloudUpload, Coins, CopyPlus, Focus, FolderKanban, Gauge, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Sparkles, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Tooltip } from "antd";
 
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
@@ -34,6 +34,7 @@ type CanvasTopBarProps = {
     onUndo: () => void;
     onRedo: () => void;
     onShare: () => void;
+    onPlazaApply?: () => void;
     shortcutRequestNonce: number;
     mediaPerformanceMode: CanvasMediaPerformanceMode;
     onMediaPerformanceModeChange: (mode: CanvasMediaPerformanceMode) => void;
@@ -63,6 +64,7 @@ export function CanvasTopBar({
     onUndo,
     onRedo,
     onShare,
+    onPlazaApply,
     shortcutRequestNonce,
     mediaPerformanceMode,
     onMediaPerformanceModeChange,
@@ -267,6 +269,11 @@ export function CanvasTopBar({
                     <CanvasTopBarTooltip label="分享画布">
                         <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" />
                     </CanvasTopBarTooltip>
+                    {onPlazaApply ? (
+                        <CanvasTopBarTooltip label="上架广场">
+                            <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Sparkles className="size-4" />} onClick={onPlazaApply} aria-label="上架广场" />
+                        </CanvasTopBarTooltip>
+                    ) : null}
                 </div>
             </div>
             <CanvasShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

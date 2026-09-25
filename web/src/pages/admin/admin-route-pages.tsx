@@ -11,9 +11,13 @@ const AdminAnnouncementsPanel = lazy(() => import("./components/admin-announceme
 const CreditOperationsPanel = lazy(() => import("./components/credit-operations-panel"));
 const AccessSettingsPanel = lazy(() => import("./components/access-settings-panel"));
 const EmailSettingsPanel = lazy(() => import("./components/email-settings-panel"));
+const SmsSettingsPanel = lazy(() => import("./components/sms-settings-panel"));
 const FeatureAvailabilityPanel = lazy(() => import("./components/feature-availability-panel"));
 const StorageResourcesPanel = lazy(() => import("./components/storage-resources-panel"));
 const AgentLessonsPanel = lazy(() => import("./components/agent-lessons-panel"));
+const StreamersPanel = lazy(() => import("./components/streamers-panel"));
+const PayoutsPanel = lazy(() => import("./components/payouts-panel"));
+const RolesPanel = lazy(() => import("./components/roles-panel"));
 
 export function AnalyticsPage() {
     const { references } = useAdminContext();
@@ -92,6 +96,14 @@ export function EmailSettingsPage() {
     );
 }
 
+export function SmsSettingsPage() {
+    return (
+        <AdminPageFrame title="短信服务" description="用阿里云短信发送注册验证码，签名和模板需先审核" scroll>
+            <SmsSettingsPanel />
+        </AdminPageFrame>
+    );
+}
+
 export function FeatureAvailabilityPage() {
     return (
         <AdminPageFrame title="功能开放" description="按用户使用路径控制工作台、插件与模型能力" scroll>
@@ -104,6 +116,30 @@ export function StorageResourcesPage() {
     return (
         <AdminPageFrame title="存储资源" description="只读查看资源记录、容量分布与文件预览" scroll>
             <StorageResourcesPanel />
+        </AdminPageFrame>
+    );
+}
+
+export function StreamersPage() {
+    return (
+        <AdminPageFrame title="主播代理" description="创建主播子域、邀请码、分类返利与档案；专属首页与官网相同，只换背景视频。" scroll>
+            <StreamersPanel />
+        </AdminPageFrame>
+    );
+}
+
+export function PayoutsPage() {
+    return (
+        <AdminPageFrame title="提现审核" description="同意只扣钱包记账，需要管理员线下转到代理支付宝。" scroll>
+            <PayoutsPanel />
+        </AdminPageFrame>
+    );
+}
+
+export function RolesPage() {
+    return (
+        <AdminPageFrame title="角色管理" description="配置管理员、代理和普通用户分别能访问哪些页面" scroll>
+            <RolesPanel />
         </AdminPageFrame>
     );
 }

@@ -54,6 +54,9 @@ export type GenerationTask = {
     completedAt?: string;
     createdAt: string;
     updatedAt: string;
+    clientSubmit?: boolean;
+    ticketJti?: string;
+    ticketExpiresAt?: string;
     billing?: {
         amountMicrocredits: number;
         status: TaskBillingStatus;
@@ -124,6 +127,10 @@ export type CreateTaskInput = {
 	logicalModelId?: string;
     input?: Record<string, unknown>;
 };
+export function reportTaskProviderRequest(taskId: string, providerRequestId: string) {
+    return http.post<{ task: GenerationTask }>(`/tasks/${encodeURIComponent(taskId)}/provider-request`, { providerRequestId }).then((payload) => payload.task);
+}
+
 export function createGenerationTask(input: CreateTaskInput) {
     return http.post<GenerationTask>("/tasks", input).then((task) => {
         recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });

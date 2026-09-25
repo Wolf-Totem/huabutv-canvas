@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, Clapperboard, Coins, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, Bot, Clapperboard, Coins, Globe2, ListChecks, MonitorCog, PlugZap, RadioTower, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getAdminFeatureAvailability, updateAdminFeatureAvailability } from "@/services/api/auth";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { AdminStatusBadge } from "./admin-ui";
 
-type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers";
+type FeatureKey = "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "cloudAgentEnabled" | "ipLocalePromptEnabled";
 type FeatureRow = {
     key: FeatureKey;
     title: string;
@@ -17,7 +17,7 @@ type FeatureRow = {
     dependsOn?: FeatureKey;
 };
 
-const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers"];
+const editableFeatureKeys: FeatureKey[] = ["shortDramaEnabled", "taskCenterEnabled", "creditsEnabled", "customChannelsEnabled", "frontendModelsEnabled", "pluginCenterEnabled", "systemPluginsVisibleToUsers", "cloudAgentEnabled", "ipLocalePromptEnabled"];
 
 const workspaceFeatureRows: FeatureRow[] = [
     {
@@ -39,10 +39,22 @@ const workspaceFeatureRows: FeatureRow[] = [
         icon: <Coins className="size-4" aria-hidden="true" />,
     },
     {
+        key: "ipLocalePromptEnabled",
+        title: "IP 语言与价格提示",
+        description: "登录后若账号语言与当前 IP 推荐语言不一致，弹出切换提示，便于展示对应区域价格。关闭后不再提示切换语言。",
+        icon: <Globe2 className="size-4" aria-hidden="true" />,
+    },
+    {
         key: "customChannelsEnabled",
         title: "自定义渠道",
         description: "允许用户配置并使用自己的模型渠道。",
         icon: <RadioTower className="size-4" aria-hidden="true" />,
+    },
+    {
+        key: "cloudAgentEnabled",
+        title: "画布TV智能 Agent",
+        description: "开放画布TV智能 Agent。默认关闭；开启后打开网站会自动加载并启动。关闭不删除已有记忆。",
+        icon: <Bot className="size-4" aria-hidden="true" />,
     },
 ];
 
@@ -245,7 +257,7 @@ export default function FeatureAvailabilityPanel() {
                     title="1. 用户工作台入口"
                     description="先决定普通用户能进入哪些核心工作区"
                     icon={<MonitorCog className="size-4" aria-hidden="true" />}
-                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/4 开放`} tone={enabledWorkspaceFeatures === 4 ? "success" : "neutral"} />}
+                    status={<AdminStatusBadge label={`${enabledWorkspaceFeatures}/6 开放`} tone={enabledWorkspaceFeatures === 6 ? "success" : "neutral"} />}
                 >
                     {workspaceFeatureRows.map((row) => (
                         <FeatureSettingRow key={row.key} row={row} saved={savedFeatures} draft={draftFeatures} saving={saving} onChange={requestFeatureChange} />
@@ -354,6 +366,8 @@ function toEditablePayload(features: FeatureAvailability) {
         frontendModelsEnabled: features.frontendModelsEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
         systemPluginsVisibleToUsers: features.systemPluginsVisibleToUsers,
+        cloudAgentEnabled: features.cloudAgentEnabled,
+        ipLocalePromptEnabled: features.ipLocalePromptEnabled,
     };
 }
 
@@ -365,6 +379,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
     if (!value || typeof value !== "object") throw new Error("功能开放配置响应格式无效");
     const record = value as Record<string, unknown>;
     for (const key of editableFeatureKeys) {
+        if (key === "cloudAgentEnabled" || key === "ipLocalePromptEnabled") continue;
         if (typeof record[key] !== "boolean") throw new Error("功能开放配置响应缺少有效开关状态");
     }
     return {
@@ -376,6 +391,8 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,
+        cloudAgentEnabled: record.cloudAgentEnabled === true,
+        ipLocalePromptEnabled: record.ipLocalePromptEnabled === true,
         configured: typeof record.configured === "boolean" ? record.configured : undefined,
         updatedBy: typeof record.updatedBy === "string" ? record.updatedBy : undefined,
         updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : undefined,

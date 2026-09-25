@@ -12,8 +12,7 @@ import { saveAs } from "file-saver";
 
 import { CanvasTimelineRuler } from "./canvas-timeline-ruler";
 import { CanvasTimelinePreview } from "./canvas-timeline-preview";
-import { canvasThemes } from "@/lib/canvas-theme";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { buildTimelineFromNodes, isNodeInTimeline, syncTimelineSubtitleClips } from "@/lib/timeline/timeline-build";
 import { canPlaceAt, clampClipDurationByNeighbors, findNearestAvailablePlacement } from "@/lib/timeline/timeline-placement";
 import { computeSnap } from "@/lib/timeline/timeline-snap";
@@ -77,7 +76,7 @@ export function CanvasTimelineDialog({
     onCreateAssembledNode,
 }: CanvasTimelineDialogProps) {
     const { message } = App.useApp();
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const [draft, setDraft] = useState<TimelineProject>(() => buildTimelineFromNodes([]));
     const [playheadMs, setPlayheadMs] = useState(0);
     const [zoomLevel, setZoomLevel] = useState(1);

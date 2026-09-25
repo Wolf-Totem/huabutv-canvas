@@ -7,8 +7,7 @@ import { Camera, RotateCcw, Send, X } from "lucide-react";
 import { CanvasAngleScene } from "@/components/canvas/canvas-angle-scene";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { canvasThemes } from "@/lib/canvas-theme";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 
 export type CanvasImageAngleParams = {
     horizontalAngle: number;
@@ -36,7 +35,7 @@ function distanceLabel(value: number) {
 }
 
 export function CanvasNodeAnglePanel({ dataUrl, onClose, onConfirm }: { dataUrl: string; onClose: () => void; onConfirm: (params: CanvasImageAngleParams) => void }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const reducedMotion = useReducedMotion();
     const [params, setParams] = useState(defaultParams);
     const [mode, setMode] = useState<"camera" | "skybox">("camera");

@@ -1,0 +1,62 @@
+import { expect, test } from "bun:test";
+
+test("portal home is the site root for every visitor and create lives at /create", async () => {
+    const [root, home, router, main] = await Promise.all([
+        Bun.file(new URL("../src/pages/public-home/root-home.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/public-home/manchuang-home.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/router.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/main.tsx", import.meta.url)).text(),
+    ]);
+    expect(root).toContain("ManchuangHomePage");
+    expect(root).not.toContain("CreatePage");
+    expect(home).toContain("mc-hero-cta");
+    expect(home).toContain("mc-hero-cta-pin");
+    expect(home).toContain("openAuth({ tab: \"login\" })");
+    expect(home).toContain("mc-hero-preview");
+    expect(home).toContain("openAuth");
+    expect(home.indexOf("mc-nav-start")).toBeLessThan(home.indexOf("LANDING_NAV.map"));
+    expect(home).toContain('openWorkspace("/create#plaza")');
+    expect(home).toContain("作品");
+    expect(router).toContain('path: "/create"');
+    expect(router).toContain("deferred(<CreatePage />)");
+    expect(router).toContain('to="/?auth=login"');
+    expect(main).not.toContain("peekAuthUser");
+});
+
+test("featured plaza cards ship enough covers to fill the home grid", async () => {
+    const cards = (await import("../src/lib/plaza-featured.json")).default as Array<{ coverUrl: string; name: string }>;
+    expect(cards.length).toBeGreaterThanOrEqual(60);
+    expect(cards.every((item) => Boolean(item.coverUrl) && Boolean(item.name))).toBe(true);
+});
+
+test("guest agent start opens the login dialog instead of toasting session not ready", async () => {
+    const source = await Bun.file(new URL("../src/pages/create/creation-agent-entry.tsx", import.meta.url)).text();
+    expect(source).toContain("openAuth({ tab: \"login\"");
+    expect(source).not.toContain("agent.sessionNotReady");
+    expect(source).toContain("requireLogin");
+});
+
+test("register dialog keeps an optional invite code with one-to-one guidance copy", async () => {
+    const source = await Bun.file(new URL("../src/pages/auth/register.tsx", import.meta.url)).text();
+    expect(source).toContain("邀请码（可选）");
+    expect(source).toContain("填写邀请码可接受一对一指导和优先服务");
+    expect(source).toContain("inviteCode: inviteCode.trim() || undefined");
+});
+
+test("create page keeps the composer and names the feed 作品广场 with work tags", async () => {
+    const [createPage, featured, router] = await Promise.all([
+        Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/create/creation-workspace.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/router.tsx", import.meta.url)).text(),
+    ]);
+    expect(createPage).toContain("creation-home-heading");
+    expect(createPage).toContain("CreationAgentEntry");
+    expect(createPage).not.toContain("feed=plaza");
+    expect(featured).toContain(">作品广场<");
+    expect(featured).toContain("WORK_TAGS");
+    expect(featured).toContain("plaza-feed-grid");
+    expect(featured).toContain("previewUrl");
+    expect(router).toContain('path: "/plaza"');
+    expect(router).toContain('path: "/plaza/:slug"');
+    expect(router).toContain('path: "/u/:userId"');
+});

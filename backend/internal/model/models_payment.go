@@ -78,8 +78,12 @@ type PaymentOrder struct {
 	ProviderConfigVersion int64              `json:"providerConfigVersion"`
 	AmountFen             int64              `json:"amountFen"`
 	Currency              string             `json:"currency" gorm:"size:8"`
-	CreditsMicrocredits   int64              `json:"creditsMicrocredits"`
-	Status                PaymentOrderStatus `json:"status" gorm:"size:24;index;index:idx_payment_order_status_expiry,priority:1"`
+	CreditsMicrocredits     int64              `json:"creditsMicrocredits"`
+	ProductKind             string             `json:"productKind" gorm:"size:24;index"`
+	PlanSKU                 string             `json:"planSku" gorm:"size:32"`
+	MembershipDurationDays  int                `json:"membershipDurationDays"`
+	StorageQuotaBytes       int64              `json:"storageQuotaBytes"`
+	Status                  PaymentOrderStatus `json:"status" gorm:"size:24;index;index:idx_payment_order_status_expiry,priority:1"`
 	ProviderTradeNo       *string            `json:"providerTradeNo,omitempty" gorm:"size:96;uniqueIndex:idx_payment_provider_trade,priority:2"`
 	ProviderStatus        string             `json:"providerStatus,omitempty" gorm:"size:40;index"`
 	CheckoutMode          string             `json:"checkoutMode,omitempty" gorm:"size:24"`

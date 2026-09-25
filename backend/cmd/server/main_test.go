@@ -65,6 +65,40 @@ func TestParseCORSPolicyRejectsNonOriginValue(t *testing.T) {
 	}
 }
 
+func TestAllowedOriginAllowsOneLevelSubdomainOfConfiguredHost(t *testing.T) {
+	t.Setenv("CANVAS_CORS_ORIGINS", "https://app.huabutv.example")
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest("GET", "http://backend/api/health", nil)
+	if !allowedOrigin(context, "https://zhangsan.huabutv.example") {
+		t.Fatal("one-level streamer subdomain should be allowed")
+	}
+	if allowedOrigin(context, "https://evil.zhangsan.huabutv.example") {
+		t.Fatal("nested extra labels should be rejected")
+	}
+	if allowedOrigin(context, "https://other.example") {
+		t.Fatal("unrelated host should be rejected")
+	}
+}
+
+func TestAllowedOriginWildcardSubdomainPattern(t *testing.T) {
+	t.Setenv("CANVAS_CORS_ORIGINS", "https://*.huabutv.example")
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest("GET", "http://backend/api/health", nil)
+	if !allowedOrigin(context, "https://agent.huabutv.example") {
+		t.Fatal("explicit *.parent pattern should allow one label")
+	}
+}
+
+func TestParseCORSPolicyRejectsBareStarWhenMixed(t *testing.T) {
+	policy, err := parseCORSPolicy("https://app.huabutv.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policy.allowAny {
+		t.Fatal("configured list must not allow any origin")
+	}
+}
+
 func TestAllowedOriginConfiguredListDoesNotFallbackToArbitraryLocalhost(t *testing.T) {
 	t.Setenv("CANVAS_CORS_ORIGINS", "https://app.example.com")
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())

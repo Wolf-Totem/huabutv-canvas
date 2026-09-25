@@ -2,36 +2,17 @@ import { motion, useReducedMotion } from "motion/react";
 import { ConfigProvider, Tabs } from "antd";
 import { ArrowLeft, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { LocaleSwitcher } from "@/components/i18n/locale-switcher";
 import { SiteComplianceFooter } from "@/components/layout/site-compliance-footer";
+import { PUBLIC_HOME_HREF, handlePublicHomeClick } from "@/lib/public-home";
+import { getPublicSiteSkin, type PublicSiteSkin } from "@/services/api/streamer";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { brandStudioLabel, useAppearanceStore } from "@/stores/use-appearance-store";
-
-const AUTH_TABS = [
-    { key: "login", label: "登录" },
-    { key: "register", label: "注册" },
-];
-
-const authCopy = {
-    login: {
-        eyebrow: "WELCOME BACK",
-        title: "进入创作现场",
-        description: "继续编辑你的画布、素材与生成任务。",
-    },
-    register: {
-        eyebrow: "CREATE ACCOUNT",
-        title: "建立你的创作空间",
-        description: "一个账号管理画布、素材、技能和模型偏好。",
-    },
-    recovery: {
-        eyebrow: "ACCOUNT RECOVERY",
-        title: "重新设置密码",
-        description: "验证账号邮箱后，设置一个新的登录密码。",
-    },
-} as const;
+import { useTranslation } from "react-i18next";
 
 export function LinuxDOIcon() {
     return (
@@ -47,6 +28,7 @@ export function LinuxDOIcon() {
 }
 
 export function AuthScene() {
+    const { t } = useTranslation("common");
     const appearance = useAppearanceStore((state) => state.appearance);
     const location = useLocation();
     const navigate = useNavigate();
@@ -55,9 +37,18 @@ export function AuthScene() {
     const [manualVideoActive, setManualVideoActive] = useState(false);
     const [videoPlaying, setVideoPlaying] = useState(false);
     const [failedPosterURL, setFailedPosterURL] = useState("");
+    const [siteSkin, setSiteSkin] = useState<PublicSiteSkin | null>(null);
     const recovery = location.pathname === "/forgot-password";
     const activeTab = location.pathname === "/register" ? "register" : "login";
-    const copy = recovery ? authCopy.recovery : activeTab === "register" ? authCopy.register : authCopy.login;
+    const copy = recovery
+        ? { title: t("auth.recovery"), description: t("auth.recoveryLead"), eyebrow: "ACCOUNT RECOVERY" }
+        : activeTab === "register"
+            ? { title: t("auth.createSpace"), description: t("auth.createSpaceLead"), eyebrow: "CREATE ACCOUNT" }
+            : { title: t("auth.welcomeBack"), description: t("auth.welcomeBackLead"), eyebrow: "WELCOME BACK" };
+    const AUTH_TABS = [
+        { key: "login", label: t("auth.login") },
+        { key: "register", label: t("auth.register") },
+    ];
     const automaticVideoActive = appearance.authVideoAutoplay && !reducedMotion;
     const videoActive = Boolean(appearance.authVideoUrl && (automaticVideoActive || manualVideoActive));
 
@@ -65,6 +56,18 @@ export function AuthScene() {
         setManualVideoActive(false);
         setVideoPlaying(false);
     }, [appearance.authVideoUrl, appearance.authVideoAutoplay]);
+
+    useEffect(() => {
+        let cancelled = false;
+        void getPublicSiteSkin()
+            .then((skin) => {
+                if (!cancelled) setSiteSkin(skin);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const playVideo = () => {
         setManualVideoActive(true);
@@ -81,13 +84,13 @@ export function AuthScene() {
                     <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,5,8,.58),transparent_42%,rgba(4,5,8,.74))]" />
                     <div aria-hidden className="auth-scene-video-blend absolute inset-y-0 right-0 hidden w-[clamp(120px,14vw,240px)] lg:block" />
                     <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-4 p-5 sm:p-7 lg:p-9">
-                        <Link to="/" className="inline-flex items-center gap-2.5 text-sm font-semibold text-white drop-shadow-sm transition-opacity hover:opacity-80">
-                            <BrandLogo theme="dark" className="size-7" alt="" fallback={<span className="size-7 bg-current" style={{ mask: "url(/logo.svg) center / contain no-repeat", WebkitMask: "url(/logo.svg) center / contain no-repeat" }} />} />
-                            {appearance.brandName}
-                        </Link>
+                        <a href={PUBLIC_HOME_HREF} onClick={(event) => handlePublicHomeClick(event, appearance.publicHomepage)} className="inline-flex items-center gap-2.5 text-sm font-semibold text-white drop-shadow-sm transition-opacity hover:opacity-80">
+                            {siteSkin?.logoUrl ? <img src={siteSkin.logoUrl} alt="" className="size-10 object-contain" /> : <BrandLogo theme="dark" className="size-10" alt="" fallback={<img src="/logo.png" alt="" className="size-10 object-contain" />} />}
+                            {siteSkin?.title || appearance.brandName}
+                        </a>
                         <button type="button" className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[var(--fs-label)] text-white/76 backdrop-blur-xl transition hover:bg-black/35 disabled:cursor-default" onClick={playVideo} disabled={videoPlaying || !appearance.authVideoUrl} aria-pressed={videoPlaying}>
                             <Play className="size-3 fill-current" />
-                            {videoPlaying ? "创作正在发生" : "播放品牌影片"}
+                            {videoPlaying ? t("auth.playing") : t("auth.playBrand")}
                         </button>
                     </div>
                     <motion.div
@@ -103,10 +106,13 @@ export function AuthScene() {
                 </section>
 
                 <section className="auth-scene-form-pane relative flex min-h-[660px] items-start justify-center overflow-y-auto px-4 pb-24 pt-20 sm:px-8 lg:min-h-0 lg:px-10 lg:pb-24 lg:pt-20">
-                    <Link to="/" className="auth-scene-return absolute right-5 top-5 z-20 inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs backdrop-blur-xl transition lg:right-8 lg:top-8">
-                        <ArrowLeft className="size-3.5" />
-                        返回首页
-                    </Link>
+                    <div className="auth-scene-toolbar absolute right-5 top-5 z-20 lg:right-8 lg:top-8">
+                        <LocaleSwitcher variant="auth" />
+                        <a href={PUBLIC_HOME_HREF} onClick={(event) => handlePublicHomeClick(event, appearance.publicHomepage)} className="auth-home-button">
+                            <ArrowLeft className="size-4" />
+                            {t("auth.backHome")}
+                        </a>
+                    </div>
 
                     <motion.div
                         initial={reducedMotion ? false : { opacity: 0, y: 14 }}

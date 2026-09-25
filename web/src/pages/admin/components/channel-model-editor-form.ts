@@ -1,4 +1,5 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
+import { inferBrandIcon } from "@/lib/model-logo-ids";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
@@ -30,7 +31,7 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
         modelKey: item?.modelKey || "",
         providerModelKey: upstreamModel,
         displayName: item?.displayName || "",
-        icon: item?.icon || "",
+        icon: item?.icon || inferBrandIcon(item?.modelKey || item?.displayName),
         capability,
         protocol,
         priceTiers: item ? (item.priceTiers?.length ? item.priceTiers.map(priceTierToForm) : [legacyPriceTierToForm(item)]) : [defaultPriceTier()],

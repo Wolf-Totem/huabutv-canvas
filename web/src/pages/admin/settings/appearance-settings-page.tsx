@@ -1,4 +1,4 @@
-import { App, Button, Form, Input, Skeleton } from "antd";
+import { App, Button, Form, Input, Skeleton, Tabs } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
 import { Copyright, Globe2, Image as ImageIcon, MonitorPlay, Moon, Palette, RefreshCw, RotateCcw, Save, Search, Sun, Type, Undo2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -7,9 +7,13 @@ import { useBlocker } from "react-router";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { AdminStatusBadge, SettingsSectionCard } from "@/pages/admin/components/admin-ui";
 import { cn } from "@/lib/utils";
-import { cloneSkinDefinition, DEFAULT_CLASSIC_SKIN, duplicateSkinDefinition, normalizeSkinDefinition, type SkinDefinition } from "@/lib/skin-themes";
-import { SkinThemeEditor } from "@/pages/admin/settings/components/skin-theme-editor";
+import { CINEMATIC_SKINS, DEFAULT_CINEMATIC_SKIN_ID } from "@/lib/cinematic-skins";
+import { cinematicSkinDefinition, cloneSkinDefinition, normalizeSkinDefinition, type SkinDefinition } from "@/lib/skin-themes";
+import { DEFAULT_HOME_CTA_HREF, DEFAULT_HOME_CTA_LABEL, DEFAULT_HOME_NAV_ITEMS, normalizeHomeNavItems, validHomeHref, type HomeNavItem } from "@/lib/home-navigation";
+import { DEFAULT_MANCHUANG_LANDING, mergeManchuangLanding, type ManchuangLanding } from "@/lib/manchuang-landing";
+import { HomeNavSetting } from "@/pages/admin/settings/components/home-nav-setting";
 import { WelcomeSetting } from "@/pages/admin/settings/components/welcome-setting";
+import { IpLocalePromptSetting } from "@/pages/admin/settings/components/ip-locale-prompt-setting";
 import { deleteAdminResources } from "@/services/api/admin-storage";
 import { getAdminAppearance, resetAdminAppearance, updateAdminAppearance, uploadAppearanceAsset, type AdminAppearance, type AppearanceAssetSlot } from "@/services/api/appearance";
 import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-appearance-store";
@@ -17,13 +21,14 @@ import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-
 type DraftFiles = Record<AppearanceAssetSlot, File | null>;
 type ResetState = Record<AppearanceAssetSlot, boolean>;
 
-const EMPTY_FILES: DraftFiles = { logo: null, "logo-dark": null, video: null, poster: null };
-const EMPTY_RESETS: ResetState = { logo: false, "logo-dark": false, video: false, poster: false };
+const EMPTY_FILES: DraftFiles = { logo: null, "logo-dark": null, video: null, poster: null, "landing-video": null };
+const EMPTY_RESETS: ResetState = { logo: false, "logo-dark": false, video: false, poster: false, "landing-video": false };
 const FILE_RULES: Record<AppearanceAssetSlot, { accept: string; maxBytes: number; label: string }> = {
     logo: { accept: "image/png,image/jpeg,image/webp", maxBytes: 5 << 20, label: "浅色模式 Logo" },
     "logo-dark": { accept: "image/png,image/jpeg,image/webp", maxBytes: 5 << 20, label: "深色模式 Logo" },
     poster: { accept: "image/png,image/jpeg,image/webp", maxBytes: 10 << 20, label: "视频封面" },
     video: { accept: "video/mp4,video/webm", maxBytes: 256 << 20, label: "品牌视频" },
+    "landing-video": { accept: "video/mp4,video/webm", maxBytes: 256 << 20, label: "首页背景视频" },
 };
 
 export default function AppearanceSettingsPage() {
@@ -35,14 +40,21 @@ export default function AppearanceSettingsPage() {
     const [authHeroDescription, setAuthHeroDescription] = useState("");
     const [authVideoAutoplay, setAuthVideoAutoplay] = useState(true);
     const [logoFrameEnabled, setLogoFrameEnabled] = useState(true);
-    const [skinId, setSkinId] = useState("classic");
-    const [skinThemes, setSkinThemes] = useState<SkinDefinition[]>([DEFAULT_CLASSIC_SKIN]);
+    const [skinId, setSkinId] = useState<string>(DEFAULT_CINEMATIC_SKIN_ID);
+    const [skinThemes, setSkinThemes] = useState<SkinDefinition[]>(() => CINEMATIC_SKINS.map((skin) => cinematicSkinDefinition(skin.id)));
+    const [enabledSkins, setEnabledSkins] = useState<string[]>([]);
+    const [defaultMode, setDefaultMode] = useState<"light" | "dark">("dark");
     const [seoTitle, setSeoTitle] = useState("");
     const [seoDescription, setSeoDescription] = useState("");
     const [seoKeywords, setSeoKeywords] = useState("");
     const [footerCopyright, setFooterCopyright] = useState("");
     const [icpFilingEnabled, setIcpFilingEnabled] = useState(false);
     const [icpFilingNumber, setIcpFilingNumber] = useState("");
+    const [publicHomepage, setPublicHomepage] = useState<"welcome" | "manchuang">("welcome");
+    const [homeNavItems, setHomeNavItems] = useState<HomeNavItem[]>(() => DEFAULT_HOME_NAV_ITEMS.map((item) => ({ ...item })));
+    const [homeCtaLabel, setHomeCtaLabel] = useState(DEFAULT_HOME_CTA_LABEL);
+    const [homeCtaHref, setHomeCtaHref] = useState(DEFAULT_HOME_CTA_HREF);
+    const [landing, setLanding] = useState<ManchuangLanding>(DEFAULT_MANCHUANG_LANDING);
     const [files, setFiles] = useState<DraftFiles>(EMPTY_FILES);
     const [resets, setResets] = useState<ResetState>(EMPTY_RESETS);
     const [loading, setLoading] = useState(true);
@@ -50,12 +62,14 @@ export default function AppearanceSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [restoring, setRestoring] = useState(false);
     const [loadError, setLoadError] = useState("");
+    const [activeTab, setActiveTab] = useState("brand");
     const requestVersionRef = useRef(0);
     const inputRefs = {
         logo: useRef<HTMLInputElement>(null),
         "logo-dark": useRef<HTMLInputElement>(null),
         video: useRef<HTMLInputElement>(null),
         poster: useRef<HTMLInputElement>(null),
+        "landing-video": useRef<HTMLInputElement>(null),
     };
 
     const dirty =
@@ -67,34 +81,53 @@ export default function AppearanceSettingsPage() {
             authVideoAutoplay !== setting?.authVideoAutoplay ||
             logoFrameEnabled !== setting?.logoFrameEnabled ||
             skinId !== setting?.skinId ||
-            JSON.stringify(skinThemes) !== JSON.stringify(setting?.skinThemes) ||
+            JSON.stringify(skinThemes) !== JSON.stringify((setting?.skinThemes || []).map((theme) => normalizeSkinDefinition(theme))) ||
+            JSON.stringify([...enabledSkins].sort()) !== JSON.stringify([...(setting?.enabledSkins || [])].sort()) ||
+            defaultMode !== (setting?.defaultMode || "dark") ||
             normalizeSingleLine(seoTitle) !== setting?.seoTitle ||
             normalizeDraftCopy(seoDescription) !== setting?.seoDescription ||
             normalizeSingleLine(seoKeywords) !== setting?.seoKeywords ||
             normalizeSingleLine(footerCopyright) !== setting?.footerCopyright ||
             icpFilingEnabled !== setting?.icpFilingEnabled ||
             normalizeSingleLine(icpFilingNumber) !== setting?.icpFilingNumber ||
+            publicHomepage !== resolvedPublicHomepage(setting) ||
+            JSON.stringify(landing) !== JSON.stringify(mergeManchuangLanding(setting?.landing ?? setting?.public?.landing)) ||
+            JSON.stringify(normalizeHomeNavItems(homeNavItems)) !== JSON.stringify(normalizeHomeNavItems(setting?.homeNavItems ?? setting?.public?.homeNavItems)) ||
+            normalizeSingleLine(homeCtaLabel) !== normalizeSingleLine(setting?.homeCtaLabel || setting?.public?.homeCtaLabel || DEFAULT_HOME_CTA_LABEL) ||
+            normalizeSingleLine(homeCtaHref) !== normalizeSingleLine(setting?.homeCtaHref || setting?.public?.homeCtaHref || DEFAULT_HOME_CTA_HREF) ||
             Object.values(files).some(Boolean) ||
             Object.values(resets).some(Boolean));
     const blocker = useBlocker(dirty && !saving && !restoring);
 
     const applySetting = useCallback((value: AdminAppearance) => {
-        setSetting(value);
         setBrandName(value.brandName);
         setBrandSlug(value.brandSlug);
         setAuthHeroTitle(value.authHeroTitle);
         setAuthHeroDescription(value.authHeroDescription);
         setAuthVideoAutoplay(value.authVideoAutoplay);
         setLogoFrameEnabled(value.logoFrameEnabled);
-        const themes = value.skinThemes.map((theme) => normalizeSkinDefinition(theme));
-        setSkinThemes(themes.length ? themes : [cloneSkinDefinition(DEFAULT_CLASSIC_SKIN)]);
-        setSkinId(themes.some((theme) => theme.id === value.skinId) ? value.skinId : "classic");
+        const themes = (value.skinThemes || []).map((theme) => normalizeSkinDefinition(theme));
+        const nextEnabled = Array.isArray(value.enabledSkins) ? value.enabledSkins : [];
+        const nextHomepage = resolvedPublicHomepage(value);
+        const nextNav = normalizeHomeNavItems(value.homeNavItems ?? value.public?.homeNavItems);
+        const nextCtaLabel = value.homeCtaLabel || value.public?.homeCtaLabel || DEFAULT_HOME_CTA_LABEL;
+        const nextCtaHref = value.homeCtaHref || value.public?.homeCtaHref || DEFAULT_HOME_CTA_HREF;
+        setSetting({ ...value, skinThemes: themes, enabledSkins: nextEnabled, publicHomepage: nextHomepage, homeNavItems: nextNav, homeCtaLabel: nextCtaLabel, homeCtaHref: nextCtaHref, landing: mergeManchuangLanding(value.landing ?? value.public?.landing) });
+        setSkinThemes(themes.length ? themes : []);
+        setSkinId(themes.some((theme) => theme.id === value.skinId) ? value.skinId : DEFAULT_CINEMATIC_SKIN_ID);
+        setEnabledSkins(nextEnabled);
+        setDefaultMode(value.defaultMode === "light" ? "light" : "dark");
         setSeoTitle(value.seoTitle);
         setSeoDescription(value.seoDescription);
         setSeoKeywords(value.seoKeywords);
         setFooterCopyright(value.footerCopyright);
         setIcpFilingEnabled(value.icpFilingEnabled);
         setIcpFilingNumber(value.icpFilingNumber);
+        setPublicHomepage(nextHomepage);
+        setHomeNavItems(nextNav);
+        setHomeCtaLabel(nextCtaLabel);
+        setHomeCtaHref(nextCtaHref);
+        setLanding(mergeManchuangLanding(value.landing ?? value.public?.landing));
         setFiles(EMPTY_FILES);
         setResets(EMPTY_RESETS);
         setLoadError("");
@@ -198,12 +231,15 @@ export default function AppearanceSettingsPage() {
         setLogoFrameEnabled(setting.logoFrameEnabled);
         setSkinId(setting.skinId);
         setSkinThemes(setting.skinThemes.map((theme) => cloneSkinDefinition(theme)));
+        setEnabledSkins(setting.enabledSkins || []);
+        setDefaultMode(setting.defaultMode === "light" ? "light" : "dark");
         setSeoTitle(setting.seoTitle);
         setSeoDescription(setting.seoDescription);
         setSeoKeywords(setting.seoKeywords);
         setFooterCopyright(setting.footerCopyright);
         setIcpFilingEnabled(setting.icpFilingEnabled);
         setIcpFilingNumber(setting.icpFilingNumber);
+        setPublicHomepage(setting.publicHomepage === "manchuang" ? "manchuang" : "welcome");
         setFiles(EMPTY_FILES);
         setResets(EMPTY_RESETS);
         Object.values(inputRefs).forEach((ref) => {
@@ -268,18 +304,22 @@ export default function AppearanceSettingsPage() {
         const nextFooterCopyright = normalizeSingleLine(footerCopyright);
         const nextIcpFilingNumber = normalizeSingleLine(icpFilingNumber);
         if (!nextBrandName || Array.from(nextBrandName).length > 40) {
+            setActiveTab("brand");
             message.error("品牌名称必须为 1 到 40 个字符");
             return;
         }
         if (!/^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/.test(nextBrandSlug)) {
+            setActiveTab("brand");
             message.error("英文品牌标识须为 1 到 48 位小写字母、数字或连字符");
             return;
         }
         if (!nextAuthHeroTitle || Array.from(nextAuthHeroTitle).length > 80 || hasUnsupportedControlCharacter(nextAuthHeroTitle)) {
+            setActiveTab("auth");
             message.error("登录页主标题必须为 1 到 80 个字符，可使用换行");
             return;
         }
         if (Array.from(nextAuthHeroDescription).length > 160 || hasUnsupportedControlCharacter(nextAuthHeroDescription)) {
+            setActiveTab("auth");
             message.error("登录页说明文案不能超过 160 个字符，可使用换行");
             return;
         }
@@ -299,11 +339,43 @@ export default function AppearanceSettingsPage() {
             message.error("显示备案号前请先填写备案号");
             return;
         }
+        const nextHomeNavItems = homeNavItems.map((item) => ({ label: item.label.trim(), href: item.href.trim(), openInNewTab: Boolean(item.openInNewTab) }));
+        const nextHomeCtaLabel = normalizeSingleLine(homeCtaLabel) || DEFAULT_HOME_CTA_LABEL;
+        const nextHomeCtaHref = normalizeSingleLine(homeCtaHref) || DEFAULT_HOME_CTA_HREF;
+        if (nextHomeNavItems.length > 8) {
+            setActiveTab("home");
+            message.error("首页菜单最多 8 项");
+            return;
+        }
+        for (const item of nextHomeNavItems) {
+            if (!item.label || Array.from(item.label).length > 24) {
+                setActiveTab("home");
+                message.error("菜单名称必须为 1 到 24 个字符");
+                return;
+            }
+            if (!validHomeHref(item.href)) {
+                setActiveTab("home");
+                message.error("菜单链接须为页内锚点、站内路径或 http(s) 地址");
+                return;
+            }
+        }
+        if (!nextHomeCtaLabel || Array.from(nextHomeCtaLabel).length > 24) {
+            setActiveTab("home");
+            message.error("首页按钮文案必须为 1 到 24 个字符");
+            return;
+        }
+        if (!validHomeHref(nextHomeCtaHref)) {
+            setActiveTab("home");
+            message.error("首页按钮链接须为页内锚点、站内路径或 http(s) 地址");
+            return;
+        }
         const skinError = validateSkinDrafts(skinThemes, skinId);
         if (skinError) {
+            setActiveTab("skins");
             message.error(skinError);
             return;
         }
+        const nextSkinId = skinThemes.some((theme) => theme.id === skinId) ? skinId : DEFAULT_CINEMATIC_SKIN_ID;
         setSaving(true);
         const uploadedIDs: string[] = [];
         try {
@@ -312,8 +384,9 @@ export default function AppearanceSettingsPage() {
                 "logo-dark": resets["logo-dark"] ? "" : setting.darkLogoResourceId,
                 video: resets.video ? "" : setting.authVideoResourceId,
                 poster: resets.poster ? "" : setting.authVideoPosterResourceId,
+                "landing-video": resets["landing-video"] ? "" : setting.landingVideoResourceId || "",
             };
-            for (const slot of ["logo", "logo-dark", "video", "poster"] as AppearanceAssetSlot[]) {
+            for (const slot of ["logo", "logo-dark", "video", "poster", "landing-video"] as AppearanceAssetSlot[]) {
                 const file = files[slot];
                 if (!file) continue;
                 const resource = await uploadAppearanceAsset(slot, file);
@@ -331,14 +404,22 @@ export default function AppearanceSettingsPage() {
                 authVideoResourceId: ids.video,
                 authVideoPosterResourceId: ids.poster,
                 authVideoAutoplay,
-                skinId,
+                skinId: nextSkinId,
                 skinThemes,
+                enabledSkins,
+                defaultMode,
                 seoTitle: nextSeoTitle,
                 seoDescription: nextSeoDescription,
                 seoKeywords: nextSeoKeywords,
                 footerCopyright: nextFooterCopyright,
                 icpFilingEnabled,
                 icpFilingNumber: nextIcpFilingNumber,
+                publicHomepage,
+                homeNavItems: nextHomeNavItems,
+                homeCtaLabel: nextHomeCtaLabel,
+                homeCtaHref: nextHomeCtaHref,
+                landing,
+                landingVideoResourceId: ids["landing-video"],
             });
             applySetting(updated);
             commitPublicAppearance(updated.public);
@@ -367,39 +448,6 @@ export default function AppearanceSettingsPage() {
     const status = setting?.configured ? <AdminStatusBadge label="已自定义" tone="success" /> : <AdminStatusBadge label="使用原始外观" tone="neutral" />;
     const copyCustomized = normalizeDraftCopy(authHeroTitle) !== DEFAULT_PUBLIC_APPEARANCE.authHeroTitle || normalizeDraftCopy(authHeroDescription) !== DEFAULT_PUBLIC_APPEARANCE.authHeroDescription;
     const draftBrandName = brandName.trim() || "站点名称";
-    const selectedSkin = skinThemes.find((skin) => skin.id === skinId) || skinThemes[0] || DEFAULT_CLASSIC_SKIN;
-
-    const changeSkin = (next: SkinDefinition) => {
-        if (next.locked) return;
-        setSkinThemes((current) => current.map((theme) => (theme.id === next.id ? next : theme)));
-    };
-
-    const duplicateSkin = (sourceID: string) => {
-        if (skinThemes.length >= 16) return;
-        const source = skinThemes.find((theme) => theme.id === sourceID) || DEFAULT_CLASSIC_SKIN;
-        const copy = duplicateSkinDefinition(
-            source,
-            skinThemes.map((theme) => theme.id),
-        );
-        setSkinThemes((current) => [...current, copy]);
-        setSkinId(copy.id);
-    };
-
-    const deleteSkin = (targetID: string) => {
-        const target = skinThemes.find((theme) => theme.id === targetID);
-        if (!target || target.locked) return;
-        modal.confirm({
-            title: `删除主题“${target.name}”？`,
-            content: "删除会随本页其他调整一起保存；保存前仍可点击“撤销调整”恢复。若它当前启用，将自动切回经典黑白。",
-            okText: "删除主题",
-            cancelText: "取消",
-            okButtonProps: { danger: true },
-            onOk: () => {
-                setSkinThemes((current) => current.filter((theme) => theme.id !== targetID));
-                if (skinId === targetID) setSkinId("classic");
-            },
-        });
-    };
 
     return (
         <AdminPageFrame title="站点及外观" description="统一管理品牌身份、登录页、搜索信息、备案展示与全站皮肤主题" scroll>
@@ -429,7 +477,7 @@ export default function AppearanceSettingsPage() {
                                     <strong>{dirty ? "站点配置有调整待保存" : "站点及外观已与服务端同步"}</strong>
                                     <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
                                 </div>
-                                <p>{dirty ? "品牌、SEO、备案、皮肤和媒体只在本页预览；保存后才会应用。" : "公开页面会在应用渲染前读取品牌与皮肤，不会先闪现旧站点身份。"}</p>
+                                <p>{dirty ? "切换分类会保留草稿；点「保存修改」后才会应用到线上。" : "按分类管理站点配置。欢迎页开关和 IP 语言提示会立即保存，其余项随「保存修改」生效。"}</p>
                             </div>
                         </div>
                         <div className="admin-appearance-command-actions">
@@ -450,10 +498,19 @@ export default function AppearanceSettingsPage() {
                         </div>
                     </div>
 
+                    <Tabs
+                        className="admin-appearance-tabs"
+                        activeKey={activeTab}
+                        onChange={setActiveTab}
+                        items={[
+                            {
+                                key: "brand",
+                                label: "品牌识别",
+                                children: (
                     <SettingsSectionCard
                         className="admin-appearance-section admin-appearance-brand-section"
                         icon={<Palette className="size-4" aria-hidden="true" />}
-                        title="1. 设置品牌识别"
+                        title="品牌识别"
                         description="中文品牌名用于主要界面，英文品牌标识用于英文角标和可安全品牌化的路径建议；不会改动代码包、数据库或部署标识。"
                         status={status}
                     >
@@ -474,7 +531,6 @@ export default function AppearanceSettingsPage() {
                                         onChange={(event) => setBrandSlug(event.target.value.toLocaleLowerCase().replace(/[^a-z0-9-]/g, ""))}
                                     />
                                 </Form.Item>
-                                <WelcomeSetting />
                             </Form>
                             <div className="admin-appearance-brand-logo admin-appearance-logo-stack">
                                 <AssetPicker
@@ -524,11 +580,94 @@ export default function AppearanceSettingsPage() {
                             </div>
                         </div>
                     </SettingsSectionCard>
-
+                                ),
+                            },
+                            {
+                                key: "home",
+                                label: "首页",
+                                children: (
+                    <SettingsSectionCard
+                        className="admin-appearance-section"
+                        icon={<Globe2 className="size-4" aria-hidden="true" />}
+                        title="站点首页"
+                        description="游客打开网站根路径时看到的首页。欢迎页大标题跟随站点名称。导航和右侧按钮保存在这里，保存修改后同步到欢迎页。"
+                        status={<AdminStatusBadge label={publicHomepage === "manchuang" ? "漫创未登录首页" : "影策欢迎页"} tone="info" />}
+                    >
+                        <div className="admin-appearance-section-form space-y-6">
+                            <HomepagePicker value={publicHomepage} disabled={saving || refreshing || restoring} onChange={setPublicHomepage} />
+                            <WelcomeSetting />
+                            <IpLocalePromptSetting />
+                            <HomeNavSetting
+                                items={homeNavItems}
+                                ctaLabel={homeCtaLabel}
+                                ctaHref={homeCtaHref}
+                                disabled={saving || refreshing || restoring}
+                                onChangeItems={setHomeNavItems}
+                                onChangeCtaLabel={setHomeCtaLabel}
+                                onChangeCtaHref={setHomeCtaHref}
+                            />
+                            <div className="space-y-3">
+                                <strong className="text-sm">漫创未登录首页内容</strong>
+                                <p className="text-xs text-foreground/55">背景视频、首屏文案和分区标题保存后立即用于公开首页。图片默认使用内置素材，也可改成资源地址。</p>
+                                <AssetPicker
+                                    slot="landing-video"
+                                    title="首页背景视频"
+                                    description="抄自漫创官网的全屏背景。支持 MP4 / WebM，最多 256MB。留空则使用内置视频。"
+                                    configured={Boolean(setting.landingVideoResourceId) && !resets["landing-video"]}
+                                    file={files["landing-video"]}
+                                    inputRef={inputRefs["landing-video"]}
+                                    onSelect={selectFile}
+                                    onReset={resetAsset}
+                                    disabled={saving || refreshing || restoring}
+                                    emptyLabel="使用内置漫创背景视频"
+                                />
+                                <Form.Item label="首屏副标题">
+                                    <Input value={landing.heroKicker} maxLength={80} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroKicker: event.target.value }))} />
+                                </Form.Item>
+                                <Form.Item label="首屏说明">
+                                    <Input.TextArea value={landing.heroLead} maxLength={200} rows={2} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, heroLead: event.target.value }))} />
+                                </Form.Item>
+                                <Form.Item label="产品区标题 / 强调">
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        <Input value={landing.productTitleTop} maxLength={24} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, productTitleTop: event.target.value }))} />
+                                        <Input value={landing.productTitleAccent} maxLength={24} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, productTitleAccent: event.target.value }))} />
+                                    </div>
+                                </Form.Item>
+                                <Form.Item label="产品区说明">
+                                    <Input.TextArea value={landing.productLead} maxLength={200} rows={2} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, productLead: event.target.value }))} />
+                                </Form.Item>
+                                <Form.Item label="创作流标题">
+                                    <Input value={landing.workflowTitle} maxLength={40} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, workflowTitle: event.target.value }))} />
+                                </Form.Item>
+                                <Form.Item label="创作流说明">
+                                    <Input.TextArea value={landing.workflowLead} maxLength={200} rows={2} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, workflowLead: event.target.value }))} />
+                                </Form.Item>
+                                <div className="space-y-3">
+                                    <strong className="text-sm">精选画布预览</strong>
+                                    <p className="text-xs text-foreground/55">首页底部弧形轨道展示这些画布。封面是静态图，预览视频仅在鼠标悬停时播放（请用压缩后的短视频）。最多 36 条。</p>
+                                    {landing.rail.map((item, index) => (
+                                        <div key={`${item.id}-${index}`} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                                            <Input value={item.label || ""} maxLength={40} placeholder="标题" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, label: event.target.value } : row) }))} />
+                                            <Input value={item.imageUrl} maxLength={500} placeholder="封面图 URL" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, imageUrl: event.target.value } : row) }))} />
+                                            <Input value={item.previewUrl || ""} maxLength={500} placeholder="悬停预览视频 URL" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, previewUrl: event.target.value } : row) }))} />
+                                            <Button type="text" danger disabled={saving || refreshing || restoring || landing.rail.length <= 1} onClick={() => setLanding((current) => ({ ...current, rail: current.rail.filter((_, rowIndex) => rowIndex !== index) }))}>删除</Button>
+                                        </div>
+                                    ))}
+                                    <Button size="small" disabled={saving || refreshing || restoring || landing.rail.length >= 36} onClick={() => setLanding((current) => ({ ...current, rail: [...current.rail, { id: `featured-${Date.now()}`, imageUrl: "", previewUrl: "", label: "" }] }))}>添加精选画布</Button>
+                                </div>
+                            </div>
+                        </div>
+                    </SettingsSectionCard>
+                                ),
+                            },
+                            {
+                                key: "auth",
+                                label: "登录页",
+                                children: (
                     <SettingsSectionCard
                         className="admin-appearance-section admin-appearance-auth-section"
                         icon={<MonitorPlay className="size-4" aria-hidden="true" />}
-                        title="2. 设置登录页内容与媒体"
+                        title="登录页内容与媒体"
                         description="登录、注册与找回密码共享左侧品牌文案和影片；更换视频会同时取消旧封面，避免品牌串帧。"
                         status={
                             <AdminStatusBadge
@@ -614,11 +753,16 @@ export default function AppearanceSettingsPage() {
                             </div>
                         </div>
                     </SettingsSectionCard>
-
+                                ),
+                            },
+                            {
+                                key: "seo",
+                                label: "SEO 信息",
+                                children: (
                     <SettingsSectionCard
                         className="admin-appearance-section"
                         icon={<Search className="size-4" aria-hidden="true" />}
-                        title="3. SEO 信息"
+                        title="SEO 信息"
                         description="配置浏览器标题、搜索摘要和关键词；留空时标题与描述会自动跟随当前站点名称。"
                         status={<AdminStatusBadge label={seoTitle || seoDescription || seoKeywords ? "已自定义" : "自动跟随品牌"} tone={seoTitle || seoDescription || seoKeywords ? "success" : "neutral"} />}
                     >
@@ -643,11 +787,16 @@ export default function AppearanceSettingsPage() {
                             </Form.Item>
                         </Form>
                     </SettingsSectionCard>
-
+                                ),
+                            },
+                            {
+                                key: "footer",
+                                label: "页尾与备案",
+                                children: (
                     <SettingsSectionCard
                         className="admin-appearance-section"
                         icon={<Globe2 className="size-4" aria-hidden="true" />}
-                        title="4. 首页页尾与备案"
+                        title="首页页尾与备案"
                         description="配置公开登录首页底部的版权和备案信息；备案号启用后固定链接工信部备案管理系统。"
                         status={<AdminStatusBadge label={icpFilingEnabled ? "展示备案号" : "未展示备案号"} tone={icpFilingEnabled ? "success" : "neutral"} />}
                     >
@@ -679,28 +828,73 @@ export default function AppearanceSettingsPage() {
                             </div>
                         </div>
                     </SettingsSectionCard>
-
+                                ),
+                            },
+                            {
+                                key: "skins",
+                                label: "皮肤主题",
+                                children: (
                     <SettingsSectionCard
                         className="admin-appearance-section"
                         icon={<Type className="size-4" aria-hidden="true" />}
-                        title="5. 皮肤主题"
-                        description="默认主题保持项目原始样式且不可更改；其他主题可新建、复制、改名、删除，并分别定义浅色、深色、控件样式与交互反馈。"
-                        status={<AdminStatusBadge label={selectedSkin.name} tone="info" />}
+                        title="皮肤主题"
+                        description="前台工作区与加载页使用同一套 10 个动态主题。关闭某套只影响加载页，前台主题选择仍可使用全部官方主题。"
+                        status={<AdminStatusBadge label="10 套动态主题" tone="info" />}
                     >
-                        <SkinThemeEditor
-                            themes={skinThemes}
-                            selectedID={skinId}
-                            disabled={saving || refreshing || restoring}
-                            onSelect={setSkinId}
-                            onCreate={() => duplicateSkin("classic")}
-                            onDuplicate={duplicateSkin}
-                            onDelete={deleteSkin}
-                            onChange={changeSkin}
-                        />
+                        <div className="admin-appearance-loader-skins">
+                            <div className="admin-appearance-logo-frame-copy">
+                                <strong>加载页动态主题</strong>
+                                <p>只作用于工作区加载页。登录 / 注册 / 找回密码仍使用上方品牌视频。关掉的主题不会出现在加载页。</p>
+                            </div>
+                            <div className="admin-appearance-logo-frame-option">
+                                <div className="admin-appearance-logo-frame-copy">
+                                    <strong>加载页默认明暗</strong>
+                                    <p>深浅只改 token 与滤镜，不改工作区布局。</p>
+                                </div>
+                                <div className="admin-appearance-logo-frame-control">
+                                    <span>{defaultMode === "dark" ? "深色" : "浅色"}</span>
+                                    <Switch checked={defaultMode === "dark"} disabled={saving || refreshing || restoring} aria-label="加载页默认深色" onChange={(checked) => setDefaultMode(checked ? "dark" : "light")} />
+                                </div>
+                            </div>
+                            <div className="admin-loader-skin-grid">
+                                {CINEMATIC_SKINS.map((skin) => {
+                                    const enabled = enabledSkins.includes(skin.id);
+                                    return (
+                                        <label key={skin.id} className={cn("admin-loader-skin-card", enabled && "is-enabled")}>
+                                            <img src={skin.poster} alt="" />
+                                            <span>
+                                                <strong>{skin.nameZh}</strong>
+                                                <small>{skin.id}</small>
+                                            </span>
+                                            <Switch checked={enabled} disabled={saving || refreshing || restoring} aria-label={`启用加载主题 ${skin.nameZh}`} onChange={(checked) => setEnabledSkins((current) => checked ? Array.from(new Set([...current, skin.id])) : current.filter((id) => id !== skin.id))} />
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </SettingsSectionCard>
+                                ),
+                            },
+                        ]}
+                    />
                 </div>
             )}
         </AdminPageFrame>
+    );
+}
+
+function HomepagePicker({ value, disabled, onChange }: { value: "welcome" | "manchuang"; disabled: boolean; onChange: (value: "welcome" | "manchuang") => void }) {
+    return (
+        <div className="admin-homepage-picker" role="radiogroup" aria-label="切换站点首页主题">
+            <button type="button" role="radio" aria-checked={value === "welcome"} disabled={disabled} className={cn("admin-homepage-card", value === "welcome" && "is-selected")} onClick={() => onChange("welcome")}>
+                <strong>影策欢迎页</strong>
+                <span>原来的电影感欢迎页。选中后游客访问 / 会进入这页，也可继续打开 /welcome。</span>
+            </button>
+            <button type="button" role="radio" aria-checked={value === "manchuang"} disabled={disabled} className={cn("admin-homepage-card", value === "manchuang" && "is-selected")} onClick={() => onChange("manchuang")}>
+                <strong>漫创未登录首页</strong>
+                <span>复刻漫创官网未登录落地页：顶栏、绘无限造未来首屏与底部作品卡。</span>
+            </button>
+        </div>
     );
 }
 
@@ -809,6 +1003,10 @@ function AppearanceSkeleton() {
     );
 }
 
+function resolvedPublicHomepage(value?: { publicHomepage?: string; public?: { publicHomepage?: string } } | null) {
+    return value?.publicHomepage === "manchuang" || value?.public?.publicHomepage === "manchuang" ? "manchuang" : "welcome";
+}
+
 function normalizeDraftCopy(value: string) {
     return value.replace(/\r\n?/g, "\n").trim();
 }
@@ -822,7 +1020,8 @@ function hasUnsupportedControlCharacter(value: string) {
 }
 
 function validateSkinDrafts(themes: SkinDefinition[], selectedID: string) {
-    if (!themes.length || themes.length > 16) return "皮肤主题数量必须为 1 到 16 套";
+    if (themes.length > 16) return "皮肤主题数量必须为 1 到 16 套";
+    if (!themes.length) return "";
     const ids = new Set<string>();
     for (const theme of themes) {
         if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(theme.id) || ids.has(theme.id)) return "皮肤主题 ID 无效或重复";
@@ -834,7 +1033,7 @@ function validateSkinDrafts(themes: SkinDefinition[], selectedID: string) {
         if (theme.tokens.components.controlHeightSmall > theme.tokens.components.controlHeight || theme.tokens.components.controlHeight > theme.tokens.components.controlHeightLarge) return `主题“${theme.name}”的控件高度顺序无效`;
         if (theme.tokens.components.motionFast > theme.tokens.components.motionNormal) return `主题“${theme.name}”的快速动效不能慢于常规动效`;
     }
-    if (!ids.has("classic") || !ids.has(selectedID)) return "默认主题或当前启用主题不存在";
+    if (!ids.has(selectedID) && selectedID) return "当前启用的皮肤主题不存在";
     return "";
 }
 

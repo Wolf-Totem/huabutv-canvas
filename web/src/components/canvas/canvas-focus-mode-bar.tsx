@@ -4,8 +4,7 @@ import { PanelBottom, X, ZoomIn, ZoomOut } from "lucide-react";
 
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { canvasThemes } from "@/lib/canvas-theme";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 
 type CanvasFocusModeBarProps = {
     dockRevealed: boolean;
@@ -18,7 +17,7 @@ type CanvasFocusModeBarProps = {
 };
 
 export function CanvasFocusModeBar({ dockRevealed, zoomPercent, onToggleDock, onExit, onZoomIn, onZoomOut, onFit }: CanvasFocusModeBarProps) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const reducedMotion = useReducedMotion();
 
     return (

@@ -31,39 +31,18 @@ func newResourceFallbackTestService(t *testing.T) (*Service, *gorm.DB) {
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}, db
 }
 
-// TestStoreResourceDegradesToLocalWhenOSSUnavailable 覆盖对象存储不可用时的降级：
-// 配置了 OSS（enabled=1、endpoint 不可达）时上传应回退本地存储成功，
-// 而不是把上传标记为失败——本地媒体导入不应因外部存储故障整体失败。
-func TestStoreResourceDegradesToLocalWhenOSSUnavailable(t *testing.T) {
+func TestStoreResourceFailsWhenOSSUnavailable(t *testing.T) {
 	service, db := newResourceFallbackTestService(t)
-	seedOSSEnabled(t, db, "user-1", "http://127.0.0.1:1")
+	if err := db.Create(&model.SystemSetting{Key: "oss", ValueJSON: `{"enabled":true,"provider":"aliyun","endpoint":"http://127.0.0.1:1","bucket":"test-bucket","accessKeyId":"ak","accessKeySecret":"sk","region":"cn-shenzhen"}`}).Error; err != nil {
+		t.Fatal(err)
+	}
 
-	resource, created, err := service.storeResource(
+	_, _, err := service.storeResource(
 		"user-1", "video", "intro.mp4", "video/mp4", 1024,
 		1920, 1080, 0, bytes.NewReader([]byte("fake-mp4-bytes")), nil, false,
 	)
-	if err != nil {
-		t.Fatalf("storeResource: %v", err)
-	}
-	if !created {
-		t.Fatal("storeResource returned created=false, want true")
-	}
-	if resource.Status != model.ResourceStatusReady {
-		t.Fatalf("resource.Status = %q, want %q", resource.Status, model.ResourceStatusReady)
-	}
-	if resource.Provider != "local" {
-		t.Fatalf("resource.Provider = %q, want local (degraded from OSS)", resource.Provider)
-	}
-	if resource.Endpoint != "" || resource.Bucket != "" || resource.StorageSettingID != "" {
-		t.Fatalf("resource storage binding not cleared after degrade: endpoint=%q bucket=%q setting=%q",
-			resource.Endpoint, resource.Bucket, resource.StorageSettingID)
-	}
-	payload, err := os.ReadFile(filepath.Join(service.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)))
-	if err != nil {
-		t.Fatalf("local object not written: %v", err)
-	}
-	if string(payload) != "fake-mp4-bytes" {
-		t.Fatalf("local object content = %q, want fake-mp4-bytes", payload)
+	if err == nil {
+		t.Fatal("storeResource() error = nil, want object storage failure")
 	}
 }
 

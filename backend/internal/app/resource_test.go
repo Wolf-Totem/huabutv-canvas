@@ -548,6 +548,7 @@ func TestCurrentUserCDNSettingAppliesToHistoricalResourcesInSameStorage(t *testi
 	defer server.Close()
 	svc := newResourceTestService(t)
 	actor := &model.User{ID: "user-1"}
+	enablePersonalStorageForTest(t, svc, actor.ID)
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
 		Enabled: true, Provider: aliyunOSSProvider, Endpoint: server.URL, Bucket: "private-bucket",
 		AccessKeyID: "access-id", AccessKeySecret: "secret-value",
@@ -597,6 +598,7 @@ func TestBoundHistoricalUserResourceDoesNotFollowCurrentProviderCDN(t *testing.T
 
 	svc := newResourceTestService(t)
 	actor := &model.User{ID: "user-1"}
+	enablePersonalStorageForTest(t, svc, actor.ID)
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
 		Enabled: true, Provider: aliyunOSSProvider, Endpoint: aliyunEndpoint.URL, CDNBaseURL: aliyunCDN.URL, Bucket: "aliyun-bucket",
 		AccessKeyID: "aliyun-access", AccessKeySecret: "aliyun-secret",
@@ -646,6 +648,7 @@ func TestHistoricalUserResourceWithoutStorageSettingIDKeepsItsProviderCDN(t *tes
 	defer qiniuCDN.Close()
 	svc := newResourceTestService(t)
 	actor := &model.User{ID: "user-1"}
+	enablePersonalStorageForTest(t, svc, actor.ID)
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{
 		Enabled: true, Provider: aliyunOSSProvider, Endpoint: aliyunEndpoint.URL, CDNBaseURL: aliyunCDN.URL, Bucket: "aliyun-bucket",
 		AccessKeyID: "aliyun-access", AccessKeySecret: "aliyun-secret",
@@ -872,6 +875,7 @@ func TestActiveResourceOSSSettingPrefersUserVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := &model.User{ID: "user-1"}
+	enablePersonalStorageForTest(t, svc, actor.ID)
 	created, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{Enabled: true, Provider: "aliyun", Endpoint: server.URL, Bucket: "user", AccessKeyID: "user-id", AccessKeySecret: "user-secret"})
 	if err != nil {
 		t.Fatal(err)
@@ -891,6 +895,7 @@ func TestUserOSSSettingVersionsKeepHistoricalSecrets(t *testing.T) {
 	defer server.Close()
 	svc := newResourceTestService(t)
 	actor := &model.User{ID: "user-1"}
+	enablePersonalStorageForTest(t, svc, actor.ID)
 	if _, err := svc.UpdateUserOSSSetting(actor, OSSSettingRequest{Enabled: true, Provider: "aliyun", Endpoint: server.URL, Bucket: "old", AccessKeyID: "old-id", AccessKeySecret: "old-secret"}); err != nil {
 		t.Fatal(err)
 	}
@@ -916,10 +921,19 @@ func newResourceTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.UserOSSSetting{}, &model.StorageLocation{}, &model.UserDailyUploadUsage{}, &model.Resource{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.User{}); err != nil {
 		t.Fatal(err)
 	}
 	return &Service{repo: repository.New(db), dataDir: t.TempDir()}
+}
+
+func enablePersonalStorageForTest(t *testing.T, svc *Service, userID string) {
+	t.Helper()
+	if err := svc.repo.AdminGrantMembership(userID, model.MembershipGrantSnapshot{
+		PlanSKU: model.MembershipSKUPermanent, Source: model.MembershipGrantSourceAdmin, AdminIdempotencyKey: "test-permanent-" + userID,
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestStoreResourceReusesReadyUploadIdentity(t *testing.T) {

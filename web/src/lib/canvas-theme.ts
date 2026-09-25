@@ -1,3 +1,5 @@
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+
 export type CanvasColorTheme = "light" | "dark";
 export type CanvasBackgroundMode = "dots" | "lines" | "blank";
 
@@ -138,3 +140,8 @@ export const canvasThemes = {
 } as const;
 
 export type CanvasTheme = (typeof canvasThemes)[CanvasColorTheme];
+
+export function useCanvasColorTheme(): CanvasTheme {
+    const mode = useActiveTheme();
+    return canvasThemes[mode === "light" ? "light" : "dark"];
+}

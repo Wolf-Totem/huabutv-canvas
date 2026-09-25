@@ -40,7 +40,8 @@ ARG BUILD_COMMIT=unknown
 ARG BUILD_TIME=unknown
 ENV GOPROXY=$GOPROXY
 
-RUN apk add --no-cache build-base
+RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.ustc.edu.cn#g' /etc/apk/repositories \
+    && apk add --no-cache build-base
 
 WORKDIR /src/backend
 COPY VERSION /src/VERSION
@@ -56,7 +57,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build set -eu; \
 
 FROM alpine:3.22
 
-RUN apk add --no-cache ca-certificates tzdata wget \
+RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.ustc.edu.cn#g' /etc/apk/repositories \
+    && apk add --no-cache ca-certificates tzdata wget \
     && addgroup -S app \
     && adduser -S app -G app
 

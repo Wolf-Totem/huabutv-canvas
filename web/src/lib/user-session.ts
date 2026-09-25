@@ -43,9 +43,11 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         const persistedCreationPreferences = scopedLocalStorage.getItem(CREATION_PREFERENCES_STORE_KEY);
         usePluginStore.setState({ hydrated: false, runtimeStatuses: {}, pluginStates: {} });
         useUserStore.getState().setUser(payload.user);
+        useUserStore.getState().setPermissions(payload.permissions);
         useUserStore.getState().setRuntimeLimits(payload.runtimeLimits);
         useUserStore.getState().setDrawingEngine(payload.drawingEngine);
         useUserStore.getState().setFeatures(payload.features);
+        useUserStore.getState().setMembership(payload.membership);
         await Promise.all([
             useCanvasStore.persist.rehydrate(),
             useCanvasHistoryStore.persist.rehydrate(),
@@ -61,28 +63,38 @@ export async function applyUserSession(payload: AuthSessionPayload) {
         if (!persistedPlugins) usePluginStore.setState({ installations: [], runtimeStatuses: {}, pluginStates: {} });
         if (!persistedCreationPreferences) useCreationPreferencesStore.setState({ preferences: {} });
         if (!persistedConfig) {
-            // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
-            const catalog = await getModelCatalog();
-            const initialSystemConfig = {
-                ...defaultConfig,
-                channels: modelCatalogChannels(catalog),
-                imageModels: undefined,
-                videoModels: undefined,
-                textModels: undefined,
-                audioModels: undefined,
-            };
-            useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
-        } else {
-            const catalog = await getModelCatalog();
-            useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+            useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: defaultConfig }).config);
         }
         installRemoteUserDataAutoSync();
         if (payload.user?.id) {
             await initializeRemoteUserDataSession(payload.user.id);
+            void refreshLocalModelCatalog(Boolean(persistedConfig)).catch((error) => {
+                console.warn("后台刷新模型目录失败，已先使用本地配置", error);
+            });
         } else resetRemoteUserDataSync();
     } finally {
         useUserStore.getState().setHydrated(true);
     }
+}
+
+async function refreshLocalModelCatalog(hasPersistedConfig: boolean) {
+    const catalog = await getModelCatalog();
+    if (!hasPersistedConfig) {
+        useConfigStore.getState().replaceConfig(
+            normalizeConfigSnapshot({
+                config: {
+                    ...defaultConfig,
+                    channels: modelCatalogChannels(catalog),
+                    imageModels: undefined,
+                    videoModels: undefined,
+                    textModels: undefined,
+                    audioModels: undefined,
+                },
+            }).config,
+        );
+        return;
+    }
+    useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
 }
 
 export async function refreshSystemChannels() {

@@ -6,8 +6,14 @@ import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader"
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore } from "@/stores/use-user-store";
 
+function isPublicLandingPath() {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    return path === "/";
+}
+
 export function AuthSessionHydrator({ children }: { children: ReactNode }) {
     const hydrated = useUserStore((state) => state.hydrated);
+    const publicLanding = isPublicLandingPath();
 
     useEffect(() => {
         let cancelled = false;
@@ -18,7 +24,17 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
                     applyAnonymousSession(payload);
                     return;
                 }
-                // 账号数据、画布和素材持久化只属于已登录工作区，登录页不下载这些模块。
+                if (publicLanding) {
+                    const store = useUserStore.getState();
+                    store.setUser(payload.user);
+                    store.setPermissions(payload.permissions);
+                    store.setRuntimeLimits(payload.runtimeLimits);
+                    store.setDrawingEngine(payload.drawingEngine);
+                    store.setFeatures(payload.features);
+                    store.setMembership(payload.membership);
+                    store.setHydrated(true);
+                    return;
+                }
                 const { applyUserSession } = await import("@/lib/user-session");
                 if (cancelled) return;
                 await applyUserSession(payload);
@@ -30,9 +46,10 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [publicLanding]);
 
-    return hydrated ? children : <FullScreenLoader />;
+    if (publicLanding) return children;
+    return hydrated ? children : <FullScreenLoader label="正在打开" detail="读取登录状态" />;
 }
 
 function applyAnonymousSession(payload: AuthSessionPayload) {

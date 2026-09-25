@@ -21,6 +21,8 @@ import {
 import { buildNodeMentionReferences } from "@/lib/canvas/canvas-resource-references";
 import { buildStoryboardAssetCatalog } from "@/lib/canvas/canvas-storyboard-assets";
 import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
+import { storyboardNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
+import { userChannelDisconnectNotice } from "@/lib/generation-user-channel";
 import { reconcileStoryboardTargetConnections, storyboardComposerContent, storyboardRowReferenceNodeIds } from "@/lib/canvas/canvas-storyboard-materializer";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -77,9 +79,11 @@ export function useCanvasStoryboard({
 
     const confirmGenerationSubmission = useCallback((count: number, model: string, taskLabel: string) => new Promise<boolean>((resolve) => {
         if (!count) return resolve(false);
+        const kind = taskLabel.includes("视频") ? "video" : taskLabel.includes("图片") || taskLabel.includes("动作板") ? "image" : "generic";
+        const notice = userChannelDisconnectNotice(effectiveConfig, model, kind);
         modal.confirm({
             title: `确认提交 ${count} 个${taskLabel}任务`,
-            content: `任务数：${count}；模型：${modelDisplayName(effectiveConfig, model)}。当前没有可用价格数据，将提交 ${count} 个外部模型任务。`,
+            content: `任务数：${count}；模型：${modelDisplayName(effectiveConfig, model)}。当前没有可用价格数据，将提交 ${count} 个外部模型任务。${notice ? ` ${notice}` : ""}`,
             okText: "确认生成",
             cancelText: "取消",
             centered: true,
@@ -117,6 +121,51 @@ export function useCanvasStoryboard({
     const addScriptRow = useCallback((nodeId: string) => {
         updateScriptRows(nodeId, (rows) => [...rows, createStoryboardRow(rows.length + 1)]);
     }, [updateScriptRows]);
+
+    const importScriptRows = useCallback((nodeId: string, incoming: StoryboardRow[], mode: "replace" | "append" = "replace") => {
+        const scriptNode = nodesRef.current.find((node) => node.id === nodeId && node.type === CanvasNodeType.Script);
+        if (!scriptNode) return;
+        const currentRows = scriptNode.metadata?.storyboard?.rows || [];
+        const merged = (mode === "append" ? [...currentRows, ...incoming] : incoming).map((row, index) => ({ ...row, shotNumber: index + 1 }));
+        const rowHandles = new Set(merged.map((row) => `row:${row.id}`));
+        const storyboardRowIds = new Set(merged.map((row) => row.id));
+        const previousRows = new Map(currentRows.map((row) => [row.id, row]));
+        const nextRows = merged.map((row) => invalidateEditedPromptVariables(previousRows.get(row.id), row));
+        const height = Math.max(scriptNode.height, storyboardNodeHeight(nextRows.length, scriptNode.metadata?.storyboardComposerHeight));
+        const nextNodes = nodesRef.current.map((node) => node.id !== nodeId ? node : {
+            ...node,
+            height,
+            metadata: {
+                ...node.metadata,
+                storyboard: {
+                    rows: nextRows,
+                    visibleColumns: node.metadata?.storyboard?.visibleColumns || ["shotNumber", "durationSeconds", "videoMotionPrompt", "dialogue", "assets"],
+                    referenceNodeIds: node.metadata?.storyboard?.referenceNodeIds || [],
+                },
+            },
+        });
+        const nextConnections = connectionsRef.current
+            .filter((connection) => connection.fromNodeId !== nodeId && connection.toNodeId !== nodeId || !connection.storyboardRowId || storyboardRowIds.has(connection.storyboardRowId))
+            .filter((connection) => connection.fromNodeId !== nodeId || !connection.fromHandleId?.startsWith("row:") || rowHandles.has(connection.fromHandleId))
+            .filter((connection) => connection.toNodeId !== nodeId || !connection.toHandleId?.startsWith("row:") || rowHandles.has(connection.toHandleId))
+            .filter((connection) => !(connection.toNodeId === nodeId && connection.relation === "storyboard-asset-reference"));
+        nextRows.forEach((row) => {
+            (row.assetBindings || []).forEach((binding) => {
+                nextConnections.push({
+                    id: nanoid(),
+                    fromNodeId: binding.nodeId,
+                    toNodeId: nodeId,
+                    toHandleId: `row:${row.id}`,
+                    relation: "storyboard-asset-reference",
+                    storyboardRowId: row.id,
+                });
+            });
+        });
+        nodesRef.current = nextNodes;
+        connectionsRef.current = nextConnections;
+        setNodes(nextNodes);
+        setConnections(nextConnections);
+    }, [connectionsRef, nodesRef, setConnections, setNodes]);
 
     const updateScriptRow = useCallback((nodeId: string, rowId: string, patch: Partial<StoryboardRow>) => {
         updateScriptRows(nodeId, (rows) => rows.map((row) => row.id === rowId ? invalidateEditedPromptVariables(row, { ...row, ...patch }) : row));
@@ -540,6 +589,7 @@ export function useCanvasStoryboard({
 
     return {
         addScriptRow,
+        importScriptRows,
         createAndGenerateScriptVideos,
         createScriptActionBoards,
         createScriptImageNodes,

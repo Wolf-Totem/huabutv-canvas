@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/service"
@@ -44,12 +45,12 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		account, err := svc.RedeemCredits(user, req.Code, c.ClientIP())
+		outcome, err := svc.Redeem(user, req.Code, c.ClientIP())
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"account": account})
+		ok(c, outcome)
 	})
 	r.POST("/wallet/checkin", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -192,6 +193,76 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"setting": setting})
+	})
+	r.POST("/admin/settings/email/test", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			Email  string `json:"email"`
+			Locale string `json:"locale"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := svc.AdminSendTestVerificationEmail(user, req.Email, req.Locale); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sent": true, "to": strings.TrimSpace(req.Email)})
+	})
+	r.GET("/admin/settings/sms", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		setting, err := svc.AdminSMSSetting(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.PATCH("/admin/settings/sms", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.SMSSettingRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		setting, err := svc.UpdateSMSSetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.POST("/admin/settings/sms/test", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			Phone string `json:"phone"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := svc.AdminSendTestSMS(user, req.Phone); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sent": true, "to": strings.TrimSpace(req.Phone)})
 	})
 
 	r.GET("/admin/channels/:id/models", func(c *gin.Context) {

@@ -57,8 +57,13 @@ type AdminUserPage struct {
 
 type AdminUser struct {
 	model.User
-	AvailableMicrocredits int64 `json:"availableMicrocredits"`
-	ReservedMicrocredits  int64 `json:"reservedMicrocredits"`
+	AvailableMicrocredits    int64      `json:"availableMicrocredits"`
+	ReservedMicrocredits     int64      `json:"reservedMicrocredits"`
+	PermanentActive          bool       `json:"permanentActive"`
+	AdvancedPlanSKU          string     `json:"advancedPlanSku,omitempty"`
+	AdvancedExpiresAt        *time.Time `json:"advancedExpiresAt,omitempty"`
+	EffectiveStoredFileBytes int64      `json:"effectiveStoredFileBytes"`
+	QuotaSource              string     `json:"quotaSource"`
 }
 
 type AdminChannelPage struct {
@@ -139,10 +144,13 @@ func (s *Service) RequireAdmin(user *model.User) error {
 	if user == nil {
 		return Unauthorized("请先登录")
 	}
-	if user.Role != model.UserRoleAdmin {
-		return Forbidden("需要管理员权限")
+	if user.Role == model.UserRoleAdmin {
+		return nil
 	}
-	return nil
+	if s.UserHasPermission(user, model.PermAdminAccess) {
+		return nil
+	}
+	return Forbidden("需要管理员权限")
 }
 
 func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUserPage, error) {
@@ -166,10 +174,41 @@ func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUse
 	for _, account := range accounts {
 		accountByUserID[account.UserID] = account
 	}
+	memberships, err := s.repo.UserMemberships(userIDs)
+	if err != nil {
+		return nil, err
+	}
+	membershipByUserID := make(map[string]model.UserMembership, len(memberships))
+	for _, row := range memberships {
+		membershipByUserID[row.UserID] = row
+	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		return nil, err
+	}
+	fallback := gigabytes(policy.Resource.StoredFileGB)
+	now := time.Now()
 	result := make([]AdminUser, 0, len(users))
 	for _, user := range users {
 		account := accountByUserID[user.ID]
-		result = append(result, AdminUser{User: user, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits})
+		item := AdminUser{User: user, AvailableMicrocredits: account.AvailableMicrocredits, ReservedMicrocredits: account.ReservedMicrocredits, EffectiveStoredFileBytes: fallback, QuotaSource: model.QuotaSourceGlobal}
+		if row, ok := membershipByUserID[user.ID]; ok {
+			item.PermanentActive = row.PermanentActive
+			if row.AdvancedExpiresAt != nil && row.AdvancedExpiresAt.After(now) {
+				item.AdvancedPlanSKU = row.AdvancedPlanSKU
+				item.AdvancedExpiresAt = row.AdvancedExpiresAt
+			}
+			if row.StorageOverrideBytes != nil {
+				item.EffectiveStoredFileBytes = applyStorageBonus(*row.StorageOverrideBytes, row.StorageBonusBytes)
+				item.QuotaSource = model.QuotaSourceOverride
+			} else if row.AdvancedExpiresAt != nil && row.AdvancedExpiresAt.After(now) && row.PlanStorageQuotaBytes > 0 {
+				item.EffectiveStoredFileBytes = applyStorageBonus(row.PlanStorageQuotaBytes, row.StorageBonusBytes)
+				item.QuotaSource = model.QuotaSourcePlan
+			} else {
+				item.EffectiveStoredFileBytes = applyStorageBonus(fallback, row.StorageBonusBytes)
+			}
+		}
+		result = append(result, item)
 	}
 	return &AdminUserPage{Users: result, Total: total, Page: page, Limit: limit}, nil
 }
@@ -225,8 +264,8 @@ func (s *Service) CreateAdminUser(actor *model.User, req CreateAdminUserRequest)
 			return nil, err
 		}
 	}
-	if req.Role != model.UserRoleAdmin && req.Role != model.UserRoleUser {
-		return nil, BadAuthRequest("\u7528\u6237\u89d2\u8272\u65e0\u6548")
+	if !model.ValidUserRole(req.Role) {
+		return nil, BadAuthRequest("用户角色无效")
 	}
 	if req.Status != model.UserStatusActive && req.Status != model.UserStatusDisabled {
 		return nil, BadAuthRequest("\u7528\u6237\u72b6\u6001\u65e0\u6548")
@@ -291,7 +330,7 @@ func (s *Service) UpdateUser(actor *model.User, userID string, req UpdateUserReq
 		return nil, BadAuthRequest("不能禁用当前管理员账号")
 	}
 	nextRole := user.Role
-	if req.Role == model.UserRoleAdmin || req.Role == model.UserRoleUser {
+	if model.ValidUserRole(req.Role) {
 		nextRole = req.Role
 	}
 	nextStatus := user.Status

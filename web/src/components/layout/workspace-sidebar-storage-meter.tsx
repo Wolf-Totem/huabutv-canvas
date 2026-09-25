@@ -1,16 +1,20 @@
+import { TicketPlus } from "lucide-react";
 import { Link } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
 import { accountStorageMeter } from "@/lib/account-storage-usage";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
+import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 
 export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean }) {
+    const { t } = useTranslation("sidebar");
     const query = useAccountFileStorageUsage();
     const meter = accountStorageMeter(query.data);
-    const usedText = query.data ? `已用 ${meter.usedLabel}` : query.isError ? "容量暂不可用" : "正在统计容量";
-    const remainingText = query.data ? (meter.full ? "容量已满" : `剩余 ${meter.remainingLabel}`) : "";
-    const totalText = query.data ? `共 ${meter.totalLabel}` : "";
+    const usedText = query.data ? t("storage.used", { value: meter.usedLabel }) : query.isError ? t("storage.unavailable") : t("storage.loading");
+    const remainingText = query.data ? (meter.full ? t("storage.full") : t("storage.remaining", { value: meter.remainingLabel })) : "";
+    const totalText = query.data ? t("storage.total", { value: meter.totalLabel }) : "";
     const summary = query.data ? `${usedText}，${remainingText}，${totalText}` : usedText;
 
     if (query.isError && !query.data) {
@@ -31,6 +35,7 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
     }
 
     return (
+        <div className={cn("app-workspace-sidebar-storage-wrap", collapsed && "is-collapsed")}>
         <Link
             to="/assets"
             className={cn(
@@ -68,5 +73,15 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
                 <span style={{ width: `${meter.percent}%` }} />
             </span>
         </Link>
+        <button
+            type="button"
+            className={cn("app-workspace-sidebar-storage-topup", collapsed && "is-collapsed")}
+            title="用兑换码充值容量"
+            aria-label="用兑换码充值容量"
+            onClick={() => openWorkspaceWallet({ focusRedeem: true })}
+        >
+            {collapsed ? <TicketPlus className="size-3.5" /> : t("storage.recharge")}
+        </button>
+        </div>
     );
 }

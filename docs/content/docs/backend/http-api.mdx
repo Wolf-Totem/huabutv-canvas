@@ -80,6 +80,12 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 `POST /api/admin/channels/:id/duplicate` 需要管理员权限，会复制指定系统渠道的连接配置、加密凭证、请求头、模型和价格档，生成新的渠道与模型 ID；复制渠道名称自动追加“ - 副本”。原渠道及其前台供应线路不受影响。
 
+## 会员订阅与存储配额
+
+`GET /api/auth/session` 增加 `membership`，积分开关关闭时仍返回。`GET /api/membership`、`GET /api/membership/products` 需要登录。`POST /api/payments/orders` 增加 `productKind=membership`，不依赖积分功能开关。`POST /api/wallet/redeem` 可核销订阅码；`redeemEnabled=false` 时在查码前返回 403。`reason=failed_precondition`（HTTP 409）用于高级订阅剩余超过 30 天、已拥有永久订阅、未完成订阅订单、订阅商品未定价。
+
+管理员：`GET/PATCH /api/admin/membership/products/:id`（只能改名称、说明、价格、上下架、排序）、`GET/PATCH /api/admin/settings/commerce-methods`、`GET/PATCH /api/admin/settings/support-contact`、`PATCH /api/admin/users/:id/storage-quota`、`POST /api/admin/users/:id/membership/grant`（`sku` 与 `idempotencyKey` 必填）。个人对象存储热路径要求永久订阅且平台 `allowUserS3=true`。
+
 ## 信封
 
 成功：

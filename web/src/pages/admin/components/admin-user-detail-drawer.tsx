@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { App, Button, Descriptions, Progress, Skeleton, Tabs } from "antd";
+import { App, Button, Descriptions, Input, InputNumber, Progress, Select, Skeleton, Tabs } from "antd";
 import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -7,11 +7,18 @@ import { formatCredits } from "@/constant/credits";
 import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
 import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
+import { grantAdminMembership, updateAdminUserStorageQuota } from "@/services/api/membership";
+import { formatMembershipStorage } from "@/lib/membership";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
 export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
     const { message } = App.useApp();
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
+    const [grantSku, setGrantSku] = useState("permanent");
+    const [grantNote, setGrantNote] = useState("");
+    const [granting, setGranting] = useState(false);
+    const [overrideGiB, setOverrideGiB] = useState<number | null>(null);
+    const [savingQuota, setSavingQuota] = useState(false);
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
     const [tasks, setTasks] = useState<AdminUserTask[]>([]);
     const [events, setEvents] = useState<AdminAuditEvent[]>([]);
@@ -33,7 +40,10 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
         setAuditPage(1);
         void getAdminUserDetail(userId)
             .then((nextDetail) => {
-                if (active) setDetail(nextDetail);
+                if (active) {
+                    setDetail(nextDetail);
+                    setOverrideGiB(nextDetail.membership?.storageOverrideBytes ? Math.round(nextDetail.membership.storageOverrideBytes / (1024 ** 3)) : null);
+                }
             })
             .catch((error) => active && message.error(error instanceof Error ? error.message : "读取用户详情失败"))
             .finally(() => active && setLoading(false));
@@ -119,14 +129,50 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                         items={[
                                             { key: "username", label: "用户名", children: `@${detail.user.username}` },
                                             { key: "email", label: "邮箱", children: detail.user.email || "未填写" },
-                                            { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : "普通用户" },
+                                            { key: "role", label: "角色", children: detail.user.role === "admin" ? "管理员" : detail.user.role === "agent" ? "代理" : "普通用户" },
                                             { key: "status", label: "状态", children: <AdminStatusBadge label={detail.user.status === "active" ? "启用" : "停用"} tone={detail.user.status === "active" ? "success" : "neutral"} /> },
                                             { key: "available", label: "可用积分", children: formatCredits(detail.account.availableMicrocredits) },
                                             { key: "reserved", label: "冻结积分", children: formatCredits(detail.account.reservedMicrocredits) },
                                             { key: "created", label: "注册时间", children: formatTime(detail.user.createdAt) },
                                             { key: "login", label: "最后登录", children: formatTime(detail.user.lastLoginAt) },
+                                            { key: "membership", label: "订阅", children: detail.membership?.permanentActive ? "永久订阅" : detail.membership?.advancedPlanSku || "未订阅" },
+                                            { key: "quotaSource", label: "容量来源", children: detail.quotaSource || detail.membership?.quotaSource || "global_default" },
                                         ]}
                                     />
+                                    <div className="rounded-md border border-border p-3">
+                                        <div className="mb-2 text-sm font-medium">赠送订阅 / 单人容量覆盖</div>
+                                        <div className="flex flex-wrap items-end gap-2">
+                                            <Select value={grantSku} onChange={setGrantSku} options={[{ value: "permanent", label: "永久订阅" }, { value: "advanced_month", label: "月卡" }, { value: "advanced_quarter", label: "季卡" }, { value: "advanced_year", label: "年卡" }]} className="w-36" />
+                                            <Input value={grantNote} onChange={(event) => setGrantNote(event.target.value)} placeholder="备注（可选）" className="w-48" />
+                                            <Button loading={granting} onClick={() => {
+                                                if (!userId) return;
+                                                setGranting(true);
+                                                void grantAdminMembership(userId, { sku: grantSku, idempotencyKey: crypto.randomUUID(), note: grantNote })
+                                                    .then((result) => {
+                                                        message.success("已赠送订阅");
+                                                        setDetail((current) => current ? { ...current, membership: result.membership, effectiveStoredFileBytes: result.membership.effectiveStoredFileBytes, quotaSource: result.membership.quotaSource } : current);
+                                                    })
+                                                    .catch((error) => message.error(error instanceof Error ? error.message : "赠送失败"))
+                                                    .finally(() => setGranting(false));
+                                            }}>赠送</Button>
+                                        </div>
+                                        <div className="mt-3 flex flex-wrap items-end gap-2">
+                                            <InputNumber value={overrideGiB ?? undefined} min={0} max={3072} addonAfter="GiB" placeholder="留空清除覆盖" onChange={(value) => setOverrideGiB(typeof value === "number" ? value : null)} />
+                                            <Button loading={savingQuota} onClick={() => {
+                                                if (!userId) return;
+                                                setSavingQuota(true);
+                                                const bytes = overrideGiB == null ? null : overrideGiB * (1024 ** 3);
+                                                void updateAdminUserStorageQuota(userId, bytes)
+                                                    .then(() => {
+                                                        message.success(bytes == null ? "已清除容量覆盖" : "已更新容量覆盖");
+                                                        return getAdminUserDetail(userId);
+                                                    })
+                                                    .then((nextDetail) => setDetail(nextDetail))
+                                                    .catch((error) => message.error(error instanceof Error ? error.message : "更新容量失败"))
+                                                    .finally(() => setSavingQuota(false));
+                                            }}>保存覆盖</Button>
+                                        </div>
+                                    </div>
                                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                                         {Object.entries({ 积分流水: detail.counts.ledgerEntries, 生成任务: detail.counts.tasks, 上游请求: detail.counts.apiCalls, 管理操作: detail.counts.auditEvents }).map(([label, value]) => (
                                             <div key={label} className="rounded-md border border-border p-3">
@@ -248,7 +294,7 @@ function quotaUsageItems(detail: AdminUserDetail) {
     const bytes = (value: number) => value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GB` : `${(value / 1024 ** 2).toFixed(1)} MB`;
     const number = (value: number) => new Intl.NumberFormat("zh-CN").format(value);
     return [
-        { label: "资源与附件", value: detail.storedFileBytes, limit: detail.quota.storedFileGB * 1024 ** 3, display: `${bytes(detail.storedFileBytes)} / ${detail.quota.storedFileGB} GB` },
+        { label: "资源与附件", value: detail.platformStoredFileBytes ?? detail.storedFileBytes, limit: detail.effectiveStoredFileBytes || detail.quota.storedFileGB * 1024 ** 3, display: `${bytes(detail.platformStoredFileBytes ?? detail.storedFileBytes)} / ${formatMembershipStorage(detail.effectiveStoredFileBytes || detail.quota.storedFileGB * 1024 ** 3)}` },
         { label: "今日上传（UTC）", value: detail.dailyUploadBytes, limit: detail.quota.dailyUploadMB * 1024 ** 2, display: `${bytes(detail.dailyUploadBytes)} / ${detail.quota.dailyUploadMB} MB` },
         { label: "画布、素材与会话数据", value: structuredBytes, limit: detail.quota.structuredDataMB * 1024 ** 2, display: `${bytes(structuredBytes)} / ${detail.quota.structuredDataMB} MB` },
         { label: "任务与请求日志数据", value: detail.storageUsage.taskBytes, limit: detail.quota.taskDataGB * 1024 ** 3, display: `${bytes(detail.storageUsage.taskBytes)} / ${detail.quota.taskDataGB} GB` },

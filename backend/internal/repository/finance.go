@@ -23,6 +23,9 @@ var (
 	ErrBillingStateConflict    = errors.New("billing state conflict")
 	ErrBillingUsageUnavailable = errors.New("billing usage unavailable")
 	ErrChannelModelInUse       = errors.New("channel model is in use")
+	ErrTicketConsumed          = errors.New("generation ticket already consumed")
+	ErrTicketExpired           = errors.New("generation ticket expired")
+	ErrTicketNotFound          = errors.New("generation ticket not found")
 )
 
 // 先抢占唯一业务键再更新账户，确保注册和签到奖励在多实例并发下只入账一次。
@@ -396,7 +399,7 @@ func (r *Repository) CreditLedger(userID string, entryType string, limit int, of
 	query := r.db.Model(&model.CreditLedgerEntry{}).Where("user_id = ? AND type <> ?", userID, model.CreditLedgerReserve)
 	switch entryType {
 	case "income":
-		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus})
+		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus, model.CreditLedgerStreamerRebate})
 	case "consume":
 		query = query.Where("type = ?", model.CreditLedgerConsume)
 	case "refund":
@@ -460,9 +463,11 @@ func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, o
 				return err
 			}
 		}
+		ticketExpires := time.Now().Add(10 * time.Minute)
 		updates := map[string]any{
 			"status": model.TaskStatusQueued, "stage": "等待队列调度", "progress": 5, "error": "", "result_json": "",
 			"text_draft": "", "started_at": nil, "completed_at": nil,
+			"ticket_jti": newRepositoryID(), "ticket_expires_at": ticketExpires, "ticket_consumed_at": nil,
 			"provider_request_id": "", "poll_stage": "", "next_poll_at": nil,
 			"provider_cancel_status": "", "provider_cancel_error": "", "provider_cancel_attempts": 0,
 			"provider_cancel_requested_at": nil, "provider_cancelled_at": nil, "provider_cancel_next_check_at": nil,
@@ -848,7 +853,13 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 			return errors.Join(err, usageErr)
 		}
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if rebateErr := r.ApplyStreamerConsumptionRebate(id); rebateErr != nil {
+		return rebateErr
+	}
+	return nil
 }
 
 // RestoreRefundedBillingOrder compensates a billing order that was refunded
@@ -859,7 +870,7 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 // The conditional refunded -> settled update keeps concurrent/repeated manual
 // recovery requests idempotent.
 func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID string) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var order model.BillingOrder
 		if err := tx.First(&order, "id = ?", id).Error; err != nil {
 			return err
@@ -954,6 +965,10 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			Note:                       "人工查询确认上游成功，退款订单重新扣费",
 		}).Error
 	})
+	if err != nil {
+		return err
+	}
+	return r.ApplyStreamerConsumptionRebate(id)
 }
 
 func zeroPricedTokenOrder(order model.BillingOrder) bool {
@@ -1176,7 +1191,15 @@ func (r *Repository) AdminRedeemCodes(batchID string, status string, limit int, 
 }
 
 func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP string) (*model.CreditAccount, error) {
-	var account model.CreditAccount
+	result, err := r.RedeemCodeWithHooks(userID, codeHash, redeemedIP, RedeemHooks{})
+	if err != nil {
+		return nil, err
+	}
+	return result.Account, nil
+}
+
+func (r *Repository) RedeemCodeWithHooks(userID string, codeHash string, redeemedIP string, hooks RedeemHooks) (*RedeemResult, error) {
+	var result RedeemResult
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var code model.RedeemCode
 		if err := tx.First(&code, "code_hash = ?", codeHash).Error; err != nil {
@@ -1184,6 +1207,14 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 				return ErrRedeemCodeInvalid
 			}
 			return err
+		}
+		if _, err := lockUserMembership(tx, userID); err != nil {
+			return err
+		}
+		if hooks.BeforeApply != nil {
+			if err := hooks.BeforeApply(tx, &code); err != nil {
+				return err
+			}
 		}
 		now := time.Now()
 		query := tx.Model(&model.RedeemCode{}).Where("id = ? AND status = ?", code.ID, model.RedeemCodeUnused)
@@ -1197,33 +1228,60 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 		if updated.RowsAffected != 1 {
 			return ErrRedeemCodeInvalid
 		}
-		account = model.CreditAccount{UserID: userID}
+		account := model.CreditAccount{UserID: userID}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&model.CreditAccount{}).Where("user_id = ?", userID).Updates(map[string]any{
-			"available_microcredits": gorm.Expr("available_microcredits + ?", code.AmountMicrocredits),
-			"version":                gorm.Expr("version + 1"),
-			"updated_at":             now,
-		}).Error; err != nil {
+		if code.AmountMicrocredits > 0 {
+			if err := tx.Model(&model.CreditAccount{}).Where("user_id = ?", userID).Updates(map[string]any{
+				"available_microcredits": gorm.Expr("available_microcredits + ?", code.AmountMicrocredits),
+				"version":                gorm.Expr("version + 1"),
+				"updated_at":             now,
+			}).Error; err != nil {
+				return err
+			}
+			if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
+				return err
+			}
+			if err := tx.Create(&model.CreditLedgerEntry{
+				ID:                         newRepositoryID(),
+				UserID:                     userID,
+				Type:                       model.CreditLedgerRedeem,
+				AmountMicrocredits:         code.AmountMicrocredits,
+				AvailableDeltaMicrocredits: code.AmountMicrocredits,
+				AvailableAfterMicrocredits: account.AvailableMicrocredits,
+				ReservedAfterMicrocredits:  account.ReservedMicrocredits,
+				RedeemCodeID:               code.ID,
+				Note:                       "兑换码充值",
+			}).Error; err != nil {
+				return err
+			}
+		} else if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
 			return err
 		}
-		if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
-			return err
+		if model.NormalizeRedeemKind(code.Kind) == model.RedeemKindMembership {
+			_, storage, days, _ := model.MembershipSKUSpec(code.PlanSKU)
+			if err := r.ApplyMembershipGrant(tx, userID, model.MembershipGrantSnapshot{
+				ProductID: code.BatchID, PlanSKU: code.PlanSKU, CreditsMicrocredits: code.AmountMicrocredits,
+				StorageQuotaBytes: storage, DurationDays: days,
+				Source: model.MembershipGrantSourceRedeem, RedeemCodeID: code.ID, Note: "兑换码开通订阅",
+			}); err != nil {
+				return err
+			}
 		}
-		return tx.Create(&model.CreditLedgerEntry{
-			ID:                         newRepositoryID(),
-			UserID:                     userID,
-			Type:                       model.CreditLedgerRedeem,
-			AmountMicrocredits:         code.AmountMicrocredits,
-			AvailableDeltaMicrocredits: code.AmountMicrocredits,
-			AvailableAfterMicrocredits: account.AvailableMicrocredits,
-			ReservedAfterMicrocredits:  account.ReservedMicrocredits,
-			RedeemCodeID:               code.ID,
-			Note:                       "兑换码充值",
-		}).Error
+		if model.NormalizeRedeemKind(code.Kind) == model.RedeemKindStorage {
+			if err := tx.Model(&model.UserMembership{}).Where("user_id = ?", userID).Updates(map[string]any{
+				"storage_bonus_bytes": gorm.Expr("storage_bonus_bytes + ?", code.StorageQuotaBytes),
+				"updated_at":          now,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		result.Account = &account
+		result.Code = code
+		return nil
 	})
-	return &account, err
+	return &result, err
 }
 
 func newRepositoryID() string {

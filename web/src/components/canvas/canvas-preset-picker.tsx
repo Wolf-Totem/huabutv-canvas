@@ -2,9 +2,8 @@ import { useMemo, useState } from "react";
 import { Input, Popover } from "antd";
 import { LayoutTemplate, Search, WandSparkles } from "lucide-react";
 
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { CANVAS_BUILTIN_PRESETS, type CanvasPromptPreset } from "@/lib/prompts";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasGenerationMode } from "@/types/canvas";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 
@@ -29,7 +28,7 @@ export function CanvasPresetPicker({
     dense?: boolean;
     appearance?: "default" | "quiet";
 }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const [internalOpen, setInternalOpen] = useState(false);
     const [query, setQuery] = useState("");
     const actualOpen = open ?? internalOpen;

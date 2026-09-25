@@ -58,3 +58,7 @@ func Unauthorized(message string) *AppError {
 func Forbidden(message string) *AppError {
 	return NewAppError(403, message)
 }
+
+func FailedPrecondition(message string) *AppError {
+	return &AppError{Status: CodeConflict, Code: CodeConflict, Reason: ReasonFailedPrecondition, Message: message}
+}

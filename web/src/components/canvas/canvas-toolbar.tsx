@@ -13,7 +13,7 @@ import { ToolbarSettingsModal } from "@/components/canvas/toolbars/toolbar-setti
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import type { CanvasAppearance } from "@/lib/canvas/canvas-appearance";
-import { canvasThemes, type CanvasBackgroundMode, type CanvasTheme } from "@/lib/canvas-theme";
+import { type CanvasBackgroundMode, type CanvasTheme, useCanvasColorTheme } from "@/lib/canvas-theme";
 import { defaultToolbarPrefs, readToolbarPrefs, resolveToolbarEntries, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
@@ -53,6 +53,7 @@ export function CanvasToolbar({
     onShowImageInfoChange,
     onOpenMyAssets,
     onOpenProjectCharacters,
+    onOpenWorkspace,
 }: {
     selectedCount: number;
     workspaceMode: CanvasWorkspaceMode;
@@ -88,12 +89,13 @@ export function CanvasToolbar({
     onShowImageInfoChange: (show: boolean) => void;
     onOpenMyAssets: () => void;
     onOpenProjectCharacters: () => void;
+    onOpenWorkspace?: () => void;
 }) {
     const rootRef = useRef<HTMLDivElement>(null);
     const { bringToFront, zIndex } = useCanvasOverlayLayer("main-toolbar", "var(--z-toolbar)");
     const dockRef = useRef<HTMLDivElement>(null);
     const colorTheme = useActiveTheme();
-    const theme = canvasThemes[colorTheme];
+    const theme = useCanvasColorTheme();
     const [addOpen, setAddOpen] = useState(false);
     const [appearanceOpen, setAppearanceOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -152,6 +154,7 @@ export function CanvasToolbar({
         onUpload,
         onOpenMyAssets,
         onOpenProjectCharacters,
+        onOpenWorkspace,
         onBackgroundModeChange,
         onShowImageInfoChange,
         onToggleAddPanel: (event: ReactMouseEvent<HTMLElement>) => { placePanel(event); setAppearanceOpen(false); setSettingsOpen(false); setAddOpen((value) => !value); },

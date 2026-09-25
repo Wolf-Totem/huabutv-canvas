@@ -1,9 +1,8 @@
 import { ArrowRight, CheckCircle2, CircleAlert, Image as ImageIcon, LoaderCircle, RefreshCw, ScanSearch } from "lucide-react";
 
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { ART_CRITIQUE_PLUGIN_ID, artCritiqueSourceFingerprint, artCritiqueStageLabel, createDefaultArtCritiqueState, isArtCritiqueImageInput, type ArtCritiqueNodeState } from "@/lib/art-critique/contracts";
 import { usePluginStore } from "@/stores/use-plugin-store";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 import { useCanvasNodeActions } from "../canvas-node-action-context";
@@ -14,7 +13,7 @@ type ArtCritiqueNodeProps = {
 };
 
 export function ArtCritiqueNodeContent({ node }: ArtCritiqueNodeProps) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const installations = usePluginStore((state) => state.installations);
     const { openArtCritique } = useCanvasNodeActions();
     const imageInputs = useUpstreamNodes(node.id).filter(isArtCritiqueImageInput);

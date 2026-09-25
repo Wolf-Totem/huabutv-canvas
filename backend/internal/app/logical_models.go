@@ -40,6 +40,8 @@ type LogicalModelRequest struct {
 	Routes         []LogicalRouteRequest `json:"routes"`
 	// SourceChannelModelID 仅供系统渠道同步流程使用，前台模型不再拥有独立的能力和价格真相。
 	SourceChannelModelID string `json:"-"`
+	AgentShareEnabled    *bool  `json:"agentShareEnabled"`
+	AgentShareBps        *int   `json:"agentShareBps"`
 }
 type LogicalRouteRequest struct {
 	ChannelModelID string `json:"channelModelId"`
@@ -108,6 +110,8 @@ type AdminLogicalModel struct {
 	RevisionVersion    int                 `json:"revisionVersion"`
 	ConfigurationError string              `json:"configurationError,omitempty"`
 	AvailabilityError  string              `json:"availabilityError,omitempty"`
+	AgentShareEnabled  bool                `json:"agentShareEnabled"`
+	AgentShareBps      int                 `json:"agentShareBps"`
 	Routes             []AdminLogicalRoute `json:"routes"`
 }
 
@@ -413,7 +417,11 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 	for _, channelModel := range graph.ChannelModels {
 		channelModelByID[channelModel.ID] = channelModel
 	}
-	admin := AdminLogicalModel{PublicLogicalModel: publicLogicalModel(cachedLogicalModel{Model: item, ProductSpec: productSpec, Defaults: map[string]any{}}, false), Enabled: item.Enabled, ActiveRevisionID: graph.Revision.ID, RevisionVersion: graph.Revision.Version, Routes: []AdminLogicalRoute{}}
+	shareBps := item.AgentShareBps
+	if shareBps <= 0 {
+		shareBps = model.DefaultAgentShareBps
+	}
+	admin := AdminLogicalModel{PublicLogicalModel: publicLogicalModel(cachedLogicalModel{Model: item, ProductSpec: productSpec, Defaults: map[string]any{}}, false), Enabled: item.Enabled, ActiveRevisionID: graph.Revision.ID, RevisionVersion: graph.Revision.Version, AgentShareEnabled: item.AgentShareEnabled, AgentShareBps: shareBps, Routes: []AdminLogicalRoute{}}
 	for _, route := range graph.Routes {
 		channelModel, channelOK := channelModelByID[route.ChannelModelID]
 		if !channelOK {
@@ -448,6 +456,8 @@ func (s *Service) buildAdminLogicalModel(item model.LogicalModel, graph *reposit
 	admin.ConfigurationError = logicalModelConfigurationError(productSpec, structuralRouteSpecs)
 	admin.AvailabilityError = logicalModelAvailabilityError(item.PricePolicy, productSpec, structuralRouteSpecs, settlementRouteSpecs)
 	admin.Available = len(settlementRouteSpecs) > 0 && admin.ConfigurationError == "" && admin.AvailabilityError == ""
+	admin.AgentShareEnabled = item.AgentShareEnabled
+	admin.AgentShareBps = shareBps
 	return &admin, nil
 }
 
@@ -687,6 +697,18 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	}
 	item.Enabled, item.SortOrder, item.PricePolicy, item.BillingMode = req.Enabled, req.SortOrder, pricePolicy, billingMode
 	item.UnitPriceMicrocredits, item.InputPriceMicrocredits, item.OutputPriceMicrocredits, item.CachedPriceMicrocredits = req.UnitPriceMicrocredits, req.InputPriceMicrocredits, req.OutputPriceMicrocredits, req.CachedPriceMicrocredits
+	if req.AgentShareEnabled != nil {
+		item.AgentShareEnabled = *req.AgentShareEnabled
+	}
+	if req.AgentShareBps != nil {
+		if *req.AgentShareBps < 100 || *req.AgentShareBps > 10000 {
+			return nil, nil, nil, false, BadAuthRequest("模型代理定价比需在 1% 到 100% 之间")
+		}
+		item.AgentShareBps = *req.AgentShareBps
+	}
+	if item.AgentShareBps <= 0 {
+		item.AgentShareBps = model.DefaultAgentShareBps
+	}
 	if req.LegacyModelIDs != nil {
 		legacyJSON, marshalErr := json.Marshal(normalizeLegacyModelIDs(req.LegacyModelIDs))
 		if marshalErr != nil {

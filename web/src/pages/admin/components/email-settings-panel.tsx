@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
-import { getAdminEmailSetting, updateAdminEmailSetting, type EmailSetting } from "@/services/api/wallet";
+import { getAdminEmailSetting, sendAdminEmailTest, updateAdminEmailSetting, type EmailSetting } from "@/services/api/wallet";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 
@@ -29,6 +29,8 @@ export default function EmailSettingsPanel() {
     const [draftEnabled, setDraftEnabled] = useState(false);
     const [loadError, setLoadError] = useState("");
     const [saveError, setSaveError] = useState("");
+    const [testEmail, setTestEmail] = useState("");
+    const [testing, setTesting] = useState(false);
     const [form] = Form.useForm<EmailFormValues>();
     const requestVersionRef = useRef(0);
     const navigationConfirmOpenRef = useRef(false);
@@ -181,6 +183,31 @@ export default function EmailSettingsPanel() {
         }
     };
 
+    const sendTest = async () => {
+        const email = testEmail.trim();
+        if (!email) {
+            message.error("请填写测试收件邮箱");
+            return;
+        }
+        if (dirty) {
+            message.error("请先保存当前邮件配置，再发送测试邮件");
+            return;
+        }
+        if (!setting.enabled) {
+            message.error("请先保存并启用邮件服务");
+            return;
+        }
+        setTesting(true);
+        try {
+            const result = await sendAdminEmailTest(email);
+            message.success(`测试验证码已发到 ${result.to || email}，请查收（含垃圾箱）`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "测试邮件发送失败");
+        } finally {
+            setTesting(false);
+        }
+    };
+
     const toggleEnabled = (enabled: boolean) => {
         if (!setting || saving) return;
         form.setFieldValue("enabled", enabled);
@@ -241,6 +268,18 @@ export default function EmailSettingsPanel() {
                     ) : null}
                     <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={saving} onClick={requestRefresh}>
                         刷新状态
+                    </Button>
+                    <Input
+                        value={testEmail}
+                        onChange={(event) => setTestEmail(event.target.value)}
+                        placeholder="测试收件邮箱"
+                        autoComplete="email"
+                        inputMode="email"
+                        style={{ width: 220 }}
+                        disabled={saving || testing}
+                    />
+                    <Button icon={<Send className="size-4" />} loading={testing} disabled={saving || dirty || !setting.enabled} onClick={() => void sendTest()}>
+                        发送测试邮件
                     </Button>
                 </div>
             </div>
@@ -320,7 +359,7 @@ export default function EmailSettingsPanel() {
                         className="admin-email-section admin-email-configuration-section"
                         icon={<Server className="size-4" aria-hidden="true" />}
                         title="2. 配置 SMTP 连接与发件身份"
-                        description="填写邮件服务器、身份验证和发件人信息。保存不会主动探测或发送测试邮件。"
+                        description="填写邮件服务器、身份验证和发件人信息。保存后可用右上角发送测试验证码邮件。"
                         status={<AdminStatusBadge label={dirty ? "待保存" : smtpReady ? "已配置" : "待配置"} tone={dirty ? "warning" : smtpReady ? "success" : "neutral"} />}
                         footer={
                             <>
@@ -343,9 +382,26 @@ export default function EmailSettingsPanel() {
                     >
                             <div className="admin-email-form-section">
                                 <FormSectionTitle icon={<Server className="size-4" />} title="服务器连接" description="填写 SMTP 主机、端口和传输加密；STARTTLS 通常使用 587，直接 TLS 通常使用 465。" />
+                                <div className="mb-3">
+                                    <Button
+                                        onClick={() => {
+                                            form.setFieldsValue({
+                                                host: "smtp.mx.cloudflare.net",
+                                                port: 465,
+                                                encryption: "tls",
+                                                username: "api_token",
+                                                fromEmail: String(form.getFieldValue("fromEmail") || "").trim() || "noreply@jiasuapi.com",
+                                            });
+                                            setDirty(hasEmailChanges(form.getFieldsValue(true), setting));
+                                        }}
+                                    >
+                                        填入 Cloudflare Email Sending
+                                    </Button>
+                                    <p className="mt-2 text-xs text-foreground/55">使用已在 Cloudflare 开通的 jiasuapi.com 发信。用户名固定为 api_token，密码填写具备 Email Sending 权限的 API Token。</p>
+                                </div>
                                 <div className="admin-email-form-grid is-connection">
-                                    <Form.Item name="host" label="SMTP 主机" extra="仅填写主机名或 IP，不包含协议和端口。">
-                                        <Input autoComplete="off" placeholder="smtp.example.com" />
+                                    <Form.Item name="host" label="SMTP 主机" extra="仅填写主机名或 IP，不包含协议和端口。Cloudflare Email Sending 为 smtp.mx.cloudflare.net。">
+                                        <Input autoComplete="off" placeholder="smtp.mx.cloudflare.net" />
                                     </Form.Item>
                                     <Form.Item
                                         name="port"
@@ -373,10 +429,10 @@ export default function EmailSettingsPanel() {
                             <div className="admin-email-form-section">
                                 <FormSectionTitle icon={<KeyRound className="size-4" />} title="SMTP 身份验证" description="服务器要求登录时填写账号和密码；密码留空会保留服务端已配置值。" />
                                 <div className="admin-email-form-grid">
-                                    <Form.Item name="username" label="SMTP 用户名" extra="通常是完整邮箱地址；无需验证的服务器可留空。">
-                                        <Input autoComplete="off" placeholder="mailer@example.com" />
+                                    <Form.Item name="username" label="SMTP 用户名" extra="通常是完整邮箱地址。Cloudflare Email Sending 必须填写字面量 api_token。">
+                                        <Input autoComplete="off" placeholder="api_token" />
                                     </Form.Item>
-                                    <Form.Item name="password" label={setting.hasPassword ? `SMTP 密码（${configuredSecretText}）` : "SMTP 密码"} extra="只在需要新增或替换密码时填写。">
+                                    <Form.Item name="password" label={setting.hasPassword ? `SMTP 密码（${configuredSecretText}）` : "SMTP 密码"} extra="只在需要新增或替换密码时填写。Cloudflare Email Sending 使用具备 Email Sending 权限的 API Token。">
                                         <Input.Password autoComplete="new-password" placeholder={setting.hasPassword ? "留空保留原密码" : "SMTP 密码或服务商授权码"} />
                                     </Form.Item>
                                 </div>

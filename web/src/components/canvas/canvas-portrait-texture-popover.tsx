@@ -1,14 +1,13 @@
 import { Popover } from "antd";
 import { SlidersHorizontal } from "lucide-react";
 
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import {
     PORTRAIT_TEXTURE_GROUPS,
     normalizePortraitTextureSettings,
     type PortraitTextureSettingKey,
     type PortraitTextureSettings,
 } from "@/lib/canvas/canvas-portrait-texture";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 type CanvasPortraitTexturePopoverProps = {
     value: unknown;
@@ -17,7 +16,7 @@ type CanvasPortraitTexturePopoverProps = {
 };
 
 export function CanvasPortraitTexturePopover({ value, placement = "topLeft", onChange }: CanvasPortraitTexturePopoverProps) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const settings = normalizePortraitTextureSettings(value);
 
     const updateSetting = (key: PortraitTextureSettingKey, nextValue: string) => {

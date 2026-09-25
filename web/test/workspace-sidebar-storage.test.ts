@@ -55,12 +55,20 @@ describe("workspace sidebar storage meter", () => {
 
         expect(sidebar).toContain("<WorkspaceSidebarStorageMeter collapsed={collapsed} />");
         expect(sidebar.indexOf("WorkspaceSidebarStorageMeter")).toBeLessThan(sidebar.indexOf("app-workspace-sidebar-profile-row"));
+        expect(sidebar).toContain("membershipStatusKey");
+        expect(sidebar).toContain('to="/settings"');
+        expect(sidebar).toContain("打开会员与充值");
+        expect(sidebar).toContain("getPopupContainer={() => document.body}");
         expect(meter).toContain("已用 ${meter.usedLabel}");
         expect(meter).toContain("剩余 ${meter.remainingLabel}");
         expect(meter).toContain("共 ${meter.totalLabel}");
         expect(meter).toContain('to="/assets"');
+        expect(meter).toContain("充值");
+        expect(meter).toContain("focusRedeem: true");
         expect(css).toMatch(/\.app-workspace-sidebar-storage-used\s*\{[^}]*font-variant-numeric:\s*tabular-nums/s);
         expect(css).toContain(".app-workspace-sidebar-storage.is-warn");
         expect(css).toContain(".app-workspace-sidebar-storage.is-critical");
+        expect(css).toContain(".app-workspace-sidebar-storage-wrap");
+        expect(css).toContain(".app-workspace-sidebar-storage-topup");
     });
 });

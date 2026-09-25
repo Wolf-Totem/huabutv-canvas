@@ -217,7 +217,11 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		if order.AmountFen != evidence.AmountFen || order.Currency != evidence.Currency || strings.TrimSpace(evidence.ProviderTradeNo) == "" {
 			return ErrPaymentEvidenceMismatch
 		}
-		if order.AmountFen <= 0 || order.CreditsMicrocredits <= 0 {
+		kind := model.NormalizeProductKind(order.ProductKind)
+		if order.AmountFen <= 0 {
+			return ErrPaymentOrderStateConflict
+		}
+		if kind != model.ProductKindMembership && order.CreditsMicrocredits <= 0 {
 			return ErrPaymentOrderStateConflict
 		}
 		if order.Status == model.PaymentOrderCredited {
@@ -233,48 +237,56 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		if duplicate > 0 {
 			return ErrPaymentTradeNoConflict
 		}
-		referenceKey := "payment:" + providerID + ":" + merchantOrderNo
-		entry := model.CreditLedgerEntry{
-			ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerPaymentTopup,
-			AmountMicrocredits: order.CreditsMicrocredits, PaymentOrderID: order.ID,
-			ReferenceKey: &referenceKey, Note: order.ProductName + " · 在线支付充值",
-		}
-		created := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "reference_key"}}, DoNothing: true}).Create(&entry)
-		if created.Error != nil {
-			return created.Error
-		}
-		if created.RowsAffected == 0 {
-			// A credited order is handled above. Reaching this branch means a
-			// ledger row exists while the order is still non-terminal, so treating
-			// the operation as successful would hide an inconsistent credit state.
-			return ErrPaymentOrderStateConflict
-		}
-		account := model.CreditAccount{UserID: order.UserID}
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
-			return err
-		}
 		now := time.Now()
-		accountUpdate := tx.Model(&model.CreditAccount{}).
-			Where("user_id = ? AND available_microcredits <= ?", order.UserID, maxPaymentCreditBalance-order.CreditsMicrocredits).
-			Updates(map[string]any{
-				"available_microcredits": gorm.Expr("available_microcredits + ?", order.CreditsMicrocredits),
-				"version":                gorm.Expr("version + 1"), "updated_at": now,
-			})
-		if accountUpdate.Error != nil {
-			return accountUpdate.Error
+		if order.CreditsMicrocredits > 0 {
+			referenceKey := "payment:" + providerID + ":" + merchantOrderNo
+			entry := model.CreditLedgerEntry{
+				ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerPaymentTopup,
+				AmountMicrocredits: order.CreditsMicrocredits, PaymentOrderID: order.ID,
+				ReferenceKey: &referenceKey, Note: order.ProductName + " · 在线支付充值",
+			}
+			created := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "reference_key"}}, DoNothing: true}).Create(&entry)
+			if created.Error != nil {
+				return created.Error
+			}
+			if created.RowsAffected == 0 {
+				return ErrPaymentOrderStateConflict
+			}
+			account := model.CreditAccount{UserID: order.UserID}
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
+				return err
+			}
+			accountUpdate := tx.Model(&model.CreditAccount{}).
+				Where("user_id = ? AND available_microcredits <= ?", order.UserID, maxPaymentCreditBalance-order.CreditsMicrocredits).
+				Updates(map[string]any{
+					"available_microcredits": gorm.Expr("available_microcredits + ?", order.CreditsMicrocredits),
+					"version":                gorm.Expr("version + 1"), "updated_at": now,
+				})
+			if accountUpdate.Error != nil {
+				return accountUpdate.Error
+			}
+			if accountUpdate.RowsAffected != 1 {
+				return ErrPaymentCreditOverflow
+			}
+			if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&entry).Updates(map[string]any{
+				"available_delta_microcredits": order.CreditsMicrocredits,
+				"available_after_microcredits": account.AvailableMicrocredits,
+				"reserved_after_microcredits":  account.ReservedMicrocredits,
+			}).Error; err != nil {
+				return err
+			}
 		}
-		if accountUpdate.RowsAffected != 1 {
-			return ErrPaymentCreditOverflow
-		}
-		if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&entry).Updates(map[string]any{
-			"available_delta_microcredits": order.CreditsMicrocredits,
-			"available_after_microcredits": account.AvailableMicrocredits,
-			"reserved_after_microcredits":  account.ReservedMicrocredits,
-		}).Error; err != nil {
-			return err
+		if kind == model.ProductKindMembership {
+			if err := r.ApplyMembershipGrant(tx, order.UserID, model.MembershipGrantSnapshot{
+				ProductID: order.ProductID, PlanSKU: order.PlanSKU, CreditsMicrocredits: order.CreditsMicrocredits,
+				StorageQuotaBytes: order.StorageQuotaBytes, DurationDays: order.MembershipDurationDays,
+				Source: model.MembershipGrantSourcePayment, PaymentOrderID: order.ID, Note: order.ProductName,
+			}); err != nil {
+				return err
+			}
 		}
 		paidAt := evidence.PaidAt
 		if paidAt.IsZero() {

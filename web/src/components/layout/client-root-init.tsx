@@ -62,6 +62,17 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         };
     }, [pluginStoreHydrated, setPluginStates, setRuntimeStatuses, userId]);
 
+    const cloudAgentEnabled = useUserStore((state) => state.features.cloudAgentEnabled);
+    useEffect(() => {
+        if (!userId || !cloudAgentEnabled) return;
+        const start = () => void import("@/services/agent-local-runtime").then((mod) => mod.ensureLocalAgentRuntime()).catch(() => undefined);
+        const idle = "requestIdleCallback" in window ? window.requestIdleCallback(start, { timeout: 4000 }) : window.setTimeout(start, 1200);
+        return () => {
+            if ("cancelIdleCallback" in window) window.cancelIdleCallback(idle as number);
+            else window.clearTimeout(idle as number);
+        };
+    }, [cloudAgentEnabled, userId]);
+
     useEffect(() => {
         initializeClientDiagnostics();
     }, []);

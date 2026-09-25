@@ -5,6 +5,7 @@ import { ApiError } from "@/services/api/request";
 
 const viewport = { width: 1280, height: 800 };
 const start = { left: 816, top: 68, width: 448, height: 720 };
+const roomy = { left: 240, top: 80, width: 400, height: 400 };
 
 describe("Agent window layout", () => {
     it("restores the saved size and position", () => {
@@ -24,12 +25,30 @@ describe("Agent window layout", () => {
     it("resizes one axis at a time on an edge", () => {
         expect(changeAgentPanelLayout(start, "west", -60, 150, viewport)).toEqual({ ...start, left: 756, width: 508 });
         expect(changeAgentPanelLayout(start, "north", -60, 150, viewport)).toEqual({ ...start, top: 218, height: 570 });
+        expect(changeAgentPanelLayout(roomy, "east", 80, 150, viewport)).toEqual({ ...roomy, width: 480 });
+        expect(changeAgentPanelLayout(roomy, "south", 80, 40, viewport)).toEqual({ ...roomy, height: 440 });
+    });
+    it("keeps the top/left anchor when resizing from bottom/right", () => {
+        const layout = changeAgentPanelLayout(roomy, "southeast", 80, -40, viewport);
+        expect(layout.left).toBe(roomy.left);
+        expect(layout.top).toBe(roomy.top);
+        expect(layout.width).toBe(480);
+        expect(layout.height).toBe(360);
+    });
+    it("grows into remaining space when dragging an outer edge against the viewport", () => {
+        const east = changeAgentPanelLayout(start, "east", 200, 0, viewport);
+        expect(east.width).toBe(648);
+        expect(east.left + east.width).toBe(viewport.width - 12);
+        const south = changeAgentPanelLayout(start, "south", 0, 200, viewport);
+        expect(south.height).toBe(776);
+        expect(south.top + south.height).toBe(viewport.height - 12);
     });
     it("limits resize to viewport and minimum readable size", () => {
         expect(changeAgentPanelLayout(start, "northwest", -10000, -10000, viewport)).toEqual({ left: 12, top: 12, width: 1252, height: 776 });
         const small = changeAgentPanelLayout(start, "northwest", 10000, 10000, viewport);
-        expect(small.width).toBe(360);
-        expect(small.height).toBe(420);
+        expect(small.width).toBe(240);
+        expect(small.height).toBe(200);
+        expect(changeAgentPanelLayout(start, "southeast", -10000, -10000, viewport)).toEqual({ left: start.left, top: start.top, width: 240, height: 200 });
     });
     it("keeps the title bar reachable when dragging beyond the screen", () => {
         expect(changeAgentPanelLayout(start, "move", -10000, -10000, viewport)).toEqual({ ...start, left: 12, top: 12 });

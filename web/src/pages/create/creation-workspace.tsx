@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ImageSizePicker } from "@/components/image-size-picker";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
@@ -6,6 +7,7 @@ import { App, Button, Dropdown, Popover } from "antd";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { useWorkspaceTopBarMount } from "@/components/layout/workspace-top-bar-extension";
+import { useNavigate } from "react-router";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { Reorder, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { ArrowDown, ArrowUp, Brain, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, MoreHorizontal, Music2, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, UserRound, WandSparkles, Waves, X } from "lucide-react";
@@ -35,6 +37,9 @@ import { modelCapabilityConfigFor, normalizeVideoValue, videoDurationOptions, ty
 import { mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import type { Skill } from "@/services/api/skills";
 import { resolveResourceUrl } from "@/services/api/resources";
+import { featuredCanvases, WORK_TAGS, type FeaturedCanvas } from "@/lib/plaza-catalog";
+import "@/pages/plaza/plaza-watch.css";
+import { ossProcessedImage } from "@/lib/oss-image";
 import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -44,7 +49,7 @@ import { creationAttachmentKind, creationMediaAspectRatio, removeCreationAttachm
 import { conversationTimestamp, isImageAttachment, isVideoAttachment } from "./creation-conversations";
 import { conversationTimeFormatter, countOptions, historyDayFormatter, messageTimeFormatter, modeLabels, qualityOptions, ratioOptions, resolutionOptions, shotScriptLabels, type CreationConversation, type CreationMessage, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import "./creation-product.css";
-import { creationFeaturedWorks, inspirationSource } from "./creation-inspirations";
+
 
 const CanvasPromptOptimizerDrawer = lazy(() => import("@/components/canvas/canvas-prompt-optimizer-drawer").then((module) => ({ default: module.CanvasPromptOptimizerDrawer })));
 
@@ -352,6 +357,7 @@ type ComposerProps = {
 type CreationReferenceFilter = "all" | "image" | "video" | "audio" | "file";
 
 export function CreationComposer(props: ComposerProps) {
+    const { t } = useTranslation("canvas");
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
@@ -378,19 +384,15 @@ export function CreationComposer(props: ComposerProps) {
     });
     const showCost = creditsEnabled && credits !== null;
     const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
-    const actionLabel = props.referenceReplacementBusy ? "正在替换参考图" : interactionBusy || (props.generationActive && !canSubmit) ? "生成中" : showCost ? `预计消耗 ${formattedCredits} 积分，发送` : "发送";
+    const actionLabel = props.referenceReplacementBusy ? t("composer.replacingRef") : interactionBusy || (props.generationActive && !canSubmit) ? t("composer.generating") : showCost ? t("composer.sendWithCost", { credits: formattedCredits }) : t("composer.send");
     // Send-button working state must span the WHOLE generation (not just the
     // submit-lock window): spinner + glow stay while a message is pending and
     // the composer is empty; typing a next prompt returns the arrow so the
     // user knows a new send is possible.
     const showWorkingSpinner = interactionBusy || (props.generationActive && !canSubmit);
     const showWorkingGlow = props.generationActive && !canSubmit;
-    const placeholder = props.mode === "text"
-        ? "描述你的故事、角色或想继续讨论的创意"
-        : props.mode === "image"
-            ? "描述画面、人物、场景、构图与风格"
-            : "描述镜头内容、运动、光线与节奏";
-    const emptyPlaceholder = "输入你的镜头、画面或故事。也可以添加参考图开始创作";
+    const placeholder = t(`composer.placeholder.${props.mode}`);
+    const emptyPlaceholder = t("composer.placeholder.empty");
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
     const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.videoProfile.operations.includes("image_to_video");
     const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;
@@ -585,17 +587,17 @@ export function CreationComposer(props: ComposerProps) {
                         aria-haspopup="dialog"
                     >
                         <WandSparkles />
-                        <span>优化</span>
+                        <span>{t("composer.optimize")}</span>
                     </button>
                 </Tooltip> : null}
-				<ModelPicker config={props.config} value={props.model} onChange={props.onModelChange} capability={props.mode} requirements={props.modelRequirements} className="creation-model-picker" placeholder={`选择${modeLabels[props.mode]}模型`} showSelectedPrice={false} showOptionPrices variant="creation" />
+				<ModelPicker config={props.config} value={props.model} onChange={props.onModelChange} capability={props.mode} requirements={props.modelRequirements} className="creation-model-picker" placeholder={t("composer.pickModel", { mode: t(`mode.${props.mode}`) })} showSelectedPrice={false} showOptionPrices variant="creation" />
                 {props.mode === "video" || (props.mode === "image" && imageSettingsSupported) ? <GenerationSettingsMenu {...props} /> : null}
                 {props.mode === "video" ? <DurationMenu profile={props.videoProfile} seconds={props.seconds} onChange={props.setSeconds} /> : null}
                 {props.mode === "text" ? <>
-                    <Tooltip title={interactionBusy ? "生成中，此开关将在下次发送时生效" : (props.textStreaming ? "流式输出已开启" : "流式输出已关闭")}><button type="button" className="creation-chat-control" aria-pressed={props.textStreaming} disabled={interactionBusy} onClick={() => props.setTextStreaming(!props.textStreaming)}><Waves /><span>流式</span></button></Tooltip>
-                    <Tooltip title={interactionBusy ? "生成中，此开关将在下次发送时生效" : (props.textThinking ? "思考已开启，会展示模型返回的推理摘要" : "开启模型思考")}><button type="button" className="creation-chat-control" aria-pressed={props.textThinking} disabled={interactionBusy} onClick={() => props.setTextThinking(!props.textThinking)}><Brain /><span>思考</span></button></Tooltip>
+                    <Tooltip title={t("composer.stream")}><button type="button" className="creation-chat-control" aria-pressed={props.textStreaming} disabled={interactionBusy} onClick={() => props.setTextStreaming(!props.textStreaming)}><Waves /><span>{t("composer.stream")}</span></button></Tooltip>
+                    <Tooltip title={t("composer.think")}><button type="button" className="creation-chat-control" aria-pressed={props.textThinking} disabled={interactionBusy} onClick={() => props.setTextThinking(!props.textThinking)}><Brain /><span>{t("composer.think")}</span></button></Tooltip>
                 </> : null}
-                {props.prompt.trim() || props.attachments.length || props.references.some((reference) => reference.active) ? <Tooltip title="清空提示词和参考内容"><button type="button" className="creation-chat-control is-clear" onClick={props.onClearComposer} disabled={interactionBusy} aria-label="清空提示词和参考内容"><Trash2 /><span>清空</span></button></Tooltip> : null}
+                {props.prompt.trim() || props.attachments.length || props.references.some((reference) => reference.active) ? <Tooltip title={t("composer.clear")}><button type="button" className="creation-chat-control is-clear" onClick={props.onClearComposer} disabled={interactionBusy} aria-label={t("composer.clear")}><Trash2 /><span>{t("composer.clear")}</span></button></Tooltip> : null}
             </div>
             <Button
                 type="text"
@@ -611,7 +613,7 @@ export function CreationComposer(props: ComposerProps) {
             >
                 {showWorkingGlow ? <WorkingGlow active color="var(--creation-text)" radius="999px" /> : null}
                 {showCost ? <span className="creation-submit-cost"><CreditSymbol /><span>{formattedCredits}</span></span> : null}
-                <span className="creation-submit-action" aria-hidden>{showWorkingSpinner ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}<span>{showWorkingSpinner ? "生成中" : "开始创作"}</span></span>
+                <span className="creation-submit-action" aria-hidden>{showWorkingSpinner ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}<span>{showWorkingSpinner ? t("composer.generating") : t("composer.start")}</span></span>
             </Button>
         </footer>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
@@ -640,11 +642,12 @@ export function CreationComposer(props: ComposerProps) {
 }
 
 export function CreationModeTabs({ mode, onModeChange, agentActive = false, onAgentSelect, orientation = "horizontal" }: { mode: CreationMode; onModeChange: (mode: CreationMode) => void; agentActive?: boolean; onAgentSelect?: () => void; orientation?: "horizontal" | "vertical" }) {
+    const { t } = useTranslation("canvas");
     const reducedMotion = useReducedMotion();
     const items: { mode: CreationMode; icon: ReactNode; label: string }[] = [
-        { mode: "video", icon: <Film />, label: "视频" },
-        { mode: "image", icon: <ImageIcon />, label: "图片" },
-        { mode: "text", icon: <MessageSquareText />, label: "文本" },
+        { mode: "video", icon: <Film />, label: t("mode.video") },
+        { mode: "image", icon: <ImageIcon />, label: t("mode.image") },
+        { mode: "text", icon: <MessageSquareText />, label: t("mode.text") },
     ];
     const indicator = (pressed: boolean) => pressed ? (
         <motion.span
@@ -655,7 +658,7 @@ export function CreationModeTabs({ mode, onModeChange, agentActive = false, onAg
         />
     ) : null;
     return <LayoutGroup id={`creation-mode-tabs-${orientation}`}>
-        <div className="creation-mode-tabs" role="group" aria-label="创作模式" data-active-mode={agentActive ? "agent" : mode} data-orientation={orientation} style={{ gridTemplateColumns: orientation === "vertical" ? "minmax(0, 1fr)" : `repeat(${onAgentSelect ? 4 : 3}, minmax(0, 1fr))` }}>
+        <div className="creation-mode-tabs" role="group" aria-label={t("mode.group")} data-active-mode={agentActive ? "agent" : mode} data-orientation={orientation} style={{ gridTemplateColumns: orientation === "vertical" ? "minmax(0, 1fr)" : `repeat(${onAgentSelect ? 4 : 3}, minmax(0, 1fr))` }}>
         {items.map((item) => (
             <button key={item.mode} type="button" className="creation-mode-button" data-mode={item.mode} aria-pressed={!agentActive && item.mode === mode} aria-label={`${item.label}生成`} onClick={() => onModeChange(item.mode)}>
                 {indicator(!agentActive && item.mode === mode)}
@@ -663,7 +666,7 @@ export function CreationModeTabs({ mode, onModeChange, agentActive = false, onAg
                 <span>{item.label}</span>
             </button>
         ))}
-        {onAgentSelect ? <button type="button" className="creation-mode-button" data-mode="agent" aria-pressed={agentActive} onClick={onAgentSelect}>{indicator(agentActive)}<Brain /><span>Agent</span><i className="creation-mode-spark" aria-hidden /></button> : null}
+        {onAgentSelect ? <button type="button" className="creation-mode-button" data-mode="agent" aria-pressed={agentActive} onClick={onAgentSelect}>{indicator(agentActive)}<Brain /><span>{t("mode.agent", { defaultValue: "画布Agent" })}</span><i className="creation-mode-spark" aria-hidden /></button> : null}
         </div>
     </LayoutGroup>;
 }
@@ -734,52 +737,53 @@ function DurationMenu({ profile, seconds, onChange }: { profile: VideoCapability
     </Popover>;
 }
 
-const creationEmptyBannerFrames = [
-    { src: "/short-drama-styles/cyberpunk-neon.jpg", caption: "镜头01 · 雨夜霓虹" },
-    { src: "/short-drama-styles/suspense-noir.jpg", caption: "镜头02 · 暗巷追逐" },
-    { src: "/short-drama-styles/retro-hong-kong.jpg", caption: "镜头03 · 天台重逢" },
-];
-
 export function CreationEmptyBanner() {
+    const { t } = useTranslation("canvas");
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    const frames = [
+        { src: "/short-drama-styles/cyberpunk-neon.jpg", caption: t("banner.caption1") },
+        { src: "/short-drama-styles/suspense-noir.jpg", caption: t("banner.caption2") },
+        { src: "/short-drama-styles/retro-hong-kong.jpg", caption: t("banner.caption3") },
+    ];
     return <div className="creation-empty-art" aria-hidden="true">
-        {creationEmptyBannerFrames.map((frame, index) => <figure key={frame.caption} className={`creation-empty-art-frame ${index === 1 ? "is-main" : index === 0 ? "is-back" : "is-front"}`}>
+        {frames.map((frame, index) => <figure key={frame.caption} className={`creation-empty-art-frame ${index === 1 ? "is-main" : index === 0 ? "is-back" : "is-front"}`}>
             <img src={frame.src} alt="" />
             <span>{frame.caption}</span>
         </figure>)}
-        <span className="creation-empty-art-caption"><span>{brandName}</span>把每一帧，交给镜头导演</span>
+        <span className="creation-empty-art-caption"><span>{brandName}</span>{t("banner.tagline")}</span>
     </div>;
 }
 
-const creationEmptySuggestions: Array<{ mode: CreationMode; icon: typeof Clapperboard; title: string; hint: string; prompt: string; openLibrary?: boolean }> = [
-    { mode: "video", icon: Clapperboard, title: "生成第一个镜头", hint: "描述画面、镜头运动与光线", prompt: "雨夜天台，镜头缓缓推近霓虹灯牌下的主角，她回眸看向镜头，强对比电影感布光" },
-    { mode: "image", icon: ImageIcon, title: "从参考图开始", hint: "上传风格图，生成同风格画面", prompt: "", openLibrary: true },
-    { mode: "text", icon: FileText, title: "续写故事", hint: "和 AI 讨论剧情、角色与对白", prompt: "帮我续写一个短剧故事，先聊聊剧情走向：" },
-    { mode: "video", icon: Sparkles, title: "引用技能增强", hint: "@技能 调用分镜、配音等专业能力", prompt: "调用分镜技能，帮我规划这个镜头的拍摄方案：" },
-];
-
 export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStartPrompt: (mode: CreationMode, prompt: string) => void; onOpenLibrary: () => void }) {
+    const { t } = useTranslation("canvas");
     const reducedMotion = useReducedMotion();
     const [hovered, setHovered] = useState<string | null>(null);
+    const suggestions = [
+        { key: "shot", mode: "video" as const, icon: Clapperboard, prompt: t("suggest.shot.prompt") },
+        { key: "ref", mode: "image" as const, icon: ImageIcon, prompt: "", openLibrary: true },
+        { key: "story", mode: "text" as const, icon: FileText, prompt: t("suggest.story.prompt") },
+        { key: "skill", mode: "video" as const, icon: Sparkles, prompt: t("suggest.skill.prompt") },
+    ];
     return <LayoutGroup id="creation-empty-suggest">
-        <div className="creation-empty-suggest" aria-label="快捷创作入口">
-        {creationEmptySuggestions.map((item) => {
+        <div className="creation-empty-suggest" aria-label={t("suggest.label")}>
+        {suggestions.map((item) => {
             const Icon = item.icon;
+            const title = t(`suggest.${item.key}.title`);
             const start = () => {
                 if (item.openLibrary) onOpenLibrary();
                 else onStartPrompt(item.mode, item.prompt);
             };
             return <motion.button
-                key={item.title}
+                key={item.key}
                 type="button"
                 className="suggest-card"
                 onClick={start}
-                onHoverStart={() => setHovered(item.title)}
+                onHoverStart={() => setHovered(item.key)}
                 onHoverEnd={() => setHovered(null)}
                 whileHover={reducedMotion ? undefined : { y: -2 }}
                 transition={aceternityMotion.spring.surface}
             >
-                {hovered === item.title ? (
+                {hovered === item.key ? (
                     <motion.span
                         layoutId="creation-suggest-hover"
                         className="suggest-card-hover"
@@ -789,8 +793,8 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
                 ) : null}
                 <span className="library-icon-tile suggest-icon"><Icon size={18} strokeWidth={2} /></span>
                 <span className="suggest-copy">
-                    <strong>{item.title}</strong>
-                    <span>{item.hint}</span>
+                    <strong>{title}</strong>
+                    <span>{t(`suggest.${item.key}.hint`)}</span>
                 </span>
             </motion.button>;
         })}
@@ -799,26 +803,63 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
 }
 
 
-export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
-    const [filter, setFilter] = useState<"all" | CreationMode>("all");
-    const [limit, setLimit] = useState(12);
-    const filtered = creationFeaturedWorks.filter((item) => filter === "all" || item.mode === filter);
-    return <section className="creation-featured-works" aria-labelledby="creation-featured-title">
-        <div className="creation-featured-heading">
-            <div><h2 id="creation-featured-title">精选灵感</h2></div>
-            <p>{creationFeaturedWorks.length} 个创意起点 · 点击填入提示词，不自动生成</p>
+export function CreationFeaturedWorks({ onStartPrompt: _onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
+    const { t } = useTranslation("canvas");
+    const navigate = useNavigate();
+    const [filter, setFilter] = useState<"all" | CreationMode | string>("all");
+    const [limit, setLimit] = useState(16);
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    const source = featuredCanvases();
+    const tags = WORK_TAGS;
+    const filtered = source.filter((item) => {
+        if (filter === "all") return true;
+        if (filter === "video" || filter === "image" || filter === "text") return item.mode === filter;
+        return item.tag === filter || item.tags.includes(tags.find((tag) => tag.slug === filter)?.name || "");
+    });
+
+    useEffect(() => {
+        const node = sentinelRef.current;
+        if (!node) return;
+        const observer = new IntersectionObserver((entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) setLimit((count) => (count < filtered.length ? count + 16 : count));
+        }, { rootMargin: "320px 0px" });
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [filtered.length, filter]);
+
+    return <section className="plaza-feed" id="plaza" aria-labelledby="creation-featured-title">
+        <div className="plaza-feed-head">
+            <h2 id="creation-featured-title">作品广场</h2>
+            <p>{source.length} 个作品</p>
         </div>
-        <div className="creation-inspiration-filters" role="group" aria-label="灵感类型">
-            {(["all", "video", "image", "text"] as const).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setLimit(12); }}>{value === "all" ? "全部灵感" : modeLabels[value]}<span>{creationFeaturedWorks.filter((item) => value === "all" || item.mode === value).length}</span></button>)}
+        <div className="plaza-feed-tags" role="group" aria-label="作品分类">
+            <button type="button" aria-pressed={filter === "all"} onClick={() => { setFilter("all"); setLimit(16); }}>全部作品</button>
+            {tags.map((item) => (
+                <button key={item.slug} type="button" aria-pressed={filter === item.slug} onClick={() => { setFilter(item.slug); setLimit(16); }}>{item.name}</button>
+            ))}
+            {(["video", "image", "text"] as const).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setLimit(16); }}>{t(`mode.${value}`)}</button>)}
         </div>
-        <div className="creation-featured-layout">
-                {filtered.slice(0, limit).map((item, index) => <button key={item.title} type="button" className={`product-collection-card creation-featured-card ${index === 0 ? "is-featured-hero" : ""}`} onClick={() => onStartPrompt(item.mode, item.prompt)}>
-                    <span className="creation-featured-media"><img src={item.image} alt="" loading="lazy" /><span className="creation-inspiration-overlay"><ArrowUp />使用这个创意</span></span>
-                    <span className="creation-featured-copy"><strong>{item.title}</strong><span>{item.description}</span><em><Sparkles />{item.source ? "开源改编 · CC0" : "原创提示词"} · {modeLabels[item.mode]}</em></span>
-                </button>)}
+        <div className="plaza-feed-grid">
+            {filtered.slice(0, limit).map((item) => <PlazaFeedCard key={item.slug} item={item} onOpen={(slug) => navigate(`/plaza/${encodeURIComponent(slug)}`)} />)}
         </div>
-        <footer className="creation-inspiration-footer">{limit < filtered.length ? <Button onClick={() => setLimit((count) => count + 12)}>展开更多灵感<ChevronDown /></Button> : <span>已展示全部 {filtered.length} 个创意</span>}<details><summary>模板与封面来源</summary><p>{inspirationSource.notice}</p><a href={inspirationSource.repository} target="_blank" rel="noreferrer">awesome-chatgpt-prompts · CC0</a></details></footer>
+        <div ref={sentinelRef} className="plaza-feed-sentinel" aria-hidden />
+        <footer className="creation-inspiration-footer">{limit < filtered.length ? <span>继续下滑加载更多</span> : <span>已展示全部 {filtered.length} 个作品</span>}</footer>
     </section>;
+}
+
+function PlazaFeedCard({ item, onOpen }: { item: FeaturedCanvas; onOpen: (slug: string) => void }) {
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const cover = ossProcessedImage(item.coverUrl, 720) || item.coverUrl;
+    return (
+        <button type="button" className="plaza-card" onClick={() => onOpen(item.slug)} onMouseEnter={() => { const node = videoRef.current; if (node) void node.play().catch(() => undefined); }} onMouseLeave={() => { const node = videoRef.current; if (node) { node.pause(); node.currentTime = 0; } }}>
+            <div className="plaza-card-media">
+                {cover ? <img src={cover} alt="" loading="lazy" referrerPolicy="no-referrer-when-downgrade" /> : null}
+                {item.previewUrl ? <video ref={videoRef} src={item.previewUrl} muted loop playsInline preload="metadata" poster={cover} /> : null}
+            </div>
+            <h3>{item.title}</h3>
+            <p>{item.subtitle}</p>
+        </button>
+    );
 }
 
 type CreationThinking = { title: string; hint: string; steps: string[]; activity: string };

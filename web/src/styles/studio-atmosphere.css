@@ -1,0 +1,142 @@
+/* Copied from wood-brook-valley-bay.grok.me/studio FX layers. */
+.studio-fx {
+    z-index: 0;
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    --accent: var(--primary, #d9e6f2);
+}
+
+.studio-fx-film,
+.studio-fx-still,
+.studio-fx-shade,
+.studio-fx-mesh,
+.studio-fx-canvas,
+.studio-fx-orb,
+.studio-fx-scan,
+.studio-fx-grain,
+.studio-fx-vignette {
+    position: absolute;
+    inset: 0;
+}
+
+.studio-fx-film,
+.studio-fx-still {
+    object-fit: cover;
+    width: 108%;
+    height: 108%;
+    inset: -4%;
+    transform: translate3d(calc((var(--mx, 50%) - 50%) * .04), calc((var(--my, 42%) - 42%) * .04), 0);
+    filter: saturate(1.05) contrast(1.08);
+}
+
+.studio-fx-still {
+    background-position: 50%;
+    background-size: cover;
+}
+
+.studio-fx-shade {
+    background:
+        linear-gradient(180deg, #00000038, #0000001a 42%, #00000061),
+        radial-gradient(900px 500px at var(--mx, 50%) var(--my, 30%), color-mix(in oklab, var(--accent) 22%, transparent), transparent 70%);
+}
+
+.studio-fx[data-mode="light"] .studio-fx-film,
+.studio-fx[data-mode="light"] .studio-fx-still {
+    filter: brightness(1.28) saturate(.62) contrast(.92);
+    opacity: .5;
+}
+
+.studio-fx[data-mode="light"] .studio-fx-shade {
+    background:
+        linear-gradient(180deg, #ffffff80, #ffffff9e 48%, #ffffffc7),
+        radial-gradient(900px 500px at var(--mx, 50%) var(--my, 30%), color-mix(in oklab, var(--accent) 14%, transparent), transparent 70%);
+}
+
+.studio-fx-mesh {
+    opacity: .35;
+    mix-blend-mode: screen;
+    animation: 36s linear infinite fx-spin;
+    background:
+        radial-gradient(circle at var(--mx, 50%) var(--my, 36%), color-mix(in oklab, var(--accent) 16%, transparent), transparent 42%),
+        repeating-conic-gradient(from 0deg at 50% 50%, transparent 0 12deg, color-mix(in oklab, var(--accent) 6%, transparent) 12deg 13deg);
+}
+
+.studio-fx[data-mode="light"] .studio-fx-mesh {
+    mix-blend-mode: multiply;
+    opacity: .22;
+}
+
+.studio-fx-canvas {
+    width: 100%;
+    height: 100%;
+}
+
+.studio-fx-orb {
+    width: 42vmax;
+    height: 42vmax;
+    left: var(--mx, 50%);
+    top: var(--my, 42%);
+    right: auto;
+    bottom: auto;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    filter: blur(8px);
+    opacity: .55;
+    background: radial-gradient(circle, color-mix(in oklab, var(--accent) 28%, transparent), transparent 68%);
+}
+
+.studio-fx-scan {
+    mix-blend-mode: overlay;
+    opacity: .5;
+    background: repeating-linear-gradient(#0000 0 3px, #ffffff06 3px 4px);
+    animation: 8s linear infinite fx-scan;
+}
+
+.studio-fx-grain {
+    opacity: .14;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.55'/></svg>");
+}
+
+.studio-fx-vignette {
+    background: radial-gradient(#0000 58%, #0000005c 100%);
+}
+
+.app-user-workspace[data-skin="apex"] .studio-fx-mesh,
+.full-screen-loader[data-skin="apex"] .studio-fx-mesh { animation-duration: 22s; }
+.app-user-workspace[data-skin="nexus"] .studio-fx-scan,
+.full-screen-loader[data-skin="nexus"] .studio-fx-scan { animation-duration: 5s; }
+.app-user-workspace[data-skin="lumen"] .studio-fx-orb,
+.full-screen-loader[data-skin="lumen"] .studio-fx-orb { opacity: .7; }
+.app-user-workspace[data-skin="prism"] .studio-fx-mesh,
+.full-screen-loader[data-skin="prism"] .studio-fx-mesh { opacity: .5; animation-duration: 14s; }
+.app-user-workspace[data-skin="radix"] .studio-fx-scan,
+.full-screen-loader[data-skin="radix"] .studio-fx-scan { background: repeating-linear-gradient(#0000 0 7px, #3ee0b014 7px 8px); }
+.app-user-workspace[data-skin="helix"] .studio-fx-orb,
+.full-screen-loader[data-skin="helix"] .studio-fx-orb { border-radius: 40%; }
+.app-user-workspace[data-skin="ember"] .studio-fx-orb,
+.full-screen-loader[data-skin="ember"] .studio-fx-orb { background: radial-gradient(circle, #e08a4a66, #0000 68%); }
+.app-user-workspace[data-skin="ink"] .studio-fx-scan,
+.full-screen-loader[data-skin="ink"] .studio-fx-scan { opacity: .25; }
+.app-user-workspace[data-skin="echo"] .studio-fx-mesh,
+.full-screen-loader[data-skin="echo"] .studio-fx-mesh { animation-duration: 28s; }
+
+@keyframes fx-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes fx-scan {
+    to { background-position: 0 48px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .studio-fx-mesh,
+    .studio-fx-scan,
+    .studio-fx-orb,
+    .studio-fx-film {
+        animation: none !important;
+        transform: none !important;
+    }
+}

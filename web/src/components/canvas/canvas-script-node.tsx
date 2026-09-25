@@ -5,9 +5,10 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { CheckboxGroup } from "@/components/ui/base/checkbox";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
+import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Upload, Video } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
+import { CanvasStoryboardImportModal } from "@/components/canvas/canvas-storyboard-import-modal";
 import { StoryboardAssetsCell } from "@/components/canvas/storyboard-assets-cell";
 import { ModelPicker } from "@/components/model-picker";
 import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
@@ -16,9 +17,8 @@ import { pipelineStatusLabel, type CanvasStoryboardPipelineProgress, type Storyb
 import { generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/generation-task-display";
 import { navigateToSettings } from "@/lib/settings-navigation";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { canvasThemes, useCanvasColorTheme } from "@/lib/canvas-theme";
 import { useEffectiveConfig } from "@/stores/use-config-store";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_COMPOSER_MIN_HEIGHT, STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import type {
     CanvasGenerationBatch,
@@ -95,6 +95,7 @@ export function CanvasScriptNodeContent({
     onAddRow,
     onRemoveRow,
     onUpdateRow,
+    onImportRows,
     onPromptChange,
     onGenerateScript,
     onModelChange,
@@ -125,6 +126,7 @@ export function CanvasScriptNodeContent({
     onAddRow: () => void;
     onRemoveRow: (rowId: string) => void;
     onUpdateRow: (rowId: string, patch: Partial<StoryboardRow>) => void;
+    onImportRows: (rows: StoryboardRow[], mode: "replace" | "append") => void;
     onPromptChange: (prompt: string) => void;
     onGenerateScript: (prompt: string) => void;
     onModelChange: (model: string) => void;
@@ -135,7 +137,7 @@ export function CanvasScriptNodeContent({
     onScrollTopChange: (scrollTop: number) => void;
     workspaceMode?: CanvasWorkspaceMode;
 }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const effectiveConfig = useEffectiveConfig();
     const generationConfig = buildGenerationConfig(effectiveConfig, node, "text");
     const simpleMode = workspaceMode === "simple";
@@ -175,6 +177,7 @@ export function CanvasScriptNodeContent({
               ? generationErrorMessage(node.metadata.errorDetails)
               : "";
     const [batchDetailsOpen, setBatchDetailsOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);
     const pipelineDisabled = !rows.length || node.metadata?.status === "loading" || hasActiveBatchItems;
     const missingImages = Math.max(0, pipeline.images.total - pipeline.images.created);
@@ -182,6 +185,8 @@ export function CanvasScriptNodeContent({
     const canMerge = pipeline.successfulVideoNodeIds.length >= 2 && pipeline.final.success === 0;
     const allRowIds = pipeline.rows.map((item) => item.row.id);
     const moreMenuItems: MenuProps["items"] = [
+        { key: "import", icon: <Upload className="size-3.5" />, label: "导入分镜提示词", onClick: () => setImportOpen(true) },
+        { type: "divider" },
         { key: "generate-images", icon: <ImageIcon className="size-3.5" />, label: "生成未完成分镜图", disabled: pipelineDisabled || pipeline.images.incomplete === 0, onClick: () => onGenerateImages(allRowIds) },
         { key: "generate-videos", icon: <Video className="size-3.5" />, label: "生成未完成视频", disabled: pipelineDisabled || pipeline.videos.incomplete === 0, onClick: () => onGenerateVideos(allRowIds) },
         {
@@ -290,6 +295,13 @@ export function CanvasScriptNodeContent({
                     <GenerationBatchDetails batch={batch} rows={rows} onRetryItem={(itemId) => onRetryBatchItem(batch.id, itemId)} />
                 </Modal>
             ) : null}
+            <CanvasStoryboardImportModal
+                open={importOpen}
+                nodes={nodes}
+                existingRowCount={rows.length}
+                onClose={() => setImportOpen(false)}
+                onImport={onImportRows}
+            />
             <StoryboardMiniPipeline pipeline={pipeline} theme={theme} rows={rows} />
             <div className="storyboard-header-gutter grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
                 <HeaderCell borderColor={theme.node.stroke} align="center">
@@ -363,7 +375,7 @@ export function CanvasScriptNodeContent({
                         <span className="flex flex-col items-center gap-2.5">
                             <span className="text-sm font-bold">＋ 添加第一个镜头</span>
                             <span className="text-[var(--fs-label)] font-medium" style={{ color: theme.node.faint }}>
-                                可先连接「故事梗概 / 项目画风」节点，或在下方输入提示词一键生成分镜表
+                                可先连接「故事梗概 / 项目画风」节点，导入 CSV 模板，或在下方输入提示词一键生成分镜表
                             </span>
                         </span>
                     </button>
@@ -605,6 +617,7 @@ export function CanvasScriptEditor({
     open,
     onClose,
     onUpdateRows,
+    onImportRows,
     onVisibleColumnsChange,
     onGenerateImages,
     onGenerateVideos,
@@ -615,6 +628,7 @@ export function CanvasScriptEditor({
     open: boolean;
     onClose: () => void;
     onUpdateRows: (rows: StoryboardRow[]) => void;
+    onImportRows: (rows: StoryboardRow[], mode: "replace" | "append") => void;
     onVisibleColumnsChange: (columns: StoryboardColumn[]) => void;
     onGenerateImages: (rowIds: string[]) => void;
     onGenerateVideos: (rowIds: string[]) => void;
@@ -622,6 +636,7 @@ export function CanvasScriptEditor({
 }) {
     const [query, setQuery] = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [importOpen, setImportOpen] = useState(false);
     const rows = node?.metadata?.storyboard?.rows || EMPTY_STORYBOARD_ROWS;
     const visibleColumns = resolveStoryboardVisibleColumns(node?.metadata?.storyboard?.visibleColumns);
     const videoInputMode = node?.metadata?.storyboardVideoInputMode || "direct";
@@ -723,6 +738,9 @@ export function CanvasScriptEditor({
                 <Input.Search className="w-72" allowClear placeholder="筛选画面、台词或提示词" value={query} onChange={(event) => setQuery(event.target.value)} />
                     <CheckboxGroup className="script-column-picker" options={columnOptions} value={visibleColumns} onChange={(values) => onVisibleColumnsChange(values)} />
                 <span className="min-w-0 flex-1" />
+                <Button icon={<Upload className="size-4" />} onClick={() => setImportOpen(true)}>
+                    导入模板
+                </Button>
                 <Button icon={<Plus className="size-4" />} onClick={() => onUpdateRows([...rows, editorRow(rows.length + 1)])}>
                     新增镜头
                 </Button>
@@ -751,6 +769,13 @@ export function CanvasScriptEditor({
                 dataSource={filteredRows}
                 columns={columns}
                 rowSelection={{ selectedRowKeys: selectedIds, onChange: (keys) => setSelectedIds(keys.map(String)) }}
+            />
+            <CanvasStoryboardImportModal
+                open={importOpen}
+                nodes={nodes}
+                existingRowCount={rows.length}
+                onClose={() => setImportOpen(false)}
+                onImport={onImportRows}
             />
         </Modal>
     );

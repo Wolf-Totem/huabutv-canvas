@@ -67,6 +67,7 @@ func TestReserveUserUploadQuotaRejectsTotalStoredFilesAtLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := svc.reserveUserUploadQuota("user-1", 1); err == nil || !strings.Contains(err.Error(), "20GB 上限") {
+		t.Fatalf("reserveUserUploadQuota() error = %v", err)
 	}
 }
 

@@ -144,9 +144,8 @@ func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, fmt.Errorf("文件大小必须大于 0"))
 			return
 		}
-		// 超账号存储总量的文件无论如何都会失败，提前给出明确提示。
-		if policy.Resource.StoredFileGB > 0 && req.Size > int64(policy.Resource.StoredFileGB)<<30 {
-			fail(c, http.StatusBadRequest, fmt.Errorf("文件超过账号存储总量上限 %dGB", policy.Resource.StoredFileGB))
+		if err := svc.AssertUploadFitsAccountQuota(user.ID, req.Size); err != nil {
+			failService(c, err)
 			return
 		}
 		// 同一用户并发会话数兜底，防内存占用失控。

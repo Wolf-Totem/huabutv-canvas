@@ -4,13 +4,32 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="description" content="AI 影视与短剧创作工作台" />
-        <link rel="icon" href="/logo.svg" type="image/svg+xml" />
-        <title>正在加载</title>
+        <link rel="icon" href="/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/og-image.png" />
+        <title>画布TV</title>
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="画布TV" />
+        <meta property="og:title" content="画布TV" />
+        <meta property="og:description" content="AI 影视与短剧创作工作台" />
+        <meta property="og:image" content="https://canvas.j11.net/og-image.png?v=1.5.32" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1024" />
+        <meta property="og:image:height" content="683" />
+        <meta property="og:url" content="https://canvas.j11.net/" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="画布TV" />
+        <meta name="twitter:description" content="AI 影视与短剧创作工作台" />
+        <meta name="twitter:image" content="https://canvas.j11.net/og-image.png?v=1.5.32" />
         <style>
+            html {
+                background: #0b0d09;
+            }
             html,
             body {
                 margin: 0;
-                background: #ffffff;
+            }
+            body {
+                background: inherit;
             }
             #root:empty {
                 min-height: 100vh;
@@ -43,6 +62,12 @@
             }
             @keyframes appearance-bootstrap-pulse { 0%, 100% { opacity: .62; transform: scale(.82); } 50% { opacity: 1; transform: scale(1.08); } }
             @keyframes appearance-bootstrap-orbit { to { transform: rotate(360deg); } }
+            .portal-boot { min-height: 100dvh; background: #111; color: #f4f1ea; font-family: "PingFang SC","Microsoft YaHei",sans-serif; }
+            .portal-boot-header { display: flex; height: 68px; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid rgba(255,255,255,.07); }
+            .portal-boot-hero { display: grid; place-items: center; padding: 72px 16px 36px; }
+            .portal-boot-start { display: grid; place-items: center; width: min(280px, 100%); height: 56px; border: 1px solid rgba(103,232,249,.55); border-radius: 999px; background: #202020; font-size: 16px; }
+            .portal-boot-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; width: min(1440px, calc(100% - 40px)); margin: 0 auto; }
+            .portal-boot-card { aspect-ratio: 16/9; border-radius: 10px; background: #1c1c1c; }
             @media (prefers-reduced-motion: reduce) {
                 #root:empty::before,
                 #root:empty::after {
@@ -53,14 +78,21 @@
         <script>
             try {
                 var s = JSON.parse(localStorage.getItem("infinite-canvas:theme_store") || "{}");
-                var t = s.state && s.state.theme === "dark" ? "dark" : "light";
-                document.documentElement.classList.toggle("dark", t === "dark");
+                var t = s.state && s.state.theme === "light" ? "light" : "dark";
+                document.documentElement.classList.toggle("dark", t !== "light");
                 document.documentElement.style.colorScheme = t;
+                document.documentElement.style.background = t === "light" ? "#ffffff" : "#0b0d09";
             } catch (e) {}
         </script>
     </head>
-    <body class="bg-background text-foreground antialiased" style="background:#ffffff">
-        <div id="root"></div>
+    <body class="bg-background text-foreground antialiased">
+        <div id="root">
+            <div class="portal-boot" aria-hidden="true">
+                <div class="portal-boot-header"><strong>画布TV</strong><span>作品广场</span></div>
+                <div class="portal-boot-hero"><div class="portal-boot-start">开始创作</div></div>
+                <div class="portal-boot-grid"><i class="portal-boot-card"></i><i class="portal-boot-card"></i><i class="portal-boot-card"></i><i class="portal-boot-card"></i></div>
+            </div>
+        </div>
         <script type="module" src="/src/main.tsx"></script>
     </body>
 </html>

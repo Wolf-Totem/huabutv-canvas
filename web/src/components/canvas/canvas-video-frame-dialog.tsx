@@ -3,12 +3,11 @@ import { App, Button, InputNumber, Modal } from "antd";
 import { Check, Image as ImageIcon, SkipBack, SkipForward, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
 
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { formatVideoFrameTime, normalizeVideoFrameTimes } from "@/lib/canvas/canvas-video-frame";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { cacheResourceObjectUrl } from "@/services/resource-blob-cache";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 
 type SelectedVideoFrame = {
@@ -31,7 +30,7 @@ const MAX_SELECTED_FRAMES = 30;
 
 export function CanvasVideoFrameDialog({ node, open, onClose, onConfirm }: CanvasVideoFrameDialogProps) {
     const { message } = App.useApp();
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const videoRef = useRef<HTMLVideoElement>(null);
     const [videoUrl, setVideoUrl] = useState("");
     const [videoError, setVideoError] = useState(false);

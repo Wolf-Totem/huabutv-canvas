@@ -6,12 +6,13 @@ import type { FeatureAvailability } from "@/stores/use-user-store";
 import { http, apiBaseURL } from "@/services/api/request";
 import type { PublicLogicalModel } from "@/services/api/logical-models";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
+import type { MembershipStatus } from "@/lib/membership";
 
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
 let authSessionCache: { payload: AuthSessionPayload; expiresAt: number } | null = null;
 
-function invalidateAuthSessionCache() {
+export function invalidateAuthSessionCache() {
     authSessionCache = null;
 }
 
@@ -19,13 +20,15 @@ export type LocalUser = {
     id: string;
     username: string;
     email?: string;
+    phone?: string;
     displayName: string;
     avatarUrl?: string;
     identityProvider?: string;
     identityId?: string;
     identityUsername?: string;
-    role: "admin" | "user";
+    role: "admin" | "agent" | "user";
     status: "active" | "disabled";
+    locale?: string;
     lastLoginAt?: string;
     createdAt: string;
     updatedAt: string;
@@ -34,6 +37,11 @@ export type LocalUser = {
 export type AdminUser = LocalUser & {
     availableMicrocredits: number;
     reservedMicrocredits: number;
+    permanentActive?: boolean;
+    advancedPlanSku?: string;
+    advancedExpiresAt?: string;
+    effectiveStoredFileBytes?: number;
+    quotaSource?: string;
 };
 
 export type AuthSessionPayload = {
@@ -42,6 +50,8 @@ export type AuthSessionPayload = {
     runtimeLimits?: RuntimeLimits;
     drawingEngine?: CanvasDrawingEngineSetting;
     features?: FeatureAvailability;
+    membership?: MembershipStatus;
+    permissions?: string[];
 };
 
 export type RuntimeLimits = {
@@ -132,8 +142,12 @@ export type AdminUserDetail = {
         apiCallCount: number;
     };
     storedFileBytes: number;
+    platformStoredFileBytes?: number;
+    effectiveStoredFileBytes?: number;
+    quotaSource?: string;
     dailyUploadBytes: number;
     quota: RuntimeResourcePolicy;
+    membership?: MembershipStatus;
 };
 
 export type AdminUserTask = {
@@ -361,7 +375,7 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean }>("/auth/settings");
+    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; smsEnabled?: boolean; smsCodeRequired?: boolean; inviteRequired?: boolean; inviteLocked?: boolean; inviteDisplayName?: string }>("/auth/settings");
 }
 
 export function linuxDOLoginURL(next: string) {
@@ -396,7 +410,7 @@ export function getAdminFeatureAvailability() {
     return http.get<{ features: FeatureAvailability }>("/admin/settings/features");
 }
 
-export function updateAdminFeatureAvailability(features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers">>) {
+export function updateAdminFeatureAvailability(features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "cloudAgentEnabled" | "ipLocalePromptEnabled">>) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
 
@@ -407,19 +421,23 @@ export async function login(input: { username: string; password: string }) {
     return result;
 }
 
-export function sendRegistrationEmailCode(email: string) {
-    return http.post<{ sent: boolean }>("/auth/email-code", { email });
+export function sendRegistrationEmailCode(email: string, locale?: string) {
+    return http.post<{ sent: boolean }>("/auth/email-code", { email, locale });
 }
 
-export function sendPasswordResetEmailCode(email: string) {
-    return http.post<{ sent: boolean }>("/auth/password-reset-code", { email });
+export function sendRegistrationSmsCode(phone: string) {
+    return http.post<{ sent: boolean }>("/auth/sms-code", { phone });
+}
+
+export function sendPasswordResetEmailCode(email: string, locale?: string) {
+    return http.post<{ sent: boolean }>("/auth/password-reset-code", { email, locale });
 }
 
 export function resetPassword(input: { email: string; emailCode: string; password: string }) {
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export function register(input: { username: string; email?: string; emailCode?: string; displayName?: string; password: string }) {
+export function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; channel?: "email" | "sms"; displayName?: string; password: string; inviteCode?: string }) {
     return http.post<{ user: LocalUser }>("/auth/register", input);
 }
 
@@ -430,6 +448,32 @@ export async function logout() {
 }
 
 export type AdminListParams = { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number };
+
+export type RolePermissionDefinition = {
+    key: string;
+    label: string;
+    group: string;
+};
+
+export type RoleAccessView = {
+    role: string;
+    label: string;
+    locked: boolean;
+    permissions: string[];
+};
+
+export type RoleAccessCatalog = {
+    roles: RoleAccessView[];
+    catalog: RolePermissionDefinition[];
+};
+
+export function getAdminRoleCatalog() {
+    return http.get<RoleAccessCatalog>("/admin/roles");
+}
+
+export function updateAdminRolePermissions(role: string, permissions: string[]) {
+    return http.put<RoleAccessCatalog>(`/admin/roles/${encodeURIComponent(role)}/permissions`, { permissions });
+}
 
 export function listAdminUsers(params: AdminListParams = {}) {
     return http.get<{ users: AdminUser[]; total: number; page: number; pageSize: number }>("/admin/users", { params });

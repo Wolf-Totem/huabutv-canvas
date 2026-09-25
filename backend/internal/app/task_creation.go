@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/repository"
 )
+
+const generationTicketTTL = 10 * time.Minute
 
 // Internal admission constraints are not JSON fields. Callers cannot select a
 // task ID or bypass the quoted-charge ceiling through the public tasks API.
@@ -76,7 +79,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if isTextReplayTaskRequest(normalizedInput) {
 		return s.createTextReplayTask(userID, req, normalizedInput)
 	}
-	if err := s.requireCustomChannelsForTaskInput(normalizedInput); err != nil {
+	if err := s.requireCustomChannelsForTaskInput(userID, normalizedInput); err != nil {
 		return nil, err
 	}
 	if err := s.ValidateTaskCapability(normalizedInput); err != nil {
@@ -96,7 +99,12 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	if activeTasks >= int64(policy.Task.ActiveTaskLimit) {
 		return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
 	}
-	task := model.Task{ID: newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID, Type: taskType, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
+	ticketExpires := time.Now().Add(generationTicketTTL)
+	task := model.Task{ID: newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID, Type: taskType, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model, TicketJTI: newID(), TicketExpiresAt: &ticketExpires}
+	if taskInputUsesClientSubmit(taskType, normalizedInput) {
+		task.ClientSubmit = true
+		task.Stage = "等待客户端提交"
+	}
 	if req.admission != nil {
 		task.ID = req.admission.ID
 	}
@@ -319,11 +327,14 @@ func validateTaskType(taskType string) error {
 	return fmt.Errorf("不支持的任务类型：%s", taskType)
 }
 
-func (s *Service) requireCustomChannelsForTaskInput(input map[string]any) error {
+func (s *Service) requireCustomChannelsForTaskInput(userID string, input map[string]any) error {
 	if !taskInputUsesCustomChannel(input) {
 		return nil
 	}
-	return s.RequireFeature(FeatureCustomChannels)
+	if strings.TrimSpace(userID) == "" {
+		return s.RequireFeature(FeatureCustomChannels)
+	}
+	return s.RequireFeatureForUser(&model.User{ID: userID}, FeatureCustomChannels)
 }
 
 // resolveSystemChannelModelSelection 是系统渠道任务的 admission 边界。
@@ -503,6 +514,19 @@ func capabilityOptionsFromConfig(capability string, config map[string]any, decla
 		options[canonical] = value
 	}
 	return options
+}
+
+func taskInputUsesClientSubmit(taskType string, input map[string]any) bool {
+	if !taskInputUsesCustomChannel(input) {
+		return false
+	}
+	mode, _ := input["mode"].(string)
+	if strings.HasPrefix(taskType, "video_") || mode == "video" {
+		return true
+	}
+	config, _ := input["config"].(map[string]any)
+	iface, _ := config["interfaceType"].(string)
+	return mode == "image" && strings.TrimSpace(iface) == string(model.ChannelInterfaceNewAPIChannel2)
 }
 
 func taskInputUsesCustomChannel(input map[string]any) bool {

@@ -48,6 +48,7 @@ export default function ProjectsPage() {
     const [generateTone, setGenerateTone] = useState("平稳叙事");
     const [generateCharacterScale, setGenerateCharacterScale] = useState("3-4 个");
     const [generating, setGenerating] = useState(false);
+    const [launcherOpen, setLauncherOpen] = useState(true);
     const [generationStatus, setGenerationStatus] = useState("");
     const [generationPreview, setGenerationPreview] = useState("");
     const createOpen = searchParams.get("create") === "1";
@@ -185,7 +186,7 @@ export default function ProjectsPage() {
     return (
         <WorkspacePage className="library-page project-library-page" grid>
             <PageHeader title="短剧 Agent" description="你的故事、章节与镜头，都在这里。" meta={<span className="app-projects-header-meta">{totalProjectCount} 个项目</span>} />
-            <details className="story-launcher-panel" aria-label="开始一部新短剧">
+            <details className="story-launcher-panel" open={launcherOpen} onToggle={(event) => setLauncherOpen(event.currentTarget.open)} aria-label="开始一部新短剧">
                 <summary className="story-launcher-head">
                     <div className="story-launcher-title">
                         <span className="story-launcher-mark"><Sparkles className="size-4" /></span>
@@ -194,7 +195,7 @@ export default function ProjectsPage() {
                             <p>一句话生成章节，也可以导入小说或从空白开始</p>
                         </div>
                     </div>
-                    <span className="story-launcher-expand"><Plus className="size-4" /><span>展开创作</span></span>
+                    <span className="story-launcher-expand"><Plus className="size-4" /><span>{launcherOpen ? "收起创作" : "展开创作"}</span></span>
                 </summary>
                 <div className="story-launcher-main">
                     <Input.TextArea

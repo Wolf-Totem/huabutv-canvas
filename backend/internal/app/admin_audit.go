@@ -10,13 +10,17 @@ import (
 )
 
 type AdminUserDetail struct {
-	User             model.User                  `json:"user"`
-	Account          model.CreditAccount         `json:"account"`
-	Counts           repository.AdminUserCounts  `json:"counts"`
-	StorageUsage     repository.UserStorageUsage `json:"storageUsage"`
-	StoredFileBytes  int64                       `json:"storedFileBytes"`
-	DailyUploadBytes int64                       `json:"dailyUploadBytes"`
-	Quota            RuntimeResourcePolicy       `json:"quota"`
+	User                     model.User                  `json:"user"`
+	Account                  model.CreditAccount         `json:"account"`
+	Counts                   repository.AdminUserCounts  `json:"counts"`
+	StorageUsage             repository.UserStorageUsage `json:"storageUsage"`
+	StoredFileBytes          int64                       `json:"storedFileBytes"`
+	PlatformStoredFileBytes  int64                       `json:"platformStoredFileBytes"`
+	EffectiveStoredFileBytes int64                       `json:"effectiveStoredFileBytes"`
+	QuotaSource              string                      `json:"quotaSource"`
+	DailyUploadBytes         int64                       `json:"dailyUploadBytes"`
+	Quota                    RuntimeResourcePolicy       `json:"quota"`
+	Membership               *MembershipPublicView       `json:"membership,omitempty"`
 }
 
 type AdminTaskPage struct {
@@ -79,7 +83,7 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 	if err != nil {
 		return nil, err
 	}
-	storedFileBytes, err := s.repo.UserStoredFileBytes(user.ID)
+	storedFileBytes, err := s.repo.UserPlatformStoredFileBytes(user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -91,9 +95,15 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 	if err != nil {
 		return nil, err
 	}
+	membership, err := s.PublicMembership(user.ID)
+	if err != nil {
+		return nil, err
+	}
 	return &AdminUserDetail{
 		User: *user, Account: *account, Counts: counts, StorageUsage: usage,
-		StoredFileBytes: storedFileBytes, DailyUploadBytes: dailyUploadBytes, Quota: policy.Resource,
+		StoredFileBytes: storedFileBytes, PlatformStoredFileBytes: storedFileBytes,
+		EffectiveStoredFileBytes: membership.EffectiveStoredFileBytes, QuotaSource: membership.QuotaSource,
+		DailyUploadBytes: dailyUploadBytes, Quota: policy.Resource, Membership: membership,
 	}, nil
 }
 

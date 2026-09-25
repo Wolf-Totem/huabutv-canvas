@@ -23,6 +23,8 @@ const (
 	FeaturePluginCenter          = "pluginCenter"
 	FeatureSystemPlugins         = "systemPluginsVisibleToUsers"
 	FeatureTimelineTranscription = "timelineTranscription"
+	FeatureCloudAgent            = "cloudAgent"
+	FeatureIPLocalePrompt        = "ipLocalePrompt"
 )
 
 type FeatureAvailability struct {
@@ -35,6 +37,8 @@ type FeatureAvailability struct {
 	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
 	SystemPluginsVisibleToUsers  bool `json:"systemPluginsVisibleToUsers"`
 	TimelineTranscriptionEnabled bool `json:"timelineTranscriptionEnabled"`
+	CloudAgentEnabled            bool `json:"cloudAgentEnabled"`
+	IPLocalePromptEnabled        bool `json:"ipLocalePromptEnabled"`
 }
 
 type PublicFeatureAvailability struct {
@@ -56,6 +60,8 @@ func DefaultFeatureAvailability() FeatureAvailability {
 		PluginCenterEnabled:          true,
 		SystemPluginsVisibleToUsers:  true,
 		TimelineTranscriptionEnabled: true,
+		CloudAgentEnabled:            false,
+		IPLocalePromptEnabled:        false,
 	}
 }
 
@@ -121,6 +127,10 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.SystemPluginsVisibleToUsers, nil
 	case FeatureTimelineTranscription:
 		return value.TimelineTranscriptionEnabled, nil
+	case FeatureCloudAgent:
+		return value.CloudAgentEnabled, nil
+	case FeatureIPLocalePrompt:
+		return value.IPLocalePromptEnabled, nil
 	default:
 		return false, errors.New("未知功能开放配置")
 	}
@@ -151,6 +161,8 @@ func (s *Service) RequireFeature(feature string) error {
 		return kernel.Forbidden("系统插件暂未向普通用户展示")
 	case FeatureTimelineTranscription:
 		return kernel.Forbidden("字幕转写暂未开放")
+	case FeatureCloudAgent:
+		return kernel.Forbidden("画布TV智能 Agent 暂未开放")
 	default:
 		return kernel.Forbidden("该功能暂未开放")
 	}

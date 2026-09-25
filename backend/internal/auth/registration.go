@@ -13,16 +13,19 @@ import (
 )
 
 const registrationSettingKey = "registration"
+const inviteSubdomainRegistrationSettingKey = "registration_invite_subdomain"
 
 type RegistrationSettingRequest struct {
-	Enabled bool `json:"enabled"`
+	Enabled                bool  `json:"enabled"`
+	InviteSubdomainEnabled *bool `json:"inviteSubdomainEnabled"`
 }
 
 type PublicRegistrationSetting struct {
-	Enabled   bool      `json:"enabled"`
-	UpdatedBy string    `json:"updatedBy"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Enabled                bool      `json:"enabled"`
+	InviteSubdomainEnabled bool      `json:"inviteSubdomainEnabled"`
+	UpdatedBy              string    `json:"updatedBy"`
+	CreatedAt              time.Time `json:"createdAt"`
+	UpdatedAt              time.Time `json:"updatedAt"`
 }
 
 type registrationSettingValue struct {
@@ -37,7 +40,12 @@ func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrati
 	if err != nil {
 		return nil, err
 	}
-	return publicRegistrationSetting(setting, value), nil
+	out := publicRegistrationSetting(setting, value)
+	out.InviteSubdomainEnabled, err = s.InviteSubdomainRegistrationEnabled()
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationSettingRequest) (*PublicRegistrationSetting, error) {
@@ -59,12 +67,103 @@ func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationS
 	if err := s.repo.SaveSystemSetting(&setting); err != nil {
 		return nil, err
 	}
-	return publicRegistrationSetting(&setting, registrationSettingValue{Enabled: req.Enabled}), nil
+	inviteEnabled := true
+	if req.InviteSubdomainEnabled != nil {
+		inviteEnabled = *req.InviteSubdomainEnabled
+		if err := s.saveInviteSubdomainRegistrationSetting(actor.ID, inviteEnabled); err != nil {
+			return nil, err
+		}
+	} else {
+		inviteEnabled, err = s.InviteSubdomainRegistrationEnabled()
+		if err != nil {
+			return nil, err
+		}
+	}
+	out := publicRegistrationSetting(&setting, registrationSettingValue{Enabled: req.Enabled})
+	out.InviteSubdomainEnabled = inviteEnabled
+	return out, nil
 }
 
 func (s *Service) RegistrationEnabled() (bool, error) {
 	_, value, err := s.readRegistrationSetting()
 	return value.Enabled, err
+}
+
+func (s *Service) InviteSubdomainRegistrationEnabled() (bool, error) {
+	setting, err := s.repo.SystemSetting(inviteSubdomainRegistrationSettingKey)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	value := registrationSettingValue{Enabled: true}
+	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
+		return true, nil
+	}
+	return value.Enabled, nil
+}
+
+func (s *Service) saveInviteSubdomainRegistrationSetting(actorID string, enabled bool) error {
+	encoded, err := json.Marshal(registrationSettingValue{Enabled: enabled})
+	if err != nil {
+		return err
+	}
+	current, err := s.repo.SystemSetting(inviteSubdomainRegistrationSettingKey)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	setting := model.SystemSetting{Key: inviteSubdomainRegistrationSettingKey, ValueJSON: string(encoded), UpdatedBy: actorID}
+	if current != nil && err == nil {
+		setting.CreatedAt = current.CreatedAt
+	}
+	return s.repo.SaveSystemSetting(&setting)
+}
+
+func (s *Service) resolveRegistrationStreamer(host, inviteCode string) (*model.Streamer, error) {
+	if s == nil || s.host == nil {
+		return nil, nil
+	}
+	streamer, err := s.host.StreamerByHost(host)
+	if err != nil {
+		return nil, err
+	}
+	if streamer != nil && streamer.Status == model.StreamerStatusActive {
+		return streamer, nil
+	}
+	return s.host.ActiveStreamerByInvite(inviteCode)
+}
+
+func (s *Service) registrationAllowed(host, inviteCode string) (bool, *model.Streamer, error) {
+	streamer, err := s.resolveRegistrationStreamer(host, inviteCode)
+	if err != nil {
+		return false, nil, err
+	}
+	mainEnabled, err := s.RegistrationEnabled()
+	if err != nil {
+		return false, nil, err
+	}
+	if mainEnabled {
+		return true, streamer, nil
+	}
+	if streamer == nil || streamer.Status != model.StreamerStatusActive {
+		return false, streamer, nil
+	}
+	subEnabled, err := s.InviteSubdomainRegistrationEnabled()
+	if err != nil {
+		return false, nil, err
+	}
+	if !subEnabled {
+		return false, streamer, nil
+	}
+	hostStreamer, err := s.host.StreamerByHost(host)
+	if err != nil {
+		return false, nil, err
+	}
+	if hostStreamer == nil || hostStreamer.Status != model.StreamerStatusActive {
+		return false, streamer, nil
+	}
+	return true, hostStreamer, nil
 }
 
 func (s *Service) readRegistrationSetting() (*model.SystemSetting, registrationSettingValue, error) {

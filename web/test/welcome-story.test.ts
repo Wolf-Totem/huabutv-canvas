@@ -6,6 +6,19 @@ import { chapters, getWelcomeLook, showcases, welcomeLooks } from "../src/pages/
 const publicFile = (url: string) => resolve(import.meta.dir, "../public", url.replace(/^\//, ""));
 
 describe("welcome story", () => {
+    test("welcome page paints the site brand name and configurable nav, not a hardcoded Yingce title", async () => {
+        const [pageSource, appSource] = await Promise.all([
+            Bun.file(new URL("../src/pages/welcome/index.tsx", import.meta.url)).text(),
+            Bun.file(new URL("../src/welcome-application.tsx", import.meta.url)).text(),
+        ]);
+        expect(pageSource).toContain("<h1>{brandName}</h1>");
+        expect(pageSource).toContain("navItems.map");
+        expect(pageSource).toContain("{ctaLabel}");
+        expect(pageSource).toContain("appearance.homeNavItems");
+        expect(pageSource).not.toContain('document.title = "影策');
+        expect(appSource).toContain("bootstrapAppearance");
+    });
+
     test("uses Yingce and only the three approved looks", () => {
         expect(chapters[0].title).toBe("影策");
         expect(welcomeLooks.map((look) => look.id)).toEqual(["spring", "charge", "wing-it"]);

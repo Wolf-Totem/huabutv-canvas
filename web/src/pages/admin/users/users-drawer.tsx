@@ -92,7 +92,7 @@ export function AdminUserEditDrawer({
                     <Input placeholder="name@example.com" />
                 </Form.Item>
                 <Form.Item name="role" label="角色" extra={editingSelf ? "不能在此修改当前管理员自己的角色。" : "角色变更会立即影响后台访问权限。"}>
-                    <Select disabled={editingSelf} options={[{ label: "管理员", value: "admin" }, { label: "普通用户", value: "user" }]} />
+                    <Select disabled={editingSelf} options={[{ label: "管理员", value: "admin" }, { label: "代理", value: "agent" }, { label: "普通用户", value: "user" }]} />
                 </Form.Item>
                 <Form.Item name="status" label="账号状态" extra={editingSelf ? "不能停用当前登录账号。" : "停用后会清除登录态，但保留身份、任务和积分流水。"}>
                     <Select disabled={editingSelf} options={[{ label: "已启用", value: "active" }, { label: "已停用", value: "disabled" }]} />
@@ -193,7 +193,7 @@ export function AdminUserCreateDrawer({
                     <Input.Password placeholder={"\u81f3\u5c11 8 \u4f4d"} />
                 </Form.Item>
                 <Form.Item name="role" label={"\u89d2\u8272"}>
-                    <Select options={[{ label: "\u7ba1\u7406\u5458", value: "admin" }, { label: "\u666e\u901a\u7528\u6237", value: "user" }]} />
+                    <Select options={[{ label: "管理员", value: "admin" }, { label: "代理", value: "agent" }, { label: "普通用户", value: "user" }]} />
                 </Form.Item>
                 <Form.Item name="status" label={"\u8d26\u53f7\u72b6\u6001"}>
                     <Select options={[{ label: "\u5df2\u542f\u7528", value: "active" }, { label: "\u5df2\u505c\u7528", value: "disabled" }]} />

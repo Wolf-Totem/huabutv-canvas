@@ -1,0 +1,16 @@
+{
+  "register.subject": "Verifikasi email {{brand}}",
+  "register.title": "Verifikasi email Anda",
+  "register.hello": "{{email}}, halo:",
+  "register.lead": "Masukkan kode verifikasi berikut untuk lanjut",
+  "register.expiry": "Kode kedaluwarsa dalam 10 menit.",
+  "register.ignore": "Jika ini bukan Anda, abaikan email ini.",
+  "register.footer": "Email ini dikirim oleh {{brand}}. Jangan membalas.",
+  "reset.subject": "Reset kata sandi {{brand}}",
+  "reset.title": "Reset kata sandi Anda",
+  "reset.hello": "{{email}}, halo:",
+  "reset.lead": "Masukkan kode verifikasi berikut untuk mereset kata sandi",
+  "reset.expiry": "Kode kedaluwarsa dalam 10 menit.",
+  "reset.ignore": "Jika ini bukan Anda, abaikan email ini dan jaga keamanan akun.",
+  "reset.footer": "Email ini dikirim oleh {{brand}}. Jangan membalas."
+}

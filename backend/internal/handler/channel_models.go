@@ -17,7 +17,7 @@ func RegisterChannelModelRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		if err := svc.RequireFeature(service.FeatureCustomChannels); err != nil {
+		if err := svc.RequireFeatureForUser(user, service.FeatureCustomChannels); err != nil {
 			failService(c, err)
 			return
 		}

@@ -13,7 +13,8 @@ describe("workspace route loading", () => {
 
         expect(deferred).toContain("<WorkspaceRouteLoader />");
         expect(deferred).not.toContain("FullScreenLoader");
-        expect(router).toContain("fullScreenDeferred(<LoginPage />)");
+        expect(router).toContain('path: "/login"');
+        expect(router).toContain('to="/?auth=login"');
         expect(router).toContain("fullScreenDeferred(<SharedCanvasPage />)");
     });
 
@@ -24,7 +25,7 @@ describe("workspace route loading", () => {
         for (const route of ["projects", "canvas", "assets", "create"]) {
             expect(modules).toContain(`${route}: () => import`);
         }
-        expect(modules).toContain('projectDetail: () => import("@/pages/projects/detail")');
+        expect(modules).toContain('projectDetail: () => importWithChunkRecovery(() => import("@/pages/projects/detail"))');
         expect(modules).toContain('slug === "projects" && segments.length > 1');
         expect(navigation).toContain("onPointerEnter={() => preloadWorkspaceRoute(linkTo)}");
         expect(navigation).toContain("onPointerDown={() => preloadWorkspaceRoute(linkTo)}");
@@ -35,12 +36,12 @@ describe("workspace route loading", () => {
         const router = source("../src/router.tsx");
         const navigation = source("../src/components/layout/workspace-sidebar-nav.tsx");
 
-        expect(router).toContain('{ path: "/", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
-        expect(router).toContain('{ path: "/create", element: <RequireAuth>{deferred(<CreatePage />)}</RequireAuth> }');
+        expect(router).toContain('path: "/"');
+        expect(router).toContain("<RootHome />");
+        expect(router).toContain('{ path: "/create", element: deferred(<CreatePage />) }');
         expect(router).not.toContain('path: "/home"');
         expect(router).not.toContain("HomePage");
-        expect(navigation).toContain('{ ...toolItem("create", "/"), id: "home", title: "创作" }');
-        expect(navigation).not.toContain('to: "/create"');
+        expect(navigation).toContain('toolItem("create", "/create")');
         expect(navigation).not.toContain('to: "/home"');
     });
 
@@ -51,7 +52,7 @@ describe("workspace route loading", () => {
         const canvasCard = source("../src/components/canvas/canvas-folder-card.tsx");
 
         expect(modules).toContain('loadCanvasProjectPage = () => import("@/pages/canvas/project")');
-        expect(router).toContain("lazy(loadCanvasProjectPage)");
+        expect(router).toContain("loadCanvasProjectPage");
         expect(canvasLibrary).toContain("setOpeningProjectId(id)");
         expect(canvasLibrary).toContain("window.requestAnimationFrame(() => navigate(");
         expect(canvasCard).toContain("onPointerEnter={onPrefetch}");
@@ -147,5 +148,8 @@ describe("workspace wallet entry", () => {
         expect(topBar).toContain("openWorkspaceWallet()");
         expect(css).not.toContain(".wallet-library-page");
         expect(css).not.toContain(".wallet-market-page");
+        expect(css).toContain(".workspace-wallet-modal");
+        expect(css).toContain("backdrop-filter: none !important");
+        expect(host).toContain("focusRedeem");
     });
 });

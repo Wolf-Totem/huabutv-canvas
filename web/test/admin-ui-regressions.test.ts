@@ -190,13 +190,14 @@ test("admin settings use full-width summaries without selected-card side stripes
 });
 
 test("task-first settings reveal dependent configuration only after the primary choice", async () => {
-    const [storageSource, emailSource, accessSource, featureSource, appearanceSource, welcomeSource, drawingSource, arkSource, interceptionSource, thirdPartySource, cssSource] = await Promise.all([
+    const [storageSource, emailSource, accessSource, featureSource, appearanceSource, welcomeSource, ipLocaleSource, drawingSource, arkSource, interceptionSource, thirdPartySource, cssSource] = await Promise.all([
         Bun.file(new URL("../src/pages/admin/settings/storage-settings-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/email-settings-panel.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/access-settings-panel.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/components/feature-availability-panel.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/components/welcome-setting.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/settings/components/ip-locale-prompt-setting.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/drawing-engine-settings-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/ark-private-assets-settings-page.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/admin/settings/response-interception-settings-page.tsx", import.meta.url)).text(),
@@ -212,6 +213,8 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(emailSource).toContain('id="admin-email-smtp"');
     expect(emailSource).toContain('title="1. 是否发送账户安全邮件"');
     expect(emailSource).toContain('title="2. 配置 SMTP 连接与发件身份"');
+    expect(emailSource).toContain("填入 Cloudflare Email Sending");
+    expect(emailSource).toContain("smtp.mx.cloudflare.net");
 
     expect(accessSource).toContain("{draftLinuxDOEnabled ? (");
     expect(accessSource).toContain('title="1. 是否允许创建新账号"');
@@ -221,8 +224,20 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(featureSource).toContain('title="2. 插件开放范围"');
     expect(featureSource).toContain('title="3. 用户模型来源"');
     expect(appearanceSource).toContain("<WelcomeSetting />");
+    expect(appearanceSource).toContain("<IpLocalePromptSetting />");
+    expect(appearanceSource).toContain('title="站点首页"');
+    expect(appearanceSource).toContain("<HomeNavSetting");
+    expect(appearanceSource).toContain("漫创未登录首页");
+    expect(appearanceSource).toContain("影策欢迎页");
+    expect(appearanceSource).toContain('className="admin-appearance-tabs"');
+    expect(featureSource).toContain("ipLocalePromptEnabled");
+    expect(featureSource).toContain("/6 开放");
     expect(welcomeSource).toContain("<strong>启用欢迎页</strong>");
     expect(welcomeSource).toContain("updateAdminFeatureAvailability({ welcomeEnabled: value })");
+    expect(ipLocaleSource).toContain("<strong>根据 IP 提示切换语言</strong>");
+    expect(ipLocaleSource).toContain("updateAdminFeatureAvailability({ ipLocalePromptEnabled: value })");
+    expect(cssSource).toContain(".admin-homepage-picker");
+    expect(cssSource).toContain(".admin-homepage-card");
 
     expect(drawingSource).toContain('title="1. 选择新建绘图默认编辑器"');
     expect(drawingSource).toContain('title="2. 配置 tldraw 授权（按需）"');

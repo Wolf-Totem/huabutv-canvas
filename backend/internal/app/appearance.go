@@ -26,12 +26,15 @@ const appearanceSettingKey = "appearance"
 const (
 	AppearanceAssetLogo     = "logo"
 	AppearanceAssetDarkLogo = "logo-dark"
-	AppearanceAssetVideo    = "video"
-	AppearanceAssetPoster   = "poster"
+	AppearanceAssetVideo        = "video"
+	AppearanceAssetPoster       = "poster"
+	AppearanceAssetLandingVideo = "landing-video"
 )
 
 const (
-	appearanceSchemaVersion        = 7
+	appearanceSchemaVersion        = 9
+	publicHomepageWelcome          = "welcome"
+	publicHomepageManchuang        = "manchuang"
 	appearanceLogoMaxBytes   int64 = 5 << 20
 	appearancePosterMaxBytes int64 = 10 << 20
 	appearanceVideoMaxBytes  int64 = 256 << 20
@@ -40,7 +43,7 @@ const (
 const (
 	defaultAppearanceBrandName = "影策"
 	defaultAppearanceBrandSlug = "open-ai-canvas"
-	defaultAppearanceSkinID    = "classic"
+	defaultAppearanceSkinID    = "apex"
 	defaultAppearanceLogoURL   = "/logo.svg"
 	defaultAppearanceVideoURL  = "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4"
 	defaultAppearancePosterURL = "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg"
@@ -61,12 +64,26 @@ type AppearanceSetting struct {
 	AuthVideoAutoplay         bool                  `json:"authVideoAutoplay"`
 	SkinID                    string                `json:"skinId"`
 	SkinThemes                []AppearanceSkinTheme `json:"skinThemes"`
+	EnabledSkins              []string              `json:"enabledSkins"`
+	DefaultMode               string                `json:"defaultMode"`
 	SEOTitle                  string                `json:"seoTitle"`
 	SEODescription            string                `json:"seoDescription"`
 	SEOKeywords               string                `json:"seoKeywords"`
 	FooterCopyright           string                `json:"footerCopyright"`
 	ICPFilingEnabled          bool                  `json:"icpFilingEnabled"`
 	ICPFilingNumber           string                `json:"icpFilingNumber"`
+	PublicHomepage            string                `json:"publicHomepage"`
+	HomeNavItems              []AppearanceHomeNavItem `json:"homeNavItems,omitempty"`
+	HomeCtaLabel              string                  `json:"homeCtaLabel,omitempty"`
+	HomeCtaHref               string                  `json:"homeCtaHref,omitempty"`
+	Landing                   json.RawMessage         `json:"landing,omitempty"`
+	LandingVideoResourceID    string                  `json:"landingVideoResourceId,omitempty"`
+}
+
+type AppearanceHomeNavItem struct {
+	Label        string `json:"label"`
+	Href         string `json:"href"`
+	OpenInNewTab bool   `json:"openInNewTab"`
 }
 
 type PublicAppearanceSetting struct {
@@ -81,14 +98,23 @@ type PublicAppearanceSetting struct {
 	AuthVideoURL              string              `json:"authVideoUrl"`
 	AuthVideoPosterURL        string              `json:"authVideoPosterUrl"`
 	AuthVideoAutoplay         bool                `json:"authVideoAutoplay"`
-	SkinID                    string              `json:"skinId"`
-	ActiveSkin                AppearanceSkinTheme `json:"activeSkin"`
+	SkinID                    string                `json:"skinId"`
+	ActiveSkin                AppearanceSkinTheme   `json:"activeSkin"`
+	EnabledSkins              []AppearanceSkinTheme `json:"enabledSkins"`
+	WorkspaceSkins            []AppearanceSkinTheme `json:"workspaceSkins"`
+	DefaultMode               string                `json:"defaultMode"`
 	SEOTitle                  string              `json:"seoTitle"`
 	SEODescription            string              `json:"seoDescription"`
 	SEOKeywords               string              `json:"seoKeywords"`
 	FooterCopyright           string              `json:"footerCopyright"`
 	ICPFilingEnabled          bool                `json:"icpFilingEnabled"`
 	ICPFilingNumber           string              `json:"icpFilingNumber"`
+	PublicHomepage            string              `json:"publicHomepage"`
+	HomeNavItems              []AppearanceHomeNavItem `json:"homeNavItems,omitempty"`
+	HomeCtaLabel              string                  `json:"homeCtaLabel,omitempty"`
+	HomeCtaHref               string                  `json:"homeCtaHref,omitempty"`
+	Landing                   json.RawMessage         `json:"landing,omitempty"`
+	LandingVideoURL           string              `json:"landingVideoUrl,omitempty"`
 	LogoConfigured            bool                `json:"logoConfigured"`
 	DarkLogoConfigured        bool                `json:"darkLogoConfigured"`
 	AuthVideoConfigured       bool                `json:"authVideoConfigured"`
@@ -117,6 +143,9 @@ func defaultAppearanceSetting() AppearanceSetting {
 		LogoFrameEnabled:  true,
 		SkinID:            defaultAppearanceSkinID,
 		SkinThemes:        defaultAppearanceSkinThemes(),
+		EnabledSkins:      defaultEnabledCinematicSkinIDs(),
+		DefaultMode:       "dark",
+		PublicHomepage:    publicHomepageWelcome,
 	}
 }
 
@@ -126,7 +155,7 @@ func AppearanceAssetMaxBytes(slot string) (int64, error) {
 		return appearanceLogoMaxBytes, nil
 	case AppearanceAssetPoster:
 		return appearancePosterMaxBytes, nil
-	case AppearanceAssetVideo:
+	case AppearanceAssetVideo, AppearanceAssetLandingVideo:
 		return appearanceVideoMaxBytes, nil
 	default:
 		return 0, BadAuthRequest("外观资源类型无效")
@@ -182,11 +211,17 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 		value.SkinThemes = defaultAppearanceSkinThemes()
 	}
 	value.SkinThemes = normalizeAppearanceSkinThemes(value.SkinThemes)
+	if !appearanceSkinIDExists(value.SkinThemes, value.SkinID) {
+		value.SkinID = defaultAppearanceSkinID
+	}
+	value.EnabledSkins = normalizeEnabledSkinIDs(value.EnabledSkins, value.SkinThemes)
+	value.DefaultMode = normalizeAppearanceDefaultMode(value.DefaultMode)
 	value.SEOTitle = normalizeAppearanceSingleLine(value.SEOTitle)
 	value.SEODescription = normalizeAppearanceCopy(value.SEODescription)
 	value.SEOKeywords = normalizeAppearanceSingleLine(value.SEOKeywords)
 	value.FooterCopyright = normalizeAppearanceSingleLine(value.FooterCopyright)
 	value.ICPFilingNumber = normalizeAppearanceSingleLine(value.ICPFilingNumber)
+	value.PublicHomepage = normalizePublicHomepage(value.PublicHomepage)
 	if err := validateAppearanceSetting(value); err != nil {
 		return nil, err
 	}
@@ -206,6 +241,7 @@ func (s *Service) UpdateAppearance(actor *model.User, value AppearanceSetting) (
 		{slot: AppearanceAssetDarkLogo, resourceID: value.DarkLogoResourceID, currentID: before.DarkLogoResourceID},
 		{slot: AppearanceAssetVideo, resourceID: value.AuthVideoResourceID, currentID: before.AuthVideoResourceID},
 		{slot: AppearanceAssetPoster, resourceID: value.AuthVideoPosterResourceID, currentID: before.AuthVideoPosterResourceID},
+		{slot: AppearanceAssetLandingVideo, resourceID: value.LandingVideoResourceID, currentID: before.LandingVideoResourceID},
 	} {
 		if err := s.validateAppearanceResource(actor, candidate.slot, candidate.resourceID, candidate.currentID); err != nil {
 			return nil, err
@@ -261,7 +297,7 @@ func (s *Service) UploadAppearanceAsset(actor *model.User, slot string, header *
 	// the sniffed value so the persisted resource contract matches the bytes.
 	header.Header.Set("Content-Type", mimeType)
 	kind := "image"
-	if slot == AppearanceAssetVideo {
+	if slot == AppearanceAssetVideo || slot == AppearanceAssetLandingVideo {
 		kind = "video"
 	}
 	var resource *model.Resource
@@ -371,11 +407,17 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 		value.SkinThemes = defaultAppearanceSkinThemes()
 	}
 	value.SkinThemes = normalizeAppearanceSkinThemes(value.SkinThemes)
+	if !appearanceSkinIDExists(value.SkinThemes, value.SkinID) {
+		value.SkinID = defaultAppearanceSkinID
+	}
+	value.EnabledSkins = normalizeEnabledSkinIDs(value.EnabledSkins, value.SkinThemes)
+	value.DefaultMode = normalizeAppearanceDefaultMode(value.DefaultMode)
 	value.SEOTitle = normalizeAppearanceSingleLine(value.SEOTitle)
 	value.SEODescription = normalizeAppearanceCopy(value.SEODescription)
 	value.SEOKeywords = normalizeAppearanceSingleLine(value.SEOKeywords)
 	value.FooterCopyright = normalizeAppearanceSingleLine(value.FooterCopyright)
 	value.ICPFilingNumber = normalizeAppearanceSingleLine(value.ICPFilingNumber)
+	value.PublicHomepage = normalizePublicHomepage(value.PublicHomepage)
 	return setting, value, nil
 }
 
@@ -384,7 +426,7 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 // Remote objects are not probed on every appearance request; the frontend has
 // its own load-error fallback for objects that disappear outside the system.
 func (s *Service) resolveAvailableAppearanceAssets(value AppearanceSetting) AppearanceSetting {
-	for _, slot := range []string{AppearanceAssetLogo, AppearanceAssetDarkLogo, AppearanceAssetVideo, AppearanceAssetPoster} {
+	for _, slot := range []string{AppearanceAssetLogo, AppearanceAssetDarkLogo, AppearanceAssetVideo, AppearanceAssetPoster, AppearanceAssetLandingVideo} {
 		resourceID := appearanceResourceID(value, slot)
 		if resourceID == "" || s.appearanceAssetAvailable(slot, resourceID) {
 			continue
@@ -398,6 +440,8 @@ func (s *Service) resolveAvailableAppearanceAssets(value AppearanceSetting) Appe
 			value.AuthVideoResourceID = ""
 		case AppearanceAssetPoster:
 			value.AuthVideoPosterResourceID = ""
+		case AppearanceAssetLandingVideo:
+			value.LandingVideoResourceID = ""
 		}
 	}
 	return value
@@ -520,10 +564,10 @@ func validateAppearanceResourceType(slot string, resource *model.Resource) error
 	if _, exists := allowed[mimeType]; !exists {
 		return BadAuthRequest("外观资源文件类型不受支持")
 	}
-	if slot == AppearanceAssetVideo && resource.Kind != "video" {
-		return BadAuthRequest("登录页品牌视频必须是视频资源")
+	if (slot == AppearanceAssetVideo || slot == AppearanceAssetLandingVideo) && resource.Kind != "video" {
+		return BadAuthRequest("品牌视频必须是视频资源")
 	}
-	if slot != AppearanceAssetVideo && resource.Kind != "image" {
+	if slot != AppearanceAssetVideo && slot != AppearanceAssetLandingVideo && resource.Kind != "image" {
 		return BadAuthRequest("Logo 和视频封面必须是图片资源")
 	}
 	return nil
@@ -556,7 +600,7 @@ func validateAppearanceUpload(slot string, header *multipart.FileHeader) (string
 
 func detectAppearanceMIME(slot string, data []byte, fileSize int64) string {
 	mimeType := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
-	if slot != AppearanceAssetVideo || mimeType == "video/mp4" || len(data) < 12 {
+	if (slot != AppearanceAssetVideo && slot != AppearanceAssetLandingVideo) || mimeType == "video/mp4" || len(data) < 12 {
 		return mimeType
 	}
 	// Go's generic sniffer only recognises a subset of MP4 compatible brands.
@@ -570,7 +614,7 @@ func detectAppearanceMIME(slot string, data []byte, fileSize int64) string {
 }
 
 func appearanceAllowedMIMETypes(slot string) map[string]struct{} {
-	if slot == AppearanceAssetVideo {
+	if slot == AppearanceAssetVideo || slot == AppearanceAssetLandingVideo {
 		return map[string]struct{}{"video/mp4": {}, "video/webm": {}}
 	}
 	return map[string]struct{}{"image/png": {}, "image/jpeg": {}, "image/webp": {}}
@@ -586,6 +630,8 @@ func appearanceAssetLabel(slot string) string {
 		return "视频封面"
 	case AppearanceAssetVideo:
 		return "品牌视频"
+	case AppearanceAssetLandingVideo:
+		return "首页背景视频"
 	default:
 		return "外观资源"
 	}
@@ -601,6 +647,8 @@ func appearanceResourceID(value AppearanceSetting, slot string) string {
 		return value.AuthVideoResourceID
 	case AppearanceAssetPoster:
 		return value.AuthVideoPosterResourceID
+	case AppearanceAssetLandingVideo:
+		return value.LandingVideoResourceID
 	default:
 		return ""
 	}
@@ -625,12 +673,20 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		AuthVideoAutoplay:   value.AuthVideoAutoplay,
 		SkinID:              value.SkinID,
 		ActiveSkin:          activeAppearanceSkin(value.SkinThemes, value.SkinID),
+		EnabledSkins:        publicEnabledSkins(value),
+		WorkspaceSkins:      publicWorkspaceSkins(value),
+		DefaultMode:         normalizeAppearanceDefaultMode(value.DefaultMode),
 		SEOTitle:            effectiveAppearanceSEOTitle(value),
 		SEODescription:      effectiveAppearanceSEODescription(value),
 		SEOKeywords:         value.SEOKeywords,
 		FooterCopyright:     effectiveAppearanceCopyright(value),
 		ICPFilingEnabled:    value.ICPFilingEnabled && value.ICPFilingNumber != "",
 		ICPFilingNumber:     value.ICPFilingNumber,
+		PublicHomepage:      normalizePublicHomepage(value.PublicHomepage),
+		HomeNavItems:        value.HomeNavItems,
+		HomeCtaLabel:        value.HomeCtaLabel,
+		HomeCtaHref:         value.HomeCtaHref,
+		Landing:             value.Landing,
 		Configured:          setting != nil,
 		Revision:            revision,
 	}
@@ -653,6 +709,9 @@ func publicAppearanceSetting(setting *model.SystemSetting, value AppearanceSetti
 		if value.LogoResourceID == "" {
 			result.LogoURL = result.DarkLogoURL
 		}
+	}
+	if value.LandingVideoResourceID != "" {
+		result.LandingVideoURL = appearanceAssetURL(AppearanceAssetLandingVideo, revision)
 	}
 	if value.AuthVideoResourceID != "" {
 		result.AuthVideoConfigured = true
@@ -689,6 +748,13 @@ func effectiveAppearanceCopyright(value AppearanceSetting) string {
 		return value.FooterCopyright
 	}
 	return fmt.Sprintf("© %d %s. All rights reserved.", time.Now().Year(), value.BrandName)
+}
+
+func normalizePublicHomepage(value string) string {
+	if strings.TrimSpace(value) == publicHomepageManchuang {
+		return publicHomepageManchuang
+	}
+	return publicHomepageWelcome
 }
 
 func (s *Service) appearanceBrandName() string {

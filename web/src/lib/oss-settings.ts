@@ -2,6 +2,20 @@ export type OSSProvider = "aliyun" | "tencent" | "qiniu" | "s3";
 
 export type S3Preset = "aws" | "r2" | "b2" | "rustfs" | "custom";
 
+export type StorageMode = "local" | OSSProvider | "r2";
+
+export function backendProvider(mode: StorageMode): OSSProvider {
+    if (mode === "r2") return "s3";
+    if (mode === "local") return "aliyun";
+    return mode;
+}
+
+export function storageModeFromSetting(setting: { enabled: boolean; provider: OSSProvider; s3Preset?: S3Preset }): StorageMode {
+    if (!setting.enabled) return "local";
+    if (setting.provider === "s3" && setting.s3Preset === "r2") return "r2";
+    return setting.provider;
+}
+
 export const DEFAULT_OSS_PATH_PREFIX = "open-ai-canvas";
 
 export type OSSConnectionTestInput = {

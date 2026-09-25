@@ -61,6 +61,30 @@ func TestCanvasResourceIDRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+func TestSanitizeCanvasDocumentKeepsResourceIDsWithoutShareURLs(t *testing.T) {
+	payload := map[string]any{
+		"id": "project-1", "title": "公开画布",
+		"nodes": []any{map[string]any{
+			"id": "node-1", "type": "image", "title": "镜头", "position": map[string]any{"x": 1, "y": 2}, "width": 320, "height": 240,
+			"metadata": map[string]any{"storageKey": "resource:resource_123", "prompt": "保留提示词", "apiKey": "secret"},
+		}},
+		"connections": []any{},
+	}
+	raw, _ := json.Marshal(payload)
+	doc, resources, err := SanitizeCanvasDocument(&model.CanvasProject{ID: "project-1", Title: "公开画布", PayloadJSON: string(raw)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(doc)
+	text := string(encoded)
+	if strings.Contains(text, "secret") || strings.Contains(text, "canvas-shares") {
+		t.Fatalf("sanitize leaked secrets or share URLs: %s", text)
+	}
+	if !strings.Contains(text, "resource:resource_123") || !resources["resource_123"] {
+		t.Fatalf("sanitize lost resource id: %s", text)
+	}
+}
+
 func TestPublicCanvasProjectDropsUnmanagedMediaURL(t *testing.T) {
 	payload := `{"id":"p","nodes":[{"id":"n","type":"image","title":"image","position":{"x":0,"y":0},"width":10,"height":10,"metadata":{"content":"https://tracker.example/image.png","prompt":"public prompt"}}],"connections":[]}`
 	public, _, err := publicCanvasProject(&model.CanvasProject{ID: "p", PayloadJSON: payload}, "share-token")

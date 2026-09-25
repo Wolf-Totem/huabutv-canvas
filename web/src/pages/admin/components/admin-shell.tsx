@@ -3,6 +3,7 @@ import type { MenuProps } from "antd";
 import {
     Activity,
     ArrowLeft,
+    Banknote,
     BarChart3,
     BellRing,
     ChevronLeft,
@@ -28,6 +29,8 @@ import {
     RefreshCw,
     Sparkles,
     Settings2,
+    Smartphone,
+    Shield,
     ShieldAlert,
     ShieldCheck,
     Sun,
@@ -43,6 +46,7 @@ import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { publishWorkspaceSidebarCollapsed, readWorkspaceSidebarCollapsed, subscribeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { hasPermission } from "@/lib/access";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { getIsolatedAdminAntTheme } from "../theme/admin-ant-theme";
@@ -57,50 +61,57 @@ type AdminNavigationItem = {
     description: string;
     icon: ReactNode;
     requireFeature?: "frontendModelsEnabled";
+    permission?: string;
 };
 
 const adminNavigation: Array<{ label: string; items: AdminNavigationItem[] }> = [
     {
         label: "概览",
-        items: [{ path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" /> }],
+        items: [{ path: "/admin", label: "数据概览", description: "活跃、调用与成本趋势", icon: <BarChart3 className="size-4" />, permission: "admin.overview" }],
     },
     {
         label: "平台资源",
         items: [
-            { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" /> },
-            { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" /> },
-            { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
-            { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" /> },
-            { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" /> },
-            { path: "/admin/resources", label: "存储资源", description: "资源列表、容量与预览", icon: <Database className="size-4" /> },
+            { path: "/admin/users", label: "用户管理", description: "账号、角色与状态", icon: <UsersRound className="size-4" />, permission: "admin.users" },
+            { path: "/admin/roles", label: "角色管理", description: "分组可访问的页面与能力", icon: <Shield className="size-4" />, permission: "admin.roles" },
+            { path: "/admin/streamers", label: "主播代理", description: "子域、邀请码、返利与档案", icon: <RadioTower className="size-4" />, permission: "admin.streamers" },
+            { path: "/admin/payouts", label: "提现审核", description: "代理提现同意或退回，线下打款", icon: <Banknote className="size-4" />, permission: "admin.streamers" },
+            { path: "/admin/channels", label: "系统渠道", description: "渠道、模型与售价", icon: <RadioTower className="size-4" />, permission: "admin.channels" },
+            { path: "/admin/models", label: "前台模型", description: "展示、线路与用户价格", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled", permission: "admin.models" },
+            { path: "/admin/plugins", label: "插件管理", description: "平台可用性、上传与卸载", icon: <PlugZap className="size-4" />, permission: "admin.plugins" },
+            { path: "/admin/prompt-templates", label: "提示词模板", description: "平台创作策略版本", icon: <MessageSquareText className="size-4" />, permission: "admin.prompts" },
+            { path: "/admin/resources", label: "存储资源", description: "资源列表、容量与预览", icon: <Database className="size-4" />, permission: "admin.resources" },
         ],
     },
     {
         label: "运营",
         items: [
-            { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" /> },
-            { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" /> },
-            { path: "/admin/payments", label: "支付充值", description: "支付渠道、订单与对账", icon: <CreditCard className="size-4" /> },
-            { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" /> },
-            { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" /> },
-            { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" /> },
+            { path: "/admin/announcements", label: "系统公告", description: "发布、关闭与历史公告", icon: <BellRing className="size-4" />, permission: "admin.announcements" },
+            { path: "/admin/plaza/applications", label: "广场审核", description: "作品上架申请与草稿预览", icon: <Sparkles className="size-4" />, permission: "admin.plaza" },
+            { path: "/admin/plaza/works", label: "广场作品", description: "已上架作品与强制下架", icon: <Sparkles className="size-4" />, permission: "admin.plaza" },
+            { path: "/admin/agent-lessons", label: "Agent 记忆", description: "按用户查看个人记忆", icon: <Sparkles className="size-4" />, permission: "admin.agent_lessons" },
+            { path: "/admin/payments", label: "支付充值", description: "支付渠道、订单与对账", icon: <CreditCard className="size-4" />, permission: "admin.payments" },
+            { path: "/admin/credit-operations", label: "积分运营", description: "人工调账与异常计费", icon: <Coins className="size-4" />, permission: "admin.credits" },
+            { path: "/admin/redemption-codes", label: "兑换码", description: "生成与查看兑换码批次", icon: <TicketCheck className="size-4" />, permission: "admin.redemption" },
+            { path: "/admin/logs", label: "请求明细", description: "上游调用与费用", icon: <FileClock className="size-4" />, permission: "admin.logs" },
         ],
     },
     {
         label: "系统配置",
         items: [
-            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、SEO、备案与皮肤", icon: <Palette className="size-4" /> },
-            { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" /> },
-            { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" /> },
-            { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" /> },
-            { path: "/admin/settings/system-performance", label: "系统性能", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" /> },
-            { path: "/admin/settings/access", label: "登录与注册", description: "账号创建与第三方登录", icon: <ShieldCheck className="size-4" /> },
-            { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码与 SMTP", icon: <Mail className="size-4" /> },
-            { path: "/admin/settings/storage", label: "存储服务", description: "对象存储与资源存储", icon: <HardDrive className="size-4" /> },
-            { path: "/admin/settings/ark-private-assets", label: "方舟素材库", description: "Seedance 可信参考素材", icon: <CloudUpload className="size-4" /> },
-            { path: "/admin/settings/response-interception", label: "模型响应拦截", description: "先启用策略，再配置替换规则", icon: <ShieldAlert className="size-4" /> },
-            { path: "/admin/settings/third-party", label: "第三方参数配置", description: "先配置凭据，再开放用户入口", icon: <KeyRound className="size-4" /> },
-            { path: "/admin/settings/system-update", label: "系统更新", description: "检查版本、备份与安全更新", icon: <RefreshCw className="size-4" /> },
+            { path: "/admin/settings/appearance", label: "站点及外观", description: "品牌、SEO、备案与皮肤", icon: <Palette className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/features", label: "功能开放", description: "工作台、插件与模型能力", icon: <ToggleLeft className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/drawing-engine", label: "绘图工具", description: "画布绘图节点默认引擎", icon: <Paintbrush className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/runtime-policy", label: "资源与策略", description: "配额、并发、频控与超时", icon: <Settings2 className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/system-performance", label: "系统性能", description: "主机、数据库与缓存状态", icon: <Activity className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/access", label: "登录与注册", description: "账号创建与第三方登录", icon: <ShieldCheck className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/email", label: "邮件服务", description: "注册验证码与 SMTP", icon: <Mail className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/sms", label: "短信服务", description: "注册验证码与阿里云短信", icon: <Smartphone className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/storage", label: "存储服务", description: "对象存储与资源存储", icon: <HardDrive className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/ark-private-assets", label: "方舟素材库", description: "Seedance 可信参考素材", icon: <CloudUpload className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/response-interception", label: "模型响应拦截", description: "先启用策略，再配置替换规则", icon: <ShieldAlert className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/third-party", label: "第三方参数配置", description: "先配置凭据，再开放用户入口", icon: <KeyRound className="size-4" />, permission: "admin.settings" },
+            { path: "/admin/settings/system-update", label: "系统更新", description: "检查版本、备份与安全更新", icon: <RefreshCw className="size-4" />, permission: "admin.settings" },
         ],
     },
 ];
@@ -145,7 +156,7 @@ export function AdminShell() {
                             <AdminTooltip title={collapsed ? "查看更新日志" : undefined} placement="right">
                                 <AppChangelogButton
                                     className={cn("admin-sidebar-brand-button", collapsed && "is-collapsed")}
-                                    icon={<BrandLogoFrame className="admin-sidebar-brand-mark grid shrink-0 place-items-center bg-foreground text-background" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" />} />}
+                                    icon={<BrandLogoFrame className="admin-sidebar-brand-mark grid shrink-0 place-items-center" logoClassName="size-9 object-contain" alt="" fallback={<img src="/logo.png" alt="" className="size-9 object-contain" />} />}
                                     label={appearance.brandName}
                                     showLabel={!collapsed}
                                     showVersion={!collapsed}
@@ -244,10 +255,25 @@ function AdminThemeButton() {
     );
 }
 
-function MobileAdminNavigation() {
+function useVisibleAdminNavigation() {
     const features = useUserStore((state) => state.features);
+    const user = useUserStore((state) => state.user);
+    const permissions = useUserStore((state) => state.permissions);
+    return adminNavigation
+        .map((group) => ({
+            ...group,
+            items: group.items.filter((item) => {
+                if (item.requireFeature && !features[item.requireFeature]) return false;
+                if (item.permission && !hasPermission(user?.role, permissions, item.permission)) return false;
+                return true;
+            }),
+        }))
+        .filter((group) => group.items.length > 0);
+}
+
+function MobileAdminNavigation() {
     const location = useLocation();
-    const visibleGroups = adminNavigation.map((group) => ({ ...group, items: group.items.filter((item) => !item.requireFeature || features[item.requireFeature]) })).filter((group) => group.items.length > 0);
+    const visibleGroups = useVisibleAdminNavigation();
     const visibleItems = visibleGroups.flatMap((group) => group.items);
     const currentItem = visibleItems.find((item) => item.path === location.pathname) || visibleItems[0];
     const menuItems: MenuProps["items"] = visibleGroups.map((group) => ({
@@ -290,12 +316,12 @@ function MobileAdminNavigation() {
 }
 
 function AdminNavigation({ collapsed }: { collapsed: boolean }) {
-    const features = useUserStore((state) => state.features);
+    const visibleGroups = useVisibleAdminNavigation();
 
     return (
         <nav className="admin-sidebar-nav thin-scrollbar flex-1 overflow-y-auto" aria-label="管理后台菜单">
-            {adminNavigation.map((group) => {
-                const visibleItems = group.items.filter((item) => !item.requireFeature || features[item.requireFeature]);
+            {visibleGroups.map((group) => {
+                const visibleItems = group.items;
                 if (visibleItems.length === 0) return null;
 
                 return (

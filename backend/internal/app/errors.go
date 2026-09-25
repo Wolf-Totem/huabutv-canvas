@@ -40,6 +40,10 @@ func Forbidden(message string) *AuthError {
 	return kernel.Forbidden(message)
 }
 
+func FailedPrecondition(message string) *AppError {
+	return kernel.FailedPrecondition(message)
+}
+
 // ModelErrorCode 定义模型相关的错误码
 type ModelErrorCode string
 

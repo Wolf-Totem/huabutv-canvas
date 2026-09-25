@@ -1,0 +1,16 @@
+{
+  "register.subject": "{{brand}}邮箱验证邮件",
+  "register.title": "验证您的邮箱",
+  "register.hello": "{{email}}，您好：",
+  "register.lead": "请输入以下验证码以继续",
+  "register.expiry": "验证码将在 10 分钟后失效。",
+  "register.ignore": "如果不是您本人操作，请忽略此邮件。",
+  "register.footer": "此邮件由{{brand}}发送，请勿直接回复。",
+  "reset.subject": "{{brand}}密码重置验证邮件",
+  "reset.title": "重置您的密码",
+  "reset.hello": "{{email}}，您好：",
+  "reset.lead": "请输入以下验证码以继续重置密码",
+  "reset.expiry": "验证码将在 10 分钟后失效。",
+  "reset.ignore": "如果不是您本人操作，请忽略此邮件，并确保邮箱账号安全。",
+  "reset.footer": "此邮件由{{brand}}发送，请勿直接回复。"
+}

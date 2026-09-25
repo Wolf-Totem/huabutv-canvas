@@ -31,8 +31,13 @@ type RegisterRequest struct {
 	Username    string `json:"username"`
 	Email       string `json:"email"`
 	EmailCode   string `json:"emailCode"`
+	Phone       string `json:"phone"`
+	SmsCode     string `json:"smsCode"`
+	Channel     string `json:"channel"`
 	DisplayName string `json:"displayName"`
 	Password    string `json:"password"`
+	InviteCode  string `json:"inviteCode"`
+	Host        string `json:"-"`
 }
 
 type LoginRequest struct {
@@ -41,11 +46,16 @@ type LoginRequest struct {
 }
 
 type PublicAuthSettings struct {
-	FirstUser           bool `json:"firstUser"`
-	RegistrationEnabled bool `json:"registrationEnabled"`
-	LinuxDOEnabled      bool `json:"linuxdoEnabled"`
-	EmailEnabled        bool `json:"emailEnabled"`
-	EmailCodeRequired   bool `json:"emailCodeRequired"`
+	FirstUser           bool   `json:"firstUser"`
+	RegistrationEnabled bool   `json:"registrationEnabled"`
+	LinuxDOEnabled      bool   `json:"linuxdoEnabled"`
+	EmailEnabled        bool   `json:"emailEnabled"`
+	EmailCodeRequired   bool   `json:"emailCodeRequired"`
+	InviteRequired      bool   `json:"inviteRequired"`
+	InviteLocked        bool   `json:"inviteLocked"`
+	InviteDisplayName   string `json:"inviteDisplayName,omitempty"`
+	SmsEnabled          bool   `json:"smsEnabled"`
+	SmsCodeRequired     bool   `json:"smsCodeRequired"`
 }
 
 type AuthSessionResult struct {
@@ -62,7 +72,7 @@ type AuthUser struct {
 	IdentityUsername string `json:"identityUsername,omitempty"`
 }
 
-func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
+func (s *Service) PublicAuthSettings(host string) (*PublicAuthSettings, error) {
 	count, err := s.repo.UserCount()
 	if err != nil {
 		return nil, err
@@ -70,7 +80,7 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if count == 0 {
 		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false}, nil
 	}
-	registrationEnabled, err := s.RegistrationEnabled()
+	allowed, streamer, err := s.registrationAllowed(host, "")
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +88,30 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PublicAuthSettings{FirstUser: false, RegistrationEnabled: registrationEnabled, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true}, nil
+	smsEnabled, err := s.SMSEnabled()
+	if err != nil {
+		return nil, err
+	}
+	out := &PublicAuthSettings{FirstUser: false, RegistrationEnabled: allowed, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true, SmsEnabled: smsEnabled, SmsCodeRequired: true}
+	if streamer != nil && streamer.Status == model.StreamerStatusActive {
+		hostStreamer, err := s.host.StreamerByHost(host)
+		if err != nil {
+			return nil, err
+		}
+		if hostStreamer != nil && hostStreamer.Status == model.StreamerStatusActive {
+			out.InviteRequired = true
+			out.InviteLocked = true
+			out.InviteDisplayName = hostStreamer.DisplayName
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	username := NormalizeUsername(req.Username)
 	email := NormalizeEmail(req.Email)
+	phone := kernel.NormalizeChinaMobile(req.Phone)
+	channel := strings.ToLower(strings.TrimSpace(req.Channel))
 	displayName := NormalizeDisplayName(req.DisplayName, username)
 	if err := ValidateUsername(username); err != nil {
 		return nil, err
@@ -96,30 +124,73 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 			return nil, err
 		}
 	}
+	if phone != "" && !kernel.IsChinaMobile(phone) {
+		return nil, kernel.BadAuthRequest("请输入中国大陆 11 位手机号")
+	}
+	if channel == "" {
+		if phone != "" {
+			channel = "sms"
+		} else {
+			channel = "email"
+		}
+	}
+	if channel != "email" && channel != "sms" {
+		return nil, kernel.BadAuthRequest("请选择邮箱或短信注册")
+	}
 	s.registrationMu.Lock()
 	defer s.registrationMu.Unlock()
 	count, err := s.repo.UserCount()
 	if err != nil {
 		return nil, err
 	}
-	var verifiedCode *model.EmailVerificationCode
+	var verifiedEmail *model.EmailVerificationCode
+	var verifiedSMS *model.SmsVerificationCode
+	var inviteStreamer *model.Streamer
 	if count > 0 {
-		registrationEnabled, err := s.RegistrationEnabled()
+		allowed, streamer, err := s.registrationAllowed(req.Host, req.InviteCode)
 		if err != nil {
 			return nil, err
 		}
-		if !registrationEnabled {
+		if !allowed {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
 		}
-		if email == "" {
-			return nil, kernel.BadAuthRequest("请输入邮箱")
-		}
-		if err := s.validateRegistrationEmailDomain(email); err != nil {
-			return nil, err
-		}
-		verifiedCode, err = s.VerifyRegistrationEmailCode(email, req.EmailCode)
+		hostStreamer, err := s.host.StreamerByHost(req.Host)
 		if err != nil {
 			return nil, err
+		}
+		if hostStreamer != nil && hostStreamer.Status == model.StreamerStatusActive {
+			inviteStreamer = hostStreamer
+		} else {
+			inviteStreamer = streamer
+		}
+		if channel == "sms" {
+			smsEnabled, err := s.SMSEnabled()
+			if err != nil {
+				return nil, err
+			}
+			if !smsEnabled {
+				return nil, kernel.Forbidden("管理员尚未配置注册短信")
+			}
+			if phone == "" {
+				return nil, kernel.BadAuthRequest("请输入手机号")
+			}
+			verifiedSMS, err = s.VerifyRegistrationSMSCode(phone, req.SmsCode)
+			if err != nil {
+				return nil, err
+			}
+			email = ""
+		} else {
+			if email == "" {
+				return nil, kernel.BadAuthRequest("请输入邮箱")
+			}
+			if err := s.validateRegistrationEmailDomain(email); err != nil {
+				return nil, err
+			}
+			verifiedEmail, err = s.VerifyRegistrationEmailCode(email, req.EmailCode)
+			if err != nil {
+				return nil, err
+			}
+			phone = ""
 		}
 	}
 	if _, err := s.repo.UserByUsername(username); err == nil {
@@ -134,6 +205,13 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 			return nil, err
 		}
 	}
+	if phone != "" {
+		if _, err := s.repo.UserByPhone(phone); err == nil {
+			return nil, kernel.BadAuthRequest("手机号已被注册")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
 	passwordHash, err := HashPassword(req.Password)
 	if err != nil {
 		return nil, err
@@ -143,6 +221,7 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		ID:           kernel.NewID(),
 		Username:     username,
 		Email:        email,
+		Phone:        phone,
 		DisplayName:  displayName,
 		Role:         model.UserRoleUser,
 		Status:       model.UserStatusActive,
@@ -153,8 +232,12 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	if count == 0 {
 		user.Role = model.UserRoleAdmin
 	}
-	if verifiedCode != nil {
-		if err := s.repo.CreateUserWithEmailVerification(&user, verifiedCode.ID, time.Now()); err != nil {
+	if verifiedEmail != nil {
+		if err := s.repo.CreateUserWithEmailVerification(&user, verifiedEmail.ID, time.Now()); err != nil {
+			return nil, err
+		}
+	} else if verifiedSMS != nil {
+		if err := s.repo.CreateUserWithSmsVerification(&user, verifiedSMS.ID, time.Now()); err != nil {
 			return nil, err
 		}
 	} else if err := s.repo.Create(&user); err != nil {
@@ -162,6 +245,11 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	}
 	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
 		return nil, err
+	}
+	if inviteStreamer != nil {
+		if err := s.host.BindUserStreamerInvite(user.ID, inviteStreamer.ID); err != nil {
+			return nil, err
+		}
 	}
 	return s.createAuthSession(&user)
 }
@@ -171,7 +259,7 @@ func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 	user, err := s.repo.UserByAccount(account)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, kernel.Unauthorized("用户名、邮箱或密码不正确")
+			return nil, kernel.Unauthorized("用户名、邮箱、手机号或密码不正确")
 		}
 		return nil, err
 	}
@@ -179,7 +267,7 @@ func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 		return nil, kernel.Forbidden("该账号已被禁用")
 	}
 	if !verifyPassword(req.Password, user.PasswordHash) {
-		return nil, kernel.Unauthorized("用户名、邮箱或密码不正确")
+		return nil, kernel.Unauthorized("用户名、邮箱、手机号或密码不正确")
 	}
 	now := time.Now()
 	user.LastLoginAt = &now

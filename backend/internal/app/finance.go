@@ -66,7 +66,10 @@ type BillingOrderPage struct {
 }
 
 type CreateRedeemBatchRequest struct {
+	Kind               string     `json:"kind"`
+	PlanSKU            string     `json:"planSku"`
 	AmountMicrocredits int64      `json:"amountMicrocredits"`
+	StorageQuotaBytes  int64      `json:"storageQuotaBytes"`
 	Count              int        `json:"count"`
 	Note               string     `json:"note"`
 	ExpiresAt          *time.Time `json:"expiresAt"`
@@ -137,29 +140,98 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 }
 
 func (s *Service) RedeemCredits(user *model.User, code string, redeemedIP string) (*model.CreditAccount, error) {
+	outcome, err := s.Redeem(user, code, redeemedIP)
+	if err != nil {
+		return nil, err
+	}
+	return outcome.Account, nil
+}
+
+func (s *Service) Redeem(user *model.User, code string, redeemedIP string) (*RedeemOutcome, error) {
 	if user == nil {
 		return nil, Unauthorized("请先登录")
 	}
-	if err := s.RequireFeature(FeatureCredits); err != nil {
+	if err := s.requireRedeemEnabled(); err != nil {
 		return nil, err
 	}
 	code = strings.ToLower(strings.TrimSpace(code))
 	if len(code) != 32 {
 		return nil, BadAuthRequest("兑换码无效或已使用")
 	}
-	account, err := s.repo.RedeemCode(user.ID, hashRedeemCode(code), truncateRunes(strings.TrimSpace(redeemedIP), 64))
+	result, err := s.repo.RedeemCodeWithHooks(user.ID, hashRedeemCode(code), truncateRunes(strings.TrimSpace(redeemedIP), 64), repository.RedeemHooks{
+		BeforeApply: func(tx *gorm.DB, item *model.RedeemCode) error {
+			kind := model.NormalizeRedeemKind(item.Kind)
+			switch kind {
+			case model.RedeemKindCredits:
+				return s.RequireFeature(FeatureCredits)
+			case model.RedeemKindMembership:
+				occupied, err := repository.OccupiedMembershipCountInTx(tx, user.ID)
+				if err != nil {
+					return err
+				}
+				return s.assertCanPurchaseMembershipTx(tx, user.ID, item.PlanSKU, occupied)
+			case model.RedeemKindStorage:
+				if item.StorageQuotaBytes <= 0 {
+					return BadAuthRequest("兑换码容量无效")
+				}
+				return nil
+			default:
+				return BadAuthRequest("兑换码类型无效")
+			}
+		},
+	})
 	if errors.Is(err, repository.ErrRedeemCodeInvalid) {
 		return nil, BadAuthRequest("兑换码无效或已使用")
 	}
-	return account, err
+	if err != nil {
+		return nil, err
+	}
+	kind := model.NormalizeRedeemKind(result.Code.Kind)
+	outcome := &RedeemOutcome{Account: result.Account, Granted: &RedeemGrantedView{
+		Kind: kind, PlanSKU: result.Code.PlanSKU, CreditsMicrocredits: result.Code.AmountMicrocredits, StorageQuotaBytes: result.Code.StorageQuotaBytes,
+	}}
+	if kind == model.RedeemKindMembership || kind == model.RedeemKindStorage {
+		view, viewErr := s.PublicMembership(user.ID)
+		if viewErr != nil {
+			return nil, viewErr
+		}
+		outcome.Membership = view
+	}
+	return outcome, nil
 }
 
 func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatchRequest) (*CreateRedeemBatchResult, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	if req.AmountMicrocredits <= 0 {
+	if !model.IsRedeemKind(req.Kind) {
+		return nil, BadAuthRequest("兑换码类型无效")
+	}
+	kind := model.NormalizeRedeemKind(req.Kind)
+	planSKU := strings.TrimSpace(req.PlanSKU)
+	amount := req.AmountMicrocredits
+	storageBytes := req.StorageQuotaBytes
+	if kind == model.RedeemKindMembership {
+		if !model.IsMembershipSKU(planSKU) {
+			return nil, BadAuthRequest("未知订阅套餐")
+		}
+		product, err := s.repo.MembershipProductBySKU(planSKU)
+		if err != nil {
+			return nil, BadAuthRequest("未知订阅套餐")
+		}
+		amount = product.CreditsMicrocredits
+		storageBytes = 0
+	} else if kind == model.RedeemKindStorage {
+		if storageBytes <= 0 || storageBytes > model.MaxMembershipStorageB {
+			return nil, BadAuthRequest("容量兑换码需为 1 字节至 3TiB")
+		}
+		amount = 0
+		planSKU = ""
+	} else if amount <= 0 {
 		return nil, BadAuthRequest("兑换码积分必须大于 0")
+	} else {
+		storageBytes = 0
+		planSKU = ""
 	}
 	if req.Count <= 0 || req.Count > 5000 {
 		return nil, BadAuthRequest("单批兑换码数量需为 1-5000")
@@ -167,7 +239,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	if req.ExpiresAt != nil && !req.ExpiresAt.After(time.Now()) {
 		return nil, BadAuthRequest("兑换码过期时间必须晚于当前时间")
 	}
-	batch := model.RedeemBatch{ID: newID(), AmountMicrocredits: req.AmountMicrocredits, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, ExpiresAt: req.ExpiresAt}
+	batch := model.RedeemBatch{ID: newID(), Kind: kind, PlanSKU: planSKU, AmountMicrocredits: amount, StorageQuotaBytes: storageBytes, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, ExpiresAt: req.ExpiresAt}
 	codes := make([]string, 0, req.Count)
 	items := make([]model.RedeemCode, 0, req.Count)
 	for range req.Count {
@@ -178,7 +250,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 		codes = append(codes, plain)
 		items = append(items, model.RedeemCode{
 			ID: newID(), BatchID: batch.ID, CodeHash: hashRedeemCode(plain), CodeSuffix: plain[len(plain)-4:],
-			AmountMicrocredits: req.AmountMicrocredits, Status: model.RedeemCodeUnused, ExpiresAt: req.ExpiresAt,
+			Kind: kind, PlanSKU: planSKU, AmountMicrocredits: amount, StorageQuotaBytes: storageBytes, Status: model.RedeemCodeUnused, ExpiresAt: req.ExpiresAt,
 		})
 	}
 	encodedCodes, err := json.Marshal(codes)
@@ -195,7 +267,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	if err := s.repo.CreateRedeemBatch(&batch, items); err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "redeem_batch.create", "redeem_batch", batch.ID, "创建兑换码批次", map[string]any{"count": batch.Count, "amountMicrocredits": batch.AmountMicrocredits}); err != nil {
+	if err := s.appendAdminAudit(actor, "redeem_batch.create", "redeem_batch", batch.ID, "创建兑换码批次", map[string]any{"count": batch.Count, "kind": batch.Kind, "amountMicrocredits": batch.AmountMicrocredits, "storageQuotaBytes": batch.StorageQuotaBytes}); err != nil {
 		return nil, err
 	}
 	return &CreateRedeemBatchResult{Batch: batch, Codes: codes}, nil

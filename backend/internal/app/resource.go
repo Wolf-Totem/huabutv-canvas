@@ -17,7 +17,6 @@ import (
 	_ "image/png"
 	"infinite-canvas/backend/internal/kernel"
 	"io"
-	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -606,23 +605,7 @@ func (s *Service) storeResourceObject(resource *model.Resource, fileName string,
 	if fallbackErr == nil {
 		fallbackErr = settingErr
 	}
-	if seeker, ok := body.(io.Seeker); ok {
-		if _, seekErr := seeker.Seek(0, io.SeekStart); seekErr != nil {
-			return "", errors.Join(fallbackErr, fmt.Errorf("降级本地存储时重置读取位置失败：%w", seekErr))
-		}
-	}
-	localKey := localObjectKey(resource.UserID, resource.Kind, fileName, resource.MimeType, time.Now())
-	resource.Provider = "local"
-	resource.ObjectKey = localKey
-	resource.Endpoint = ""
-	resource.Bucket = ""
-	resource.StorageSettingID = ""
-	resource.ETag = ""
-	if localErr := writeLocalResourceObject(filepath.Join(s.dataDir, "resources", filepath.FromSlash(localKey)), body); localErr != nil {
-		return "", errors.Join(fallbackErr, fmt.Errorf("降级本地存储失败：%w", localErr))
-	}
-	log.Printf("object storage upload degraded to local storage: resource=%s error=%v", resource.ID, fallbackErr)
-	return "", nil
+	return "", fmt.Errorf("对象存储写入失败：%w", fallbackErr)
 }
 
 func (s *Service) retryStoredResource(userID string, resource *model.Resource, kind string, mimeType string, size int64, body io.Reader) (*model.Resource, error) {
@@ -738,6 +721,38 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 		}
 		return item, nil
 	case map[string]interface{}:
+		if raw := remoteResultMediaURL(item); raw != "" {
+			payload, err := downloadRemoteResource(raw, megabytes(64))
+			if err != nil {
+				return nil, fmt.Errorf("生成结果入库失败：%w", err)
+			}
+			kind := normalizeResourceKind("", payload.mimeType)
+			width, height := intValue(item["width"]), intValue(item["height"])
+			quotaDay := ""
+			if enforceQuota {
+				quotaDay, err = s.reserveGeneratedResourceQuota(userID, int64(len(payload.data)))
+				if err != nil {
+					return nil, err
+				}
+			}
+			resource, _, err := s.storeResource(userID, kind, payload.fileName, payload.mimeType, int64(len(payload.data)), width, height, int64(intValue(item["durationMs"])), bytes.NewReader(payload.data), nil, false)
+			if err != nil {
+				if enforceQuota {
+					s.releaseUserUploadQuota(userID, quotaDay, int64(len(payload.data)))
+				}
+				return nil, fmt.Errorf("生成内容写入资源存储失败：%w", err)
+			}
+			if enforceQuota {
+				s.commitUserUploadQuota(userID, int64(len(payload.data)))
+			}
+			resourceURL := resourceFileURL(resource.ID)
+			item["dataUrl"] = resourceURL
+			item["url"] = resourceURL
+			item["storageKey"] = "resource:" + resource.ID
+			item["resourceId"] = resource.ID
+			item["bytes"] = resource.Size
+			item["mimeType"] = resource.MimeType
+		}
 		if raw := inlineMediaValue(item); raw != "" {
 			mimeType, data, err := s.decodeDataURL(raw)
 			if err != nil && !skipInvalidDataURL {
@@ -795,6 +810,28 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 	default:
 		return value, nil
 	}
+}
+
+func remoteResultMediaURL(item map[string]interface{}) string {
+	kind, _ := item["mimeType"].(string)
+	mode, _ := item["mode"].(string)
+	mediaLike := strings.HasPrefix(kind, "image/") || strings.HasPrefix(kind, "video/") || strings.HasPrefix(kind, "audio/") || mode == "image" || mode == "video" || mode == "audio"
+	if !mediaLike {
+		if _, ok := item["width"]; !ok {
+			return ""
+		}
+	}
+	for _, key := range []string{"dataUrl", "content", "url", "coverUrl"} {
+		text, _ := item[key].(string)
+		if !strings.HasPrefix(text, "http://") && !strings.HasPrefix(text, "https://") {
+			continue
+		}
+		if strings.Contains(text, "/resources/") || strings.Contains(text, "/api/public/resources/") {
+			continue
+		}
+		return text
+	}
+	return ""
 }
 
 func inlineMediaValue(item map[string]interface{}) string {
@@ -971,6 +1008,24 @@ func (s *Service) activeOSSSetting() (ossSettingValue, error) {
 	return validateActiveOSSSetting(setting, "管理员尚未启用 OSS", "平台 OSS 配置不完整，请联系管理员")
 }
 
+func (s *Service) usingPersonalResourceOSS(userID string) (bool, error) {
+	userSetting, value, err := s.readUserOSSSetting(userID)
+	if err != nil {
+		return false, err
+	}
+	if userSetting == nil || !value.Enabled {
+		return false, nil
+	}
+	_, systemValue, err := s.readOSSSetting()
+	if err != nil {
+		return false, err
+	}
+	if value.Provider == s3Provider && !systemValue.AllowUserS3 {
+		return false, nil
+	}
+	return s.PersonalStorageAllowed(userID, false)
+}
+
 func (s *Service) activeResourceOSSSetting(userID string) (ossSettingValue, string, bool, error) {
 	userSetting, value, err := s.readUserOSSSetting(userID)
 	if err != nil {
@@ -980,8 +1035,11 @@ func (s *Service) activeResourceOSSSetting(userID string) (ossSettingValue, stri
 	if err != nil {
 		return ossSettingValue{}, "", false, err
 	}
-	userAllowed := value.Provider != s3Provider || systemValue.AllowUserS3
-	if userSetting != nil && value.Enabled && userAllowed {
+	personalAllowed, allowErr := s.usingPersonalResourceOSS(userID)
+	if allowErr != nil {
+		return ossSettingValue{}, "", false, allowErr
+	}
+	if userSetting != nil && value.Enabled && personalAllowed {
 		value, err = validateActiveOSSSetting(value, "用户 OSS 尚未启用", "你的 OSS 配置不完整")
 		return value, firstNonEmpty(value.StorageLocationID, userSetting.ID), true, err
 	}

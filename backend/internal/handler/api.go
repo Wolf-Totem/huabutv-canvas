@@ -12,7 +12,12 @@ import (
 func RegisterCanvasAPI(api *gin.RouterGroup, svc *service.Service) {
 	RegisterOpenAPIRoutes(api)
 	RegisterAuthRoutes(api, svc)
+	RegisterLocaleRoutes(api, svc)
 	RegisterAppearanceRoutes(api, svc)
+	RegisterSiteSkinRoutes(api, svc)
+	RegisterAdminStreamerRoutes(api, svc)
+	RegisterAdminRoleRoutes(api, svc)
+	RegisterStreamerConsoleRoutes(api, svc)
 	RegisterFeatureAvailabilityRoutes(api, svc)
 	RegisterAgentRoutes(api, svc)
 	RegisterAgentMemoryRoutes(api, svc)
@@ -27,6 +32,7 @@ func RegisterCanvasAPI(api *gin.RouterGroup, svc *service.Service) {
 	RegisterFinanceRoutes(api, svc)
 	RegisterCreationRoutes(api, svc)
 	RegisterPaymentRoutes(api, svc)
+	RegisterMembershipRoutes(api, svc)
 	RegisterLibTVRoutes(api, svc)
 	RegisterTapNowRoutes(api, svc)
 	RegisterChannelModelRoutes(api, svc)
@@ -45,6 +51,8 @@ func RegisterCanvasAPI(api *gin.RouterGroup, svc *service.Service) {
 	projectAPI.Use(RequireFeature(svc, service.FeatureShortDrama))
 	RegisterProjectRoutes(projectAPI, svc)
 	RegisterCanvasShareRoutes(api, svc)
+	RegisterPlazaRoutes(api, svc)
+	RegisterPlazaAdminRoutes(api, svc)
 }
 
 func RegisterOpenAPIRoutes(api *gin.RouterGroup) {

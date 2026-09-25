@@ -245,6 +245,19 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         image.outputFormat = { supported: false };
         image.maxOutputs = 4;
     }
+    if (protocol === "jiasu-image") {
+        image.references.maxImages = 16;
+        image.references.maskSupported = false;
+        image.size = {
+            parameter: "size",
+            values: ["1024x1024", "1024x1536", "1536x1024"],
+            default: "1024x1024",
+            allowCustom: true,
+        };
+        image.quality = { supported: true, values: ["auto", "low", "medium", "high", "1k", "2k", "4k"], default: "medium" };
+        image.transparentBackground = { supported: false, default: false };
+        image.maxOutputs = 4;
+    }
     if (protocol === "agnes-image") {
         // Agnes 图像：size 必填，取 1K/2K/3K/4K 档位或 WxH 精确尺寸，画面比例走独立的 ratio 字段；
         // 参考图放 extra_body.image，支持多图合成，但没有蒙版端点。
@@ -328,6 +341,19 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.references.maxVideoDurationSeconds = 15;
         video.references.maxAudioDurationSeconds = 15;
         video.generateAudio = { supported: true, default: true };
+    }
+    if (protocol === "jiasu-video") {
+        video.references.maxImages = 30;
+        video.references.maxVideos = 10;
+        video.references.maxAudios = 10;
+        video.references.maxVideoBytes = 200 * 1024 * 1024;
+        video.references.maxAudioBytes = 15 * 1024 * 1024;
+        video.references.maxVideoDurationSeconds = 15;
+        video.references.maxAudioDurationSeconds = 15;
+        video.resolutions = ["480p", "720p", "1080p"];
+        video.ratios = ["16:9", "9:16", "1:1"];
+        video.operations = ["text_to_video", "image_to_video", "reference_to_video", "audio_to_video"];
+        video.generateAudio = { supported: false, default: false };
     }
     if (protocol === "volcengine-ark-video" || protocol === "newapi-channel-1") video.resolutions = ["480p", "720p", "1080p"];
     if (protocol === "volcengine-ark-video") {

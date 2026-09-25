@@ -47,8 +47,15 @@ func (s *Service) TestUserOSSSetting(actor *model.User, req OSSSettingRequest) (
 	if err != nil {
 		return nil, err
 	}
-	if strings.EqualFold(strings.TrimSpace(req.Provider), s3Provider) && !platform.AllowUserS3 {
-		return nil, Forbidden("平台管理员尚未允许个人 S3 兼容存储")
+	allowed, allowErr := s.PersonalStorageAllowed(actor.ID, actor.Role == model.UserRoleAdmin)
+	if allowErr != nil {
+		return nil, allowErr
+	}
+	if !allowed {
+		if strings.EqualFold(strings.TrimSpace(req.Provider), s3Provider) && !platform.AllowUserS3 {
+			return nil, Forbidden("平台管理员尚未允许个人使用自己的对象存储桶")
+		}
+		return nil, Forbidden("开通永久订阅后才能使用个人存储")
 	}
 	_, current, err := s.readUserOSSSetting(actor.ID)
 	if err != nil {

@@ -9,7 +9,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import {
     canvasEmotionPresets,
     emotionBlendshapes,
@@ -18,7 +18,6 @@ import {
     type CanvasEmotionEditRegion,
     type CanvasFaceBox,
 } from "@/lib/canvas/canvas-emotion";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 export type CanvasImageEmotionPayload = CanvasEmotionParams & {
     label: string;
@@ -54,7 +53,7 @@ type CanvasNodeEmotionPanelProps = {
 };
 
 export function CanvasNodeEmotionPanel({ dataUrl, imageWidth, imageHeight, characters, activeCharacterId, preset, generating, error, onSelectCharacter, onManualSelect, onPresetChange, onClose, onConfirm }: CanvasNodeEmotionPanelProps) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const reducedMotion = useReducedMotion();
     return (
         <SpotlightSurface
@@ -129,7 +128,7 @@ function FaceThumbnail({ dataUrl, imageWidth, imageHeight, box }: { dataUrl: str
 }
 
 function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChange: (preset: CanvasEmotionPreset) => void }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const reducedMotion = useReducedMotion();
     const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
     const [dragging, setDragging] = useState(false);
@@ -190,7 +189,7 @@ function EmotionPad({ preset, onChange }: { preset: CanvasEmotionPreset; onChang
 }
 
 function EmotionHeadPreview({ preset }: { preset: CanvasEmotionPreset }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     return (
         <div className="relative overflow-hidden rounded-[var(--r-lg)] border" style={{ background: "#26272a", borderColor: theme.toolbar.border }}>
             <Canvas frameloop="demand" dpr={[1, 1.5]} camera={{ fov: 38, near: 0.1, far: 20, position: [0, 0, 4.15] }} gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}>

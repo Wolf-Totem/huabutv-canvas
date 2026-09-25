@@ -40,6 +40,8 @@ export type UserOSSSetting = {
     hasSessionToken: boolean;
     pathStyle: boolean;
     allowUserS3: boolean;
+    personalStorageAllowed?: boolean;
+    disabledReason?: string;
     publicBaseUrl: string;
     pathPrefix: string;
     testedAt?: string;
@@ -57,6 +59,9 @@ export type UserOSSSettingInput = Pick<UserOSSSetting, "enabled" | "provider" | 
 export type AccountFileStorageUsage = {
     usedBytes: number;
     totalBytes: number;
+    quotaSource?: string;
+    effectiveStoredFileBytes?: number;
+    personalStoredFileBytes?: number;
 };
 
 export type ArkPrivateAssetSync = {

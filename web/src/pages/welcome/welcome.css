@@ -93,14 +93,12 @@ body:has(.welcome-page) {
 }
 .welcome-brand-logo {
     display: block;
-    width: 26px;
-    height: 26px;
+    width: 36px;
+    height: 36px;
     object-fit: contain;
 }
 .welcome-brand-logo.is-fallback {
-    background: currentColor;
-    mask: url("/logo.svg") center / contain no-repeat;
-    -webkit-mask: url("/logo.svg") center / contain no-repeat;
+    background: url("/logo.png") center / contain no-repeat;
 }
 .welcome-nav {
     margin-left: auto;
@@ -759,8 +757,8 @@ body:has(.welcome-page) {
         gap: 8px;
     }
     .welcome-brand-logo {
-        width: 22px;
-        height: 22px;
+        width: 30px;
+        height: 30px;
     }
     .welcome-header-cta {
         margin-left: auto;

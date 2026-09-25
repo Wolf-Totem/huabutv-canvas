@@ -185,6 +185,22 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if task.Type == model.TaskTypeTimelineRender {
 		return w.processTimelineRender(task, ctx)
 	}
+	if latest, latestErr := s.repo.Task(task.ID); latestErr == nil {
+		task.ProviderRequestID = latest.ProviderRequestID
+		task.TicketConsumedAt = latest.TicketConsumedAt
+		task.TicketExpiresAt = latest.TicketExpiresAt
+		task.ClientSubmit = latest.ClientSubmit
+	}
+	if generationTicketExpired(task, time.Now()) {
+		return terminal.markPreparationFailure(task, "任务票已过期", errors.New("任务票已过期，未向厂商提交"), false, "任务票已过期，未向厂商提交")
+	}
+	if task.ClientSubmit && strings.TrimSpace(task.ProviderRequestID) == "" {
+		if deferErr := s.repo.DeferRunningTaskForProviderPoll(task.ID, task.LeaseOwner, "等待客户端提交", 8*time.Second); deferErr != nil {
+			return deferErr
+		}
+		_ = s.log(task.UserID, task.ID, "info", "等待浏览器提交厂商任务", "")
+		return nil
+	}
 
 	s.markAgentMemoryCompactRunning(*task)
 	task.Stage = "调用生成模型"

@@ -7,8 +7,7 @@ import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
 import { defaultImageParamsForModel } from "@/lib/model-selection";
 import type { AiConfig } from "@/stores/use-config-store";
-import { canvasThemes } from "@/lib/canvas-theme";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 
 export type CanvasImageMaskEditPayload = {
     prompt: string;
@@ -33,7 +32,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, config, onClose, onCon
     const [error, setError] = useState("");
     const [generationConfig, setGenerationConfig] = useState<AiConfig>(() => config);
     const [advancedOpen, setAdvancedOpen] = useState(false);
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
 
     useEffect(() => {
         if (!open) return;

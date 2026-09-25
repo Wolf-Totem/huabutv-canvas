@@ -69,6 +69,7 @@ type CreatePaymentOrderRequest struct {
 	ProductID      string `json:"productId"`
 	ProviderID     string `json:"providerId"`
 	IdempotencyKey string `json:"idempotencyKey"`
+	ProductKind    string `json:"productKind"`
 }
 
 type PaymentCheckoutView struct {
@@ -88,6 +89,8 @@ type PaymentOrderView struct {
 	AmountFen           int64                    `json:"amountFen"`
 	Currency            string                   `json:"currency"`
 	CreditsMicrocredits int64                    `json:"creditsMicrocredits"`
+	ProductKind         string                   `json:"productKind,omitempty"`
+	PlanSKU             string                   `json:"planSku,omitempty"`
 	Status              model.PaymentOrderStatus `json:"status"`
 	ProviderStatus      string                   `json:"providerStatus,omitempty"`
 	ProviderTradeNo     string                   `json:"providerTradeNo,omitempty"`
@@ -160,9 +163,6 @@ func PaymentNotificationResponseForWithRegistry(registry *payment.Registry, prov
 func (s *Service) PaymentProviders(actor *model.User) ([]PaymentProviderView, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
-	}
-	if err := s.RequireFeature(FeatureCredits); err != nil {
-		return nil, err
 	}
 	items := make([]PaymentProviderView, 0)
 	for _, descriptor := range s.paymentRegistry.Descriptors() {
@@ -495,13 +495,7 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 	}, nil
 }
 
-func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest) (*PaymentOrderView, error) {
-	if actor == nil {
-		return nil, Unauthorized("请先登录")
-	}
-	if err := s.RequireFeature(FeatureCredits); err != nil {
-		return nil, err
-	}
+func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest, _ *model.MembershipProduct) (*PaymentOrderView, error) {
 	idempotencyKey := strings.TrimSpace(request.IdempotencyKey)
 	if idempotencyKey == "" {
 		return nil, BadAuthRequest("支付幂等标识不能为空")
@@ -548,7 +542,7 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		ProductID: product.ID, ProductName: product.Name, ProviderID: provider.Descriptor().ID,
 		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
 		AmountFen: product.AmountFen, Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
-		Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
+		ProductKind: model.ProductKindCreditTopup, Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
 	}
 	order, created, err := s.repo.CreatePaymentOrder(order)
@@ -626,6 +620,13 @@ func (s *Service) RefreshPaymentCheckout(ctx context.Context, actor *model.User,
 	}
 	if (order.CheckoutMode != "qr_code" && order.CheckoutMode != "redirect") || (order.Status != model.PaymentOrderPending && order.Status != model.PaymentOrderCreateFailed) || !order.ExpiresAt.After(time.Now()) {
 		return nil, BadAuthRequest("支付订单当前不能刷新收银台")
+	}
+	if model.NormalizeProductKind(order.ProductKind) == model.ProductKindMembership && order.Status == model.PaymentOrderCreateFailed {
+		if occupied, err := s.repo.OccupiedMembershipPaymentOrder(actor.ID); err == nil && occupied.ID != order.ID {
+			return nil, FailedPrecondition("你有一笔未完成的订阅订单")
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
 	}
 	provider, config, values, err := s.paymentRuntimeForOrder(order)
 	if err != nil {
@@ -922,7 +923,8 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 	return PaymentOrderView{
 		ID: order.ID, UserID: order.UserID, MerchantOrderNo: order.MerchantOrderNo, ProductID: order.ProductID, ProductName: order.ProductName,
 		ProviderID: order.ProviderID, AmountFen: order.AmountFen, Currency: order.Currency,
-		CreditsMicrocredits: order.CreditsMicrocredits, Status: order.Status, ProviderStatus: order.ProviderStatus,
+		CreditsMicrocredits: order.CreditsMicrocredits, ProductKind: model.NormalizeProductKind(order.ProductKind), PlanSKU: order.PlanSKU,
+		Status: order.Status, ProviderStatus: order.ProviderStatus,
 		ProviderTradeNo: providerTradeNo, Checkout: checkout, ExpiresAt: order.ExpiresAt,
 		ProviderPaidAt: order.ProviderPaidAt, CreditedAt: order.CreditedAt, ClosedAt: order.ClosedAt,
 		CreatedAt: order.CreatedAt, UpdatedAt: order.UpdatedAt,

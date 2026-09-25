@@ -18,6 +18,7 @@ export default function AccessSettingsPanel() {
     const [refreshing, setRefreshing] = useState(false);
     const [savingLinuxDO, setSavingLinuxDO] = useState(false);
     const [savingRegistration, setSavingRegistration] = useState(false);
+    const [savingInviteSubdomain, setSavingInviteSubdomain] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [draftLinuxDOEnabled, setDraftLinuxDOEnabled] = useState(false);
     const [loadError, setLoadError] = useState("");
@@ -136,7 +137,7 @@ export default function AccessSettingsPanel() {
     const toggleRegistration = async (enabled: boolean) => {
         setSavingRegistration(true);
         try {
-            const data = await updateAdminRegistrationSetting(enabled);
+            const data = await updateAdminRegistrationSetting({ enabled });
             setRegistration(data.setting);
             message.success(enabled ? "用户注册已开启" : "用户注册已关闭");
         } catch (error) {
@@ -281,6 +282,35 @@ export default function AccessSettingsPanel() {
                             <span>{formatSettingTime(registration.updatedAt, "当前来自部署环境默认值")}</span>
                         </div>
                         <Switch checked={registration.enabled} loading={savingRegistration} disabled={loading || refreshing || savingLinuxDO} onChange={requestRegistrationChange} aria-label="允许创建新账号，切换后立即生效" />
+                    </div>
+                    <div className="admin-access-registration-policy" style={{ marginTop: 16 }}>
+                        <span className="admin-access-policy-icon">
+                            <UsersRound className="size-5" aria-hidden="true" />
+                        </span>
+                        <div className="admin-access-policy-copy">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <strong>主播子域邀请注册</strong>
+                                <AdminStatusBadge label="切换即保存" tone="info" />
+                            </div>
+                            <p>主域关闭注册时，有效主播子域是否仍允许带邀请码注册。默认开启。</p>
+                        </div>
+                        <Switch
+                            checked={registration.inviteSubdomainEnabled !== false}
+                            loading={savingInviteSubdomain}
+                            disabled={loading || refreshing || savingLinuxDO}
+                            onChange={(enabled) => {
+                                if (savingInviteSubdomain) return;
+                                setSavingInviteSubdomain(true);
+                                void updateAdminRegistrationSetting({ enabled: registration.enabled, inviteSubdomainEnabled: enabled })
+                                    .then((data) => {
+                                        setRegistration(data.setting);
+                                        message.success(enabled ? "子域邀请注册已开启" : "子域邀请注册已关闭");
+                                    })
+                                    .catch((error) => message.error(error instanceof Error ? error.message : "更新失败"))
+                                    .finally(() => setSavingInviteSubdomain(false));
+                            }}
+                            aria-label="主域关闭时仍允许主播子域邀请注册"
+                        />
                     </div>
                 </SettingsSectionCard>
             </div>

@@ -175,6 +175,14 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		image.OutputFormat.Supported = false
 		image.MaxOutputs = 4
 	}
+	if protocol == "jiasu-image" {
+		image.References.MaxImages = 16
+		image.References.MaskSupported = false
+		image.Size = ImageSizeConfig{Parameter: "size", Values: []string{"1024x1024", "1024x1536", "1536x1024"}, Default: "1024x1024", AllowCustom: true}
+		image.Quality = ImageQualityConfig{Supported: true, Values: []string{"auto", "low", "medium", "high", "1k", "2k", "4k"}, Default: "medium"}
+		image.TransparentBackground = VideoBooleanConfig{Supported: false, Default: false}
+		image.MaxOutputs = 4
+	}
 	if model.ChannelInterfaceType(protocol) != model.ChannelInterfaceGrokImage && strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelName)), "grok-imagine-image") {
 		image.References.MaxImages = 0
 		image.References.MaskSupported = false
@@ -271,6 +279,19 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
 	case model.ChannelInterfaceAgnesVideo:
 		video = applyModelSpecificVideoCapability(video, protocol, modelName)
+	}
+	if protocol == "jiasu-video" {
+		video.References.MaxImages = 30
+		video.References.MaxVideos = 10
+		video.References.MaxAudios = 10
+		video.References.MaxVideoBytes = 200 * 1024 * 1024
+		video.References.MaxAudioBytes = 15 * 1024 * 1024
+		video.References.MaxVideoDuration = 15
+		video.References.MaxAudioDuration = 15
+		video.Resolutions = []string{"480p", "720p", "1080p"}
+		video.Ratios = []string{"16:9", "9:16", "1:1"}
+		video.Operations = []string{"text_to_video", "image_to_video", "reference_to_video", "audio_to_video"}
+		video.GenerateAudio = VideoBooleanConfig{Supported: false, Default: false}
 	}
 	return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }

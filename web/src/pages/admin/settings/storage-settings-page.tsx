@@ -5,14 +5,14 @@ import { AlertTriangle, BadgeCheck, Check, Cloud, Database, Globe2, HardDrive, K
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
-import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, normalizeOSSConnectionTestInput, S3_PRESET_OPTIONS, type OSSConnectionTestResult, type S3Preset } from "@/lib/oss-settings";
+import { backendProvider, changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, normalizeOSSConnectionTestInput, S3_PRESET_OPTIONS, storageModeFromSetting, type OSSConnectionTestResult, type S3Preset } from "@/lib/oss-settings";
 import { cn } from "@/lib/utils";
 import { getAdminOSSSetting, testAdminOSSConnection, updateAdminOSSSetting, type AdminOSSSetting } from "@/services/api/auth";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
 
-type StorageMode = "local" | AdminOSSSetting["provider"];
+type StorageMode = "local" | AdminOSSSetting["provider"] | "r2";
 type OSSFormValues = {
     mode: StorageMode;
     publicBaseUrl: string;
@@ -36,7 +36,8 @@ const STORAGE_MODES: Array<{ mode: StorageMode; label: string; short: string; de
     { mode: "aliyun", label: "阿里云 OSS", short: "对象存储", description: "新增资源写入阿里云 Bucket，可选 CDN 域名读取。" },
     { mode: "tencent", label: "腾讯云 COS", short: "对象存储", description: "新增资源写入腾讯云 Bucket，可由 Region 生成 Endpoint。" },
     { mode: "qiniu", label: "七牛云 Kodo", short: "对象存储", description: "新增资源上传到 Kodo；无绑定域名时由后端代理读取。" },
-    { mode: "s3", label: "S3 兼容存储", short: "对象存储", description: "支持 AWS S3、Cloudflare R2、Backblaze B2、RustFS 与自定义 S3 Endpoint。" },
+    { mode: "r2", label: "Cloudflare R2", short: "对象存储", description: "新增资源写入 Cloudflare R2。Endpoint 使用账户级 S3 API 根地址。" },
+    { mode: "s3", label: "S3 兼容存储", short: "对象存储", description: "支持 AWS S3、Backblaze B2、RustFS 与自定义 S3 Endpoint。" },
 ];
 
 export default function StorageSettingsPage() {
@@ -311,7 +312,7 @@ export default function StorageSettingsPage() {
 
     const currentValues = form.getFieldsValue(true);
     const normalizedDraft = normalizeStoragePayload(currentValues, setting);
-    const hasCurrentProviderSecret = draftMode !== "local" && setting.provider === draftMode && setting.hasAccessKeySecret;
+    const hasCurrentProviderSecret = draftMode !== "local" && ((draftMode === "r2" && setting.provider === "s3" && setting.s3Preset === "r2") || setting.provider === draftMode) && setting.hasAccessKeySecret;
 
     return (
         <AdminPageFrame title="存储服务" description="配置新增资源的默认存储位置" scroll>
@@ -489,7 +490,7 @@ export default function StorageSettingsPage() {
                                                 <Input
                                                     autoComplete="off"
                                                     placeholder={
-                                                        draftMode === "s3" ? getS3PresetHints(form.getFieldValue("s3Preset") || "custom").region : draftMode === "tencent" ? "ap-guangzhou" : draftMode === "qiniu" ? "z0 / cn-east-1" : "oss-cn-hangzhou"
+                                                        draftMode === "r2" ? "auto" : draftMode === "s3" ? getS3PresetHints(form.getFieldValue("s3Preset") || "custom").region : draftMode === "tencent" ? "ap-guangzhou" : draftMode === "qiniu" ? "z0 / cn-east-1" : "oss-cn-hangzhou"
                                                     }
                                                 />
                                             </Form.Item>
@@ -556,7 +557,7 @@ export default function StorageSettingsPage() {
                                             <Form.Item name="accessKeySecret" label={hasCurrentProviderSecret ? `${accessKeySecretLabel(draftMode)}（${configuredSecretText}）` : accessKeySecretLabel(draftMode)} extra="只在新增或替换当前厂商密钥时填写。">
                                                 <Input.Password autoComplete="new-password" placeholder={hasCurrentProviderSecret ? "留空保留原密钥" : accessKeySecretLabel(draftMode)} />
                                             </Form.Item>
-                                            {draftMode === "s3" ? (
+                                            {draftMode === "s3" || draftMode === "r2" ? (
                                                 <Form.Item
                                                     name="sessionToken"
                                                     label={setting.provider === "s3" && setting.hasSessionToken ? `Session Token（${configuredSecretText}）` : "Session Token（可选）"}
@@ -566,7 +567,7 @@ export default function StorageSettingsPage() {
                                                 </Form.Item>
                                             ) : null}
                                         </div>
-                                        {draftMode === "s3" ? (
+                                        {draftMode === "s3" || draftMode === "r2" ? (
                                             <Form.Item name="pathStyle" label="Path Style" valuePropName="checked" extra="开启后强制使用 path-style；关闭时由后端按 Endpoint 自动选择。">
                                                 <Switch checkedChildren="强制" unCheckedChildren="自动" />
                                             </Form.Item>
@@ -584,8 +585,8 @@ export default function StorageSettingsPage() {
                                 </>
                             )}
                             <div className="admin-storage-form-section">
-                                <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="用户自有存储" description="允许用户配置个人 S3 兼容存储；个人配置停用时仍回退到平台存储。" />
-                                <Form.Item name="allowUserS3" label="允许个人 S3 兼容存储" valuePropName="checked">
+                                <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="用户自有存储" description="打开后，永久订阅用户可以配置自己的对象存储桶（含 R2）。关闭后一律回退到平台存储。" />
+                                <Form.Item name="allowUserS3" label="允许个人使用自己的对象存储桶" valuePropName="checked" extra="生产上线个人存储时请打开此开关。未开通永久订阅的用户即使打开也无法使用。">
                                     <Switch checkedChildren="允许" unCheckedChildren="不允许" />
                                 </Form.Item>
                             </div>
@@ -611,7 +612,7 @@ function FormSectionTitle({ icon, title, description }: { icon: ReactNode; title
 
 function formValues(setting: AdminOSSSetting): OSSFormValues {
     return {
-        mode: setting.enabled ? setting.provider : "local",
+        mode: storageModeFromSetting(setting),
         publicBaseUrl: setting.publicBaseUrl || "",
         region: setting.region || "",
         endpoint: setting.endpoint || "",
@@ -628,7 +629,8 @@ function formValues(setting: AdminOSSSetting): OSSFormValues {
 }
 
 function providerDraftValues(mode: Exclude<StorageMode, "local">, setting: AdminOSSSetting, pathPrefix: string): Partial<OSSFormValues> {
-    if (mode === setting.provider) {
+    const currentIsR2 = setting.provider === "s3" && setting.s3Preset === "r2";
+    if (mode === setting.provider || (mode === "r2" && currentIsR2)) {
         return {
             region: setting.region || "",
             endpoint: setting.endpoint || "",
@@ -643,7 +645,7 @@ function providerDraftValues(mode: Exclude<StorageMode, "local">, setting: Admin
         };
     }
     return {
-        region: "",
+        region: mode === "r2" ? "auto" : "",
         endpoint: "",
         cdnBaseUrl: "",
         bucket: "",
@@ -651,14 +653,14 @@ function providerDraftValues(mode: Exclude<StorageMode, "local">, setting: Admin
         accessKeySecret: "",
         sessionToken: "",
         pathPrefix: pathPrefix || DEFAULT_OSS_PATH_PREFIX,
-        s3Preset: "custom",
+        s3Preset: mode === "r2" ? "r2" : "custom",
         pathStyle: false,
     };
 }
 
 function normalizeStoragePayload(values: Partial<OSSFormValues>, setting: AdminOSSSetting): StoragePayload {
     const mode = values.mode || "local";
-    const provider = mode === "local" ? setting.provider || "aliyun" : mode;
+    const provider = mode === "local" ? setting.provider || "aliyun" : backendProvider(mode);
     const region = values.region?.trim() || "";
     let endpoint = trimTrailingSlash(values.endpoint || "");
     if (provider === "tencent" && !endpoint && region) endpoint = `https://cos.${region}.myqcloud.com`;
@@ -674,7 +676,7 @@ function normalizeStoragePayload(values: Partial<OSSFormValues>, setting: AdminO
         sessionToken: values.sessionToken?.trim() || "",
         publicBaseUrl: trimTrailingSlash(values.publicBaseUrl || ""),
         pathPrefix: (values.pathPrefix?.trim() || DEFAULT_OSS_PATH_PREFIX).replace(/^\/+|\/+$/g, ""),
-        s3Preset: values.s3Preset || "custom",
+        s3Preset: mode === "r2" ? "r2" : values.s3Preset || "custom",
         pathStyle: values.pathStyle === true,
         allowUserS3: values.allowUserS3 === true,
     };
@@ -750,10 +752,11 @@ function storageConfigurationReady(mode: StorageMode, values: StoragePayload, se
 }
 
 function storageProviderLabel(provider?: StorageMode) {
-    return provider === "s3" ? "S3 兼容存储" : provider === "tencent" ? "腾讯云 COS" : provider === "qiniu" ? "七牛云 Kodo" : provider === "aliyun" ? "阿里云 OSS" : "服务器本地";
+    return provider === "r2" ? "Cloudflare R2" : provider === "s3" ? "S3 兼容存储" : provider === "tencent" ? "腾讯云 COS" : provider === "qiniu" ? "七牛云 Kodo" : provider === "aliyun" ? "阿里云 OSS" : "服务器本地";
 }
 
 function providerGuidance(mode: Exclude<StorageMode, "local">) {
+    if (mode === "r2") return "Region 固定为 auto。Endpoint 填写 R2 控制台提供的账户级 S3 API 根 URL，不要包含 Bucket 路径。";
     if (mode === "s3") return "使用预设快速填写 Region 与 Endpoint，也可以选择自定义；自托管 S3 仍受服务端私网主机白名单约束。";
     if (mode === "tencent") return "腾讯云可只填写 Region，由服务端生成标准 COS Endpoint；也可填写完整 Endpoint 覆盖。";
     if (mode === "qiniu") return "七牛上传必须配置上传 Endpoint；绑定域名可选，留空时资源由当前后端使用 AK/SK 代理读取。";
@@ -792,8 +795,8 @@ function trimTrailingSlash(value: string) {
 
 function connectionInput(values: Partial<OSSFormValues>) {
     return normalizeOSSConnectionTestInput({
-        provider: !values.mode || values.mode === "local" ? ("aliyun" as const) : values.mode,
-        s3Preset: values.s3Preset,
+        provider: !values.mode || values.mode === "local" ? ("aliyun" as const) : values.mode === "r2" ? "s3" : values.mode,
+        s3Preset: values.mode === "r2" ? "r2" : values.s3Preset,
         region: values.region,
         endpoint: values.endpoint,
         cdnBaseUrl: values.cdnBaseUrl,

@@ -7,11 +7,10 @@ import { CanvasNodeEmotionPanel, type CanvasEmotionCharacter, type CanvasImageEm
 import { CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { buildEmotionImageArtifacts, buildEmotionPrompt, neutralEmotionPreset, type CanvasEmotionPreset, type CanvasFaceBox } from "@/lib/canvas/canvas-emotion";
 import { detectCanvasFaces } from "@/lib/canvas/canvas-face-detection";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData, Position, ViewportTransform } from "@/types/canvas";
 
 type WorkspaceStatus = "detecting" | "selecting" | "manual" | "editing" | "generating" | "error";
@@ -193,7 +192,7 @@ function FaceSelectionOverlay({
     onManualComplete: (box: CanvasFaceBox) => void;
     onFaceSelect: (box: CanvasFaceBox) => void;
 }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const overlayRef = useRef<HTMLDivElement>(null);
     const dragStartRef = useRef<{ x: number; y: number } | null>(null);
     useScreenAnchor(overlayRef, node, viewport, containerRef, (next) => imageScreenRect(node, next, imageWidth, imageHeight));
@@ -352,7 +351,7 @@ function SelectionToolbar({
     onManualSelect: () => void;
     onClose: () => void;
 }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const reducedMotion = useReducedMotion();
     const toolbarRef = useRef<HTMLDivElement>(null);
     useScreenAnchor(toolbarRef, node, viewport, containerRef, (next, container) => toolbarScreenRect(node, next, container, toolbarRef.current));

@@ -202,6 +202,27 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, task)
 	})
+	r.POST("/tasks/:id/provider-request", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		var req struct {
+			ProviderRequestID string `json:"providerRequestId"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		task, err := svc.ReportTaskProviderRequest(user.ID, c.Param("id"), req.ProviderRequestID)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"task": task})
+	})
 	r.POST("/tasks/:id/query-provider", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,7 +25,7 @@ import (
 func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerChannelOrderRoutes(r, svc)
 	r.GET("/auth/settings", func(c *gin.Context) {
-		settings, err := svc.PublicAuthSettings()
+		settings, err := svc.PublicAuthSettings(requestHost(c))
 		if err != nil {
 			failService(c, err)
 			return
@@ -41,6 +43,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !available || !enforceRateLimit(c, "register:"+c.ClientIP(), policy.Request.RegisterPerHour, time.Hour) {
 			return
 		}
+		req.Host = requestHost(c)
 		result, err := svc.Register(req)
 		if err != nil {
 			failService(c, err)
@@ -52,7 +55,8 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/auth/email-code", func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
 		var req struct {
-			Email string `json:"email"`
+			Email  string `json:"email"`
+			Locale string `json:"locale"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
@@ -65,7 +69,29 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "registration-email-account:"+passwordResetRateLimitSubject(req.Email), 10, time.Hour) {
 			return
 		}
-		if err := svc.SendRegistrationEmailCode(req.Email); err != nil {
+		if err := svc.SendRegistrationEmailCode(req.Email, req.Locale, requestHost(c)); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"sent": true})
+	})
+	r.POST("/auth/sms-code", func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req struct {
+			Phone string `json:"phone"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		policy, available := loadRuntimePolicy(c, svc)
+		if !available || !enforceRateLimit(c, "sms-code:"+c.ClientIP(), policy.Request.EmailCodePerHour, time.Hour) {
+			return
+		}
+		if !enforceRateLimit(c, "registration-sms-account:"+passwordResetRateLimitSubject(req.Phone), 10, time.Hour) {
+			return
+		}
+		if err := svc.SendRegistrationSMSCode(req.Phone); err != nil {
 			failService(c, err)
 			return
 		}
@@ -74,7 +100,8 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/auth/password-reset-code", func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
 		var req struct {
-			Email string `json:"email"`
+			Email  string `json:"email"`
+			Locale string `json:"locale"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
@@ -87,7 +114,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 		if !enforceRateLimit(c, "password-reset-code-account:"+passwordResetRateLimitSubject(req.Email), policy.Request.EmailCodePerHour, time.Hour) {
 			return
 		}
-		if err := svc.SendPasswordResetEmailCode(req.Email); err != nil {
+		if err := svc.SendPasswordResetEmailCode(req.Email, req.Locale); err != nil {
 			failService(c, err)
 			return
 		}
@@ -155,7 +182,12 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/auth/session", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
-			ok(c, gin.H{"user": nil})
+			features, featErr := svc.FeatureAvailability()
+			if featErr != nil {
+				ok(c, gin.H{"user": nil})
+				return
+			}
+			ok(c, gin.H{"user": nil, "features": features})
 			return
 		}
 		publicUser, err := svc.PublicAuthUser(user)
@@ -178,12 +210,22 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		features, err := svc.FeatureAvailability()
+		features, err := svc.FeatureAvailabilityForUser(user)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"user": publicUser, "logicalModels": logicalModels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features})
+		membership, membershipErr := svc.PublicMembership(user.ID)
+		if membershipErr != nil {
+			failService(c, membershipErr)
+			return
+		}
+		permissions, permErr := svc.PermissionsForUser(user)
+		if permErr != nil {
+			failService(c, permErr)
+			return
+		}
+		ok(c, gin.H{"user": publicUser, "logicalModels": logicalModels, "runtimeLimits": limits, "drawingEngine": drawingEngine, "features": features, "membership": membership, "permissions": permissions})
 	})
 	r.GET("/channels/system", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
@@ -884,7 +926,7 @@ func shortSystemProxyPath(rawPath string) (string, string, bool) {
 // as a channel request when a business route returns 404.
 func isReservedAPIPathPrefix(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "admin", "agent", "ai", "announcements", "assets", "auth", "canvas-projects", "channels", "diagnostics", "features", "files", "model-catalog", "models", "oauth", "plugins", "projects", "public", "resources", "sessions", "settings", "skills", "style-profiles", "tasks", "timeline", "user-data", "voice-profiles", "wallet":
+	case "admin", "agent", "ai", "announcements", "assets", "auth", "canvas-projects", "channels", "diagnostics", "features", "files", "membership", "model-catalog", "models", "oauth", "payments", "plugins", "projects", "public", "resources", "sessions", "settings", "skills", "style-profiles", "tasks", "timeline", "user-data", "voice-profiles", "wallet":
 		return true
 	default:
 		return false
@@ -1161,6 +1203,16 @@ func currentUser(c *gin.Context, svc *service.Service) (*model.User, error) {
 	return svc.CurrentUser(sessionCookie(c))
 }
 
+func requestHost(c *gin.Context) string {
+	if forwarded := strings.TrimSpace(c.GetHeader("X-Forwarded-Host")); forwarded != "" {
+		return strings.TrimSpace(strings.Split(forwarded, ",")[0])
+	}
+	if c.Request != nil {
+		return c.Request.Host
+	}
+	return ""
+}
+
 func sessionCookie(c *gin.Context) string {
 	value, _ := c.Cookie(service.SessionCookieName)
 	return value
@@ -1172,27 +1224,57 @@ func passwordResetRateLimitSubject(value string) string {
 }
 
 func setSessionCookie(c *gin.Context, value string, maxAge int) {
+	// 先清掉改 Domain 之前写下的 host-only 同名 cookie，否则浏览器会继续带旧会话，登录看起来失败。
+	writeSessionCookie(c, "", -1)
+	domain := sessionCookieDomain(c)
+	if domain != "" {
+		writeSessionCookie(c, domain, -1)
+	}
+	writeSessionCookie(c, domain, maxAge, value)
+}
+
+func clearSessionCookie(c *gin.Context) {
+	writeSessionCookie(c, "", -1)
+	if domain := sessionCookieDomain(c); domain != "" {
+		writeSessionCookie(c, domain, -1)
+	}
+}
+
+func writeSessionCookie(c *gin.Context, domain string, maxAge int, value ...string) {
 	secure := c.Request.TLS != nil || strings.EqualFold(strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")), "https")
-	http.SetCookie(c.Writer, &http.Cookie{
+	cookie := &http.Cookie{
 		Name:     service.SessionCookieName,
-		Value:    value,
 		Path:     "/",
+		Domain:   domain,
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secure,
-	})
+	}
+	if maxAge < 0 {
+		cookie.Expires = time.Unix(0, 0)
+	}
+	if len(value) > 0 {
+		cookie.Value = value[0]
+	}
+	http.SetCookie(c.Writer, cookie)
 }
 
-func clearSessionCookie(c *gin.Context) {
-	secure := c.Request.TLS != nil || strings.EqualFold(strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")), "https")
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     service.SessionCookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   secure,
-	})
+func sessionCookieDomain(c *gin.Context) string {
+	if value := strings.TrimSpace(os.Getenv("CANVAS_COOKIE_DOMAIN")); value != "" {
+		return value
+	}
+	parent := service.PublicParentDomain()
+	host := strings.ToLower(requestHost(c))
+	if h, _, err := splitHostPort(host); err == nil {
+		host = h
+	}
+	if parent != "" && (host == parent || strings.HasSuffix(host, "."+parent)) {
+		return "." + parent
+	}
+	return ""
+}
+
+func splitHostPort(host string) (string, string, error) {
+	return net.SplitHostPort(host)
 }

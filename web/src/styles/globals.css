@@ -346,6 +346,14 @@
 }
 
 .auth-scene {
+    /* 登录页是电影感暗色皮，不跟工作台亮色皮肤走，否则表单白底白字。 */
+    --auth-page-bg: #08090c;
+    --auth-panel-bg: #0b0c10;
+    --auth-card-bg: rgba(18, 19, 24, 0.94);
+    --auth-accent: rgba(147, 197, 253, 0.8);
+    --auth-muted: rgba(255, 255, 255, 0.45);
+    color: #f5f5f5;
+    color-scheme: dark;
     background: var(--auth-page-bg);
 }
 
@@ -368,6 +376,63 @@
 
 .auth-scene-muted {
     color: var(--auth-muted);
+}
+
+.auth-scene-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.auth-locale-select {
+    appearance: none;
+    height: 36px;
+    min-width: 72px;
+    padding: 0 28px 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.7)' stroke-width='2'><path d='m6 9 6 6 6-6'/></svg>")
+        no-repeat right 10px center / 12px,
+        rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 13px;
+    line-height: 36px;
+    cursor: pointer;
+}
+
+.auth-locale-select:hover,
+.auth-locale-select:focus-visible {
+    border-color: rgba(255, 255, 255, 0.28);
+    background-color: rgba(255, 255, 255, 0.1);
+    outline: none;
+}
+
+.auth-locale-select option {
+    color: #111;
+    background: #fff;
+}
+
+.auth-home-button {
+    display: inline-flex;
+    height: 36px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    backdrop-filter: blur(16px);
+}
+
+.auth-home-button:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .auth-scene-return {
@@ -2408,8 +2473,8 @@
         top: 50%;
         left: 50%;
         display: grid;
-        width: 72px;
-        height: 72px;
+        width: 96px;
+        height: 96px;
         place-items: center;
         border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
         border-radius: var(--r-xl);
@@ -2419,9 +2484,9 @@
         animation: loader-logo-breathe 2.8s ease-in-out infinite;
     }
 
-    .full-screen-loader-logo-image { width: 38px; height: 38px; }
-    .full-screen-loader-logo-fallback { display: block; width: 36px; height: 36px; background: currentColor; mask: url('/logo.svg') center / contain no-repeat; -webkit-mask: url('/logo.svg') center / contain no-repeat; }
-    .workspace-route-loader-logo .full-screen-loader-logo-fallback { width: 16px; height: 16px; }
+    .full-screen-loader-logo-image { width: 52px; height: 52px; }
+    .full-screen-loader-logo-fallback { display: block; width: 50px; height: 50px; background: url('/logo.png') center / contain no-repeat; }
+    .workspace-route-loader-logo .full-screen-loader-logo-fallback { width: 24px; height: 24px; }
 
     .full-screen-loader-orbit {
         position: absolute;
@@ -15895,8 +15960,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 }
 
 .app-user-workspace .app-workspace-brand-mark {
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     border-radius: 8px;
     background: transparent;
     box-shadow: none;
@@ -16055,6 +16120,33 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.app-user-workspace .app-workspace-topbar-locale {
+    display: inline-flex;
+    height: 36px;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px 0 10px;
+    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--workspace-surface, #fff) 88%, transparent);
+}
+
+.app-user-workspace .app-workspace-topbar-locale .ant-select {
+    min-width: 96px;
+}
+
+.app-user-workspace .app-workspace-topbar-locale .ant-select-selector {
+    padding-inline: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.app-user-workspace .app-workspace-topbar-locale-select {
+    min-width: 96px;
 }
 
 .app-user-workspace .app-workspace-topbar-credit-pill {
@@ -18858,6 +18950,23 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 
 /* Featured works are part of the home page rhythm, not an afterthought. */
 .app-user-workspace .creation-featured-works { margin-top: 40px !important; }
+.app-user-workspace .creation-empty-workspace.is-plaza-feed {
+    width: min(1440px, calc(100% - 32px)) !important;
+}
+.app-user-workspace .creation-featured-works.is-plaza-feed {
+    max-width: none;
+}
+.creation-plaza-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 18px;
+    margin: 0 0 22px;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--creation-surface, rgba(255,255,255,.04));
+}
+.creation-plaza-detail img { width: 100%; aspect-ratio: 16/9; object-fit: cover; }
+.creation-plaza-detail div { display: grid; gap: 10px; align-content: start; padding: 18px; }
 .app-user-workspace .creation-featured-heading { margin-bottom: 24px !important; }
 .app-user-workspace .creation-featured-heading span { color: var(--user-ink-soft) !important; font-size: 13px !important; }
 .app-user-workspace .creation-featured-heading h2 { color: var(--user-ink) !important; font-size: 22px !important; letter-spacing: -.025em !important; }

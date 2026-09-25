@@ -1,0 +1,16 @@
+{
+  "register.subject": "Beripikasyon ng email ng {{brand}}",
+  "register.title": "I-verify ang iyong email",
+  "register.hello": "{{email}}, kamusta:",
+  "register.lead": "Ilagay ang verification code na ito para magpatuloy",
+  "register.expiry": "Mawawalan ng bisa ang code sa loob ng 10 minuto.",
+  "register.ignore": "Kung hindi ikaw ang humiling nito, huwag pansinin ang email na ito.",
+  "register.footer": "Ang email na ito ay galing sa {{brand}}. Huwag sagutin.",
+  "reset.subject": "Pag-reset ng password ng {{brand}}",
+  "reset.title": "I-reset ang iyong password",
+  "reset.hello": "{{email}}, kamusta:",
+  "reset.lead": "Ilagay ang verification code na ito para i-reset ang password",
+  "reset.expiry": "Mawawalan ng bisa ang code sa loob ng 10 minuto.",
+  "reset.ignore": "Kung hindi ikaw ang humiling nito, huwag pansinin ang email at panatilihing ligtas ang account.",
+  "reset.footer": "Ang email na ito ay galing sa {{brand}}. Huwag sagutin."
+}

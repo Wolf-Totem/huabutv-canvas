@@ -1,7 +1,15 @@
-import "@fontsource-variable/inter";
-import "@fontsource-variable/jetbrains-mono";
-import { bootstrapAppearance } from "@/services/appearance-bootstrap";
+import { bootstrapAppearance, restoreCachedAppearance } from "@/services/appearance-bootstrap";
+import { isAuthPath, isRootPath } from "@/lib/public-shell";
 
-// The public film entry checks its availability independently of workspace bootstrap.
-if (/^\/welcome\/?$/.test(window.location.pathname)) void import("./welcome-application");
-else void bootstrapAppearance().finally(() => import("./application"));
+restoreCachedAppearance();
+void bootstrapAppearance();
+
+const path = window.location.pathname;
+
+if (/^\/welcome\/?$/.test(path)) {
+    void import("./welcome-application");
+} else if (isRootPath(path) || isAuthPath(path)) {
+    void import("./public-application");
+} else {
+    void import("./application");
+}

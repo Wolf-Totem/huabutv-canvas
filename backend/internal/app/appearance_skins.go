@@ -104,62 +104,14 @@ type AppearanceSkinTheme struct {
 	Description string               `json:"description"`
 	Locked      bool                 `json:"locked"`
 	Tokens      AppearanceSkinTokens `json:"tokens"`
+	Film        string               `json:"film,omitempty"`
+	Poster      string               `json:"poster,omitempty"`
+	FX          string               `json:"fx,omitempty"`
+	Hue         float64              `json:"hue,omitempty"`
 }
 
 func defaultAppearanceSkinThemes() []AppearanceSkinTheme {
-	classic := defaultClassicAppearanceSkin()
-	studio := cloneAppearanceSkin(classic, "studio-indigo", "青瓷工作室", "雾白青瓷 · 珊瑚点睛")
-	studio.Tokens.Light = tintAppearanceSkinMode(studio.Tokens.Light, appearanceSkinPalette{
-		canvas: "#f6f8f9", surface: "#ffffff", subtle: "#edf4f3", raised: "#d7e8e5", overlay: "#ffffff", text: "#142026", muted: "#607079", border: "#d5e0e2",
-		primary: "#087f76", primaryHover: "#076d66", primaryActive: "#095c57", primaryForeground: "#ffffff", selected: "#dff4f0", selectedHover: "#ccebe6", selectedActive: "#b9e3dd", selectedForeground: "#075f59", info: "#dd7a38",
-		switchChecked: "#087f76", switchCheckedHover: "#076d66", switchCheckedHandle: "#ffffff", switchUnchecked: "#a8b7b9", switchUncheckedHover: "#899b9e", switchUncheckedHandle: "#ffffff",
-		success: "#16866f", warning: "#c46722", danger: "#c83f3a", dangerHover: "#ad3532", dangerActive: "#922e2c", dangerForeground: "#ffffff",
-		workspace: "#ffffff", grid: "#e8f2f0", adminBackground: "#eef3f4", adminSurface: "#ffffff", adminSubtle: "#f5f9f9", adminStrong: "#dce9e8", authBackground: "#071a1d", authPanel: "#0b2226", authCard: "#0d272b", authAccent: "#72eadc", authMuted: "#8db9b4",
-	})
-	studio.Tokens.Dark = tintAppearanceSkinMode(studio.Tokens.Dark, appearanceSkinPalette{
-		canvas: "#0b1215", surface: "#121d21", subtle: "#142428", raised: "#203a3b", overlay: "#172328", text: "#e7f4f2", muted: "#8ca6a7", border: "#294044",
-		primary: "#43d8c7", primaryHover: "#72eadc", primaryActive: "#2db9aa", primaryForeground: "#052724", selected: "#193735", selectedHover: "#214743", selectedActive: "#28554f", selectedForeground: "#baf5ee", info: "#ff9e57",
-		switchChecked: "#31bfae", switchCheckedHover: "#43d8c7", switchCheckedHandle: "#052724", switchUnchecked: "#3f5559", switchUncheckedHover: "#526a6d", switchUncheckedHandle: "#e7f4f2",
-		success: "#4ade80", warning: "#ffb454", danger: "#ff7875", dangerHover: "#ff9a98", dangerActive: "#df5e5b", dangerForeground: "#2d0808",
-		workspace: "#111d21", grid: "#17292c", adminBackground: "#0c171a", adminSurface: "#132126", adminSubtle: "#192a2e", adminStrong: "#21383a", authBackground: "#061416", authPanel: "#091c20", authCard: "#0d272b", authAccent: "#72eadc", authMuted: "#8db9b4",
-	})
-	studio.Tokens.Components = appearanceSkinComponentPreset(8, 8, 14, 14, 10, 5)
-
-	warm := cloneAppearanceSkin(classic, "warm-persimmon", "暖柿纸境", "米纸暖棕 · 柿橙强调")
-	warm.Tokens.Light = tintAppearanceSkinMode(warm.Tokens.Light, appearanceSkinPalette{
-		canvas: "#fbf7f2", surface: "#fffdf9", subtle: "#f6ebe3", raised: "#ead2c2", overlay: "#fffdf9", text: "#35261f", muted: "#806b61", border: "#e5d6cb",
-		primary: "#b94f2f", primaryHover: "#9e4128", primaryActive: "#843621", primaryForeground: "#fffaf6", selected: "#f8e0cf", selectedHover: "#f1d1bb", selectedActive: "#e9c1a6", selectedForeground: "#8c3d25", info: "#c58a3b",
-		switchChecked: "#a84a2f", switchCheckedHover: "#bd5b3c", switchCheckedHandle: "#fffaf6", switchUnchecked: "#c7b3a7", switchUncheckedHover: "#aa9182", switchUncheckedHandle: "#fffdf9",
-		success: "#4d7f50", warning: "#bd6819", danger: "#bd3d32", dangerHover: "#a33229", dangerActive: "#892a23", dangerForeground: "#fffaf6",
-		workspace: "#fffdf9", grid: "#f3e9e1", adminBackground: "#f6eee7", adminSurface: "#fffdf9", adminSubtle: "#faf3ed", adminStrong: "#ead8ca", authBackground: "#1f1410", authPanel: "#291813", authCard: "#361f17", authAccent: "#ffc08b", authMuted: "#b99d89",
-	})
-	warm.Tokens.Dark = tintAppearanceSkinMode(warm.Tokens.Dark, appearanceSkinPalette{
-		canvas: "#1b1210", surface: "#291a16", subtle: "#33211b", raised: "#493027", overlay: "#31201a", text: "#f8e9df", muted: "#b89c8c", border: "#50372e",
-		primary: "#ef8a61", primaryHover: "#ffab83", primaryActive: "#d87350", primaryForeground: "#37140a", selected: "#4b2a20", selectedHover: "#5b3427", selectedActive: "#6b3e2e", selectedForeground: "#ffd9c4", info: "#f0b36c",
-		switchChecked: "#df7752", switchCheckedHover: "#ef8a61", switchCheckedHandle: "#37140a", switchUnchecked: "#65483d", switchUncheckedHover: "#7b5a4c", switchUncheckedHandle: "#f8e9df",
-		success: "#8dcc72", warning: "#f2b35f", danger: "#ff8375", dangerHover: "#ffa094", dangerActive: "#df6a5e", dangerForeground: "#32100b",
-		workspace: "#241714", grid: "#31201b", adminBackground: "#1c1210", adminSurface: "#291b17", adminSubtle: "#35231d", adminStrong: "#493027", authBackground: "#160d0a", authPanel: "#21120e", authCard: "#361f17", authAccent: "#ffc08b", authMuted: "#b99d89",
-	})
-	warm.Tokens.Components = appearanceSkinComponentPreset(10, 10, 16, 18, 12, 5)
-
-	violet := cloneAppearanceSkin(classic, "brand-violet", "霓光紫境", "冷白雾紫 · 夜幕电光")
-	violet.Tokens.Light = tintAppearanceSkinMode(violet.Tokens.Light, appearanceSkinPalette{
-		canvas: "#f8f7fc", surface: "#ffffff", subtle: "#f0eefb", raised: "#dfd9f5", overlay: "#ffffff", text: "#211b35", muted: "#716a86", border: "#ddd8ec",
-		primary: "#6656d9", primaryHover: "#5847c7", primaryActive: "#4939b2", primaryForeground: "#ffffff", selected: "#ebe8ff", selectedHover: "#ded9ff", selectedActive: "#d0c9ff", selectedForeground: "#4f3fb5", info: "#8f61e8",
-		switchChecked: "#6656d9", switchCheckedHover: "#5847c7", switchCheckedHandle: "#ffffff", switchUnchecked: "#b4afc5", switchUncheckedHover: "#9891ae", switchUncheckedHandle: "#ffffff",
-		success: "#2f966e", warning: "#b96f16", danger: "#c73559", dangerHover: "#ac2c4b", dangerActive: "#912640", dangerForeground: "#ffffff",
-		workspace: "#ffffff", grid: "#f0eef8", adminBackground: "#f1f0f7", adminSurface: "#ffffff", adminSubtle: "#f7f6fb", adminStrong: "#e4e0f1", authBackground: "#110d20", authPanel: "#17112b", authCard: "#211936", authAccent: "#b4a8ff", authMuted: "#958dad",
-	})
-	violet.Tokens.Dark = tintAppearanceSkinMode(violet.Tokens.Dark, appearanceSkinPalette{
-		canvas: "#0f0c19", surface: "#171321", subtle: "#201a2f", raised: "#302746", overlay: "#1c1734", text: "#f2efff", muted: "#a9a2bd", border: "#39304d",
-		primary: "#9a90ff", primaryHover: "#b5adff", primaryActive: "#8175ed", primaryForeground: "#171126", selected: "#292347", selectedHover: "#352d59", selectedActive: "#40366a", selectedForeground: "#ddd9ff", info: "#c45dff",
-		switchChecked: "#8175ed", switchCheckedHover: "#9a90ff", switchCheckedHandle: "#171126", switchUnchecked: "#504967", switchUncheckedHover: "#665d7f", switchUncheckedHandle: "#f2efff",
-		success: "#5bd6a2", warning: "#ffc46b", danger: "#ff7795", dangerHover: "#ff99ae", dangerActive: "#df607f", dangerForeground: "#310b17",
-		workspace: "#15111f", grid: "#211b30", adminBackground: "#110e1a", adminSurface: "#191524", adminSubtle: "#211b30", adminStrong: "#302746", authBackground: "#0b0812", authPanel: "#120d20", authCard: "#211936", authAccent: "#b4a8ff", authMuted: "#958dad",
-	})
-	violet.Tokens.Components = appearanceSkinComponentPreset(7, 7, 12, 14, 9, 4)
-
-	return []AppearanceSkinTheme{classic, studio, warm, violet}
+	return cinematicAppearanceSkins(defaultClassicAppearanceSkin())
 }
 
 func defaultClassicAppearanceSkin() AppearanceSkinTheme {
@@ -228,16 +180,25 @@ func cloneAppearanceSkin(source AppearanceSkinTheme, id, name, description strin
 func normalizeAppearanceSkinThemes(themes []AppearanceSkinTheme) []AppearanceSkinTheme {
 	result := make([]AppearanceSkinTheme, len(themes))
 	copy(result, themes)
+	result = pruneRetiredAppearanceSkins(result)
+	result = ensureCinematicAppearanceSkins(result)
 	builtins := defaultAppearanceSkinThemes()
 	for index := range result {
 		result[index].ID = strings.ToLower(strings.TrimSpace(result[index].ID))
 		result[index].Name = strings.TrimSpace(result[index].Name)
 		result[index].Description = strings.TrimSpace(result[index].Description)
-		result[index].Locked = result[index].ID == defaultAppearanceSkinID
+		result[index].Locked = isOfficialCinematicSkinID(result[index].ID)
 		var fallback AppearanceSkinTokens
 		for _, builtin := range builtins {
 			if builtin.ID == result[index].ID {
 				fallback = builtin.Tokens
+				result[index].Name = builtin.Name
+				result[index].Description = builtin.Description
+				result[index].Film = builtin.Film
+				result[index].Poster = builtin.Poster
+				result[index].FX = builtin.FX
+				result[index].Hue = builtin.Hue
+				result[index].Tokens = builtin.Tokens
 				break
 			}
 		}
@@ -291,8 +252,6 @@ func validateAppearanceSkinThemes(themes []AppearanceSkinTheme, selectedID strin
 	}
 	seen := make(map[string]struct{}, len(themes))
 	foundSelected := false
-	foundClassic := false
-	classic := defaultClassicAppearanceSkin()
 	for _, skin := range themes {
 		if !appearanceSkinIDPattern.MatchString(skin.ID) {
 			return BadAuthRequest("皮肤主题 ID 无效")
@@ -303,12 +262,6 @@ func validateAppearanceSkinThemes(themes []AppearanceSkinTheme, selectedID strin
 		seen[skin.ID] = struct{}{}
 		if skin.ID == selectedID {
 			foundSelected = true
-		}
-		if skin.ID == defaultAppearanceSkinID {
-			foundClassic = true
-			if skin.Name != classic.Name || skin.Description != classic.Description || !reflect.DeepEqual(skin.Tokens, classic.Tokens) {
-				return BadAuthRequest("经典黑白为系统默认主题，不能修改或删除")
-			}
 		}
 		if err := validateAppearanceSkinText(skin.Name, "皮肤主题名称", 40, true); err != nil {
 			return err
@@ -325,9 +278,12 @@ func validateAppearanceSkinThemes(themes []AppearanceSkinTheme, selectedID strin
 		if err := validateAppearanceSkinComponents(skin.Tokens.Components); err != nil {
 			return err
 		}
-	}
-	if !foundClassic {
-		return BadAuthRequest("经典黑白为系统默认主题，不能修改或删除")
+		if err := validateAppearanceSkinMedia(skin.Film, "film"); err != nil {
+			return err
+		}
+		if err := validateAppearanceSkinMedia(skin.Poster, "poster"); err != nil {
+			return err
+		}
 	}
 	if !foundSelected {
 		return BadAuthRequest("当前启用的皮肤主题不存在")
@@ -370,6 +326,26 @@ func validateAppearanceSkinComponents(value AppearanceSkinComponentTokens) error
 	return nil
 }
 
+func validateAppearanceSkinMedia(value, kind string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if strings.Contains(value, "..") || strings.ContainsAny(value, " \t\r\n") || !strings.HasPrefix(value, "/bg/skin-") {
+		return BadAuthRequest("皮肤影像路径无效")
+	}
+	if kind == "film" && !strings.HasSuffix(strings.ToLower(value), ".mp4") {
+		return BadAuthRequest("皮肤循环影像必须是 mp4")
+	}
+	if kind == "poster" {
+		lower := strings.ToLower(value)
+		if !strings.HasSuffix(lower, ".jpg") && !strings.HasSuffix(lower, ".jpeg") && !strings.HasSuffix(lower, ".png") && !strings.HasSuffix(lower, ".webp") {
+			return BadAuthRequest("皮肤封面必须是图片")
+		}
+	}
+	return nil
+}
+
 func validateAppearanceSkinText(value, label string, maxRunes int, required bool) error {
 	if required && value == "" {
 		return BadAuthRequest(label + "不能为空")
@@ -391,5 +367,192 @@ func activeAppearanceSkin(themes []AppearanceSkinTheme, id string) AppearanceSki
 			return skin
 		}
 	}
+	for _, skin := range themes {
+		if skin.ID == defaultAppearanceSkinID {
+			return skin
+		}
+	}
+	official := defaultAppearanceSkinThemes()
+	if len(official) > 0 {
+		return official[0]
+	}
 	return defaultClassicAppearanceSkin()
 }
+
+func cinematicAppearanceSkins(classic AppearanceSkinTheme) []AppearanceSkinTheme {
+	type spec struct {
+		id, name, description, fx string
+		hue                       float64
+		light, dark               appearanceSkinPalette
+	}
+	specs := []spec{
+		{id: "apex", name: "奇点", description: "熔金奇点 · 深空加载", fx: "rings", hue: 38,
+			dark: cinematicPalette("#070709", "#1a1a20", "#f4f1ea", "#8a8680", "#d9e6f2", "#0b0c10"),
+			light: cinematicPalette("#f3efe6", "#fffdf8", "#1a1814", "#6f6a64", "#2c333c", "#f4f1ea")},
+		{id: "nexus", name: "冰核", description: "冰晶反应堆 · 冷青加载", fx: "radar", hue: 192,
+			dark: cinematicPalette("#031018", "#0c2230", "#d8f6ff", "#6a93a4", "#5ee7ff", "#032028"),
+			light: cinematicPalette("#dff4fa", "#ffffff", "#073040", "#4a7380", "#0490a8", "#ffffff")},
+		{id: "lumen", name: "霓虹", description: "雨夜霓虹 · 电光加载", fx: "rain", hue: 312,
+			dark: cinematicPalette("#08080c", "#1b1b24", "#f5f5f7", "#8b8b99", "#4d7dff", "#ffffff"),
+			light: cinematicPalette("#f6f7f9", "#ffffff", "#171717", "#6b7280", "#2563eb", "#ffffff")},
+		{id: "prism", name: "棱镜", description: "分光晶体 · 虹彩加载", fx: "shards", hue: 268,
+			dark: cinematicPalette("#0e0a18", "#221a34", "#f0eaff", "#9a90b8", "#c4b5ff", "#1a1230"),
+			light: cinematicPalette("#f5f2fb", "#ffffff", "#211b35", "#716a86", "#6656d9", "#ffffff")},
+		{id: "radix", name: "全息", description: "全息网格 · 扫描加载", fx: "scan", hue: 168,
+			dark: cinematicPalette("#051410", "#123028", "#d8fff0", "#6fa392", "#3ee0b0", "#042018"),
+			light: cinematicPalette("#eaf6f2", "#ffffff", "#142026", "#4e6c62", "#087f76", "#ffffff")},
+		{id: "helix", name: "螺旋", description: "光之螺旋 · 双色加载", fx: "helix", hue: 262,
+			dark: cinematicPalette("#070c18", "#162244", "#dce8ff", "#7d8eaa", "#6ea8ff", "#071028"),
+			light: cinematicPalette("#e8eef8", "#ffffff", "#12182a", "#5a6780", "#1d4ed8", "#ffffff")},
+		{id: "ink", name: "墨核", description: "墨潮核心 · 高对比加载", fx: "ink", hue: 220,
+			dark: cinematicPalette("#12100e", "#26201a", "#f3eadc", "#8a8278", "#e8dcc8", "#1a1612"),
+			light: cinematicPalette("#f4ecde", "#fffaf0", "#1c1814", "#6e655c", "#1c1814", "#fffaf0")},
+		{id: "ember", name: "熔核", description: "熔炉核心 · 余烬加载", fx: "sparks", hue: 22,
+			dark: cinematicPalette("#140c08", "#301c12", "#f8e6d2", "#a08870", "#e08a4a", "#2a1008"),
+			light: cinematicPalette("#fbf4eb", "#fffdf9", "#35261f", "#806b61", "#b94f2f", "#fffaf6")},
+		{id: "veil", name: "极光", description: "极光帷幕 · 绿紫加载", fx: "aurora", hue: 148,
+			dark: cinematicPalette("#121214", "#222228", "#ececec", "#8a8d94", "#c8ccd4", "#121214"),
+			light: cinematicPalette("#ececef", "#fbfbfc", "#1c1c20", "#6a6d74", "#3a3c42", "#ffffff")},
+		{id: "echo", name: "深渊", description: "深海回声 · 靛蓝加载", fx: "sonar", hue: 222,
+			dark: cinematicPalette("#061016", "#142834", "#d4f0ff", "#6f8fa4", "#3ec8e8", "#041820"),
+			light: cinematicPalette("#e4f1f2", "#ffffff", "#0e2a32", "#4e6e76", "#0e7490", "#ffffff")},
+	}
+	out := make([]AppearanceSkinTheme, 0, len(specs))
+	for _, item := range specs {
+		skin := cloneAppearanceSkin(classic, item.id, item.name, item.description)
+		skin.Locked = true
+		skin.Film = "/bg/skin-" + item.id + ".mp4"
+		skin.Poster = "/bg/skin-" + item.id + ".jpg"
+		skin.FX = item.fx
+		skin.Hue = item.hue
+		skin.Tokens.Dark = tintAppearanceSkinMode(skin.Tokens.Dark, item.dark)
+		skin.Tokens.Light = tintAppearanceSkinMode(skin.Tokens.Light, item.light)
+		skin.Tokens.Components = appearanceSkinComponentPreset(8, 8, 14, 16, 10, 4)
+		out = append(out, skin)
+	}
+	return out
+}
+
+func cinematicPalette(canvas, surface, text, muted, primary, primaryFg string) appearanceSkinPalette {
+	return appearanceSkinPalette{
+		canvas: canvas, surface: surface, subtle: surface, raised: surface, overlay: surface, text: text, muted: muted, border: muted,
+		primary: primary, primaryHover: primary, primaryActive: primary, primaryForeground: primaryFg, selected: surface, selectedHover: surface, selectedActive: surface, selectedForeground: text,
+		switchChecked: primary, switchCheckedHover: primary, switchCheckedHandle: primaryFg, switchUnchecked: muted, switchUncheckedHover: muted, switchUncheckedHandle: text,
+		success: "#4ade80", warning: "#fbbf24", danger: "#f87171", dangerHover: "#fca5a5", dangerActive: "#ef4444", dangerForeground: primaryFg, info: primary,
+		workspace: surface, grid: muted, adminBackground: canvas, adminSurface: surface, adminSubtle: surface, adminStrong: surface,
+		authBackground: canvas, authPanel: surface, authCard: surface, authAccent: primary, authMuted: muted,
+	}
+}
+
+func defaultEnabledCinematicSkinIDs() []string {
+	return []string{"apex", "nexus", "lumen", "prism", "radix", "helix", "ink", "ember", "veil", "echo"}
+}
+
+func isOfficialCinematicSkinID(id string) bool {
+	for _, item := range defaultEnabledCinematicSkinIDs() {
+		if item == id {
+			return true
+		}
+	}
+	return false
+}
+
+func appearanceSkinIDExists(themes []AppearanceSkinTheme, id string) bool {
+	for _, theme := range themes {
+		if theme.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func pruneRetiredAppearanceSkins(themes []AppearanceSkinTheme) []AppearanceSkinTheme {
+	out := make([]AppearanceSkinTheme, 0, len(themes))
+	for _, theme := range themes {
+		if isOfficialCinematicSkinID(theme.ID) {
+			out = append(out, theme)
+		}
+	}
+	return out
+}
+
+func ensureCinematicAppearanceSkins(themes []AppearanceSkinTheme) []AppearanceSkinTheme {
+	seen := make(map[string]struct{}, len(themes))
+	for _, theme := range themes {
+		seen[theme.ID] = struct{}{}
+	}
+	classic := defaultClassicAppearanceSkin()
+	for _, extra := range cinematicAppearanceSkins(classic) {
+		if _, exists := seen[extra.ID]; exists {
+			continue
+		}
+		if len(themes) >= maxAppearanceSkinThemes {
+			break
+		}
+		themes = append(themes, extra)
+	}
+	return themes
+}
+
+func normalizeEnabledSkinIDs(ids []string, themes []AppearanceSkinTheme) []string {
+	if ids == nil {
+		ids = defaultEnabledCinematicSkinIDs()
+	}
+	allowed := make(map[string]struct{}, len(themes))
+	for _, theme := range themes {
+		allowed[theme.ID] = struct{}{}
+	}
+	out := make([]string, 0, len(ids))
+	seen := map[string]struct{}{}
+	for _, id := range ids {
+		id = strings.ToLower(strings.TrimSpace(id))
+		if _, ok := allowed[id]; !ok {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func normalizeAppearanceDefaultMode(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "light") {
+		return "light"
+	}
+	return "dark"
+}
+
+func publicWorkspaceSkins(value AppearanceSetting) []AppearanceSkinTheme {
+	out := make([]AppearanceSkinTheme, 0, len(value.SkinThemes))
+	for _, theme := range value.SkinThemes {
+		if !isOfficialCinematicSkinID(theme.ID) {
+			continue
+		}
+		item := theme
+		item.Film = ""
+		out = append(out, item)
+	}
+	return out
+}
+
+func publicEnabledSkins(value AppearanceSetting) []AppearanceSkinTheme {
+	wanted := make(map[string]struct{}, len(value.EnabledSkins))
+	for _, id := range value.EnabledSkins {
+		wanted[id] = struct{}{}
+	}
+	out := make([]AppearanceSkinTheme, 0, len(value.EnabledSkins))
+	for _, theme := range value.SkinThemes {
+		if _, ok := wanted[theme.ID]; !ok {
+			continue
+		}
+		if theme.Film == "" && theme.Poster == "" {
+			continue
+		}
+		out = append(out, theme)
+	}
+	return out
+}
+

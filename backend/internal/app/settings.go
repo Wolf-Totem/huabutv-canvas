@@ -70,6 +70,8 @@ type PublicOSSSetting struct {
 	HistoryCount            int64      `json:"historyCount"`
 	ReferencedResourceCount int64      `json:"referencedResourceCount"`
 	AllowUserS3             bool       `json:"allowUserS3"`
+	PersonalStorageAllowed  bool       `json:"personalStorageAllowed"`
+	DisabledReason          string     `json:"disabledReason,omitempty"`
 	UpdatedBy               string     `json:"updatedBy"`
 	CreatedAt               time.Time  `json:"createdAt"`
 	UpdatedAt               time.Time  `json:"updatedAt"`
@@ -196,6 +198,19 @@ func (s *Service) UserOSSSetting(actor *model.User) (*PublicOSSSetting, error) {
 	if err != nil {
 		return nil, err
 	}
+	allowed, allowErr := s.PersonalStorageAllowed(actor.ID, actor.Role == model.UserRoleAdmin)
+	if allowErr != nil {
+		return nil, allowErr
+	}
+	public.PersonalStorageAllowed = allowed
+	if !allowed {
+		public.Enabled = false
+		if !platform.AllowUserS3 {
+			public.DisabledReason = "personal_bucket_disabled"
+		} else {
+			public.DisabledReason = "requires_permanent_membership"
+		}
+	}
 	return &public, nil
 }
 
@@ -215,8 +230,17 @@ func (s *Service) UpdateUserOSSSetting(actor *model.User, req OSSSettingRequest)
 	if err != nil {
 		return nil, err
 	}
-	if next.Enabled && next.Provider == s3Provider && !platform.AllowUserS3 {
-		return nil, Forbidden("平台管理员尚未允许个人 S3 兼容存储")
+	if next.Enabled {
+		allowed, allowErr := s.PersonalStorageAllowed(actor.ID, actor.Role == model.UserRoleAdmin)
+		if allowErr != nil {
+			return nil, allowErr
+		}
+		if !allowed {
+			if next.Provider == s3Provider && !platform.AllowUserS3 {
+				return nil, Forbidden("平台管理员尚未允许个人使用自己的对象存储桶")
+			}
+			return nil, Forbidden("开通永久订阅后才能使用个人存储")
+		}
 	}
 	if next.Provider == s3Provider && next.Enabled {
 		location, err := s.requireTestedS3Location("user", actor.ID, next)
@@ -252,6 +276,19 @@ func (s *Service) UpdateUserOSSSetting(actor *model.User, req OSSSettingRequest)
 	public, err := s.publicUserOSSSetting(&setting, next, actor.ID, platform.AllowUserS3)
 	if err != nil {
 		return nil, err
+	}
+	allowed, allowErr := s.PersonalStorageAllowed(actor.ID, actor.Role == model.UserRoleAdmin)
+	if allowErr != nil {
+		return nil, allowErr
+	}
+	public.PersonalStorageAllowed = allowed
+	if !allowed {
+		public.Enabled = false
+		if !platform.AllowUserS3 {
+			public.DisabledReason = "personal_bucket_disabled"
+		} else {
+			public.DisabledReason = "requires_permanent_membership"
+		}
 	}
 	return &public, nil
 }

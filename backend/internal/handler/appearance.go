@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// 主题库最多 16 套完整 token，JSON 远超早期 32KB 上限。
+const appearanceAdminPatchMaxBytes = 1 << 20
 
 func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/public/appearance", func(c *gin.Context) {
@@ -77,9 +81,14 @@ func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, appearanceAdminPatchMaxBytes)
 		req := current.AppearanceSetting
 		if err := c.ShouldBindJSON(&req); err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				fail(c, http.StatusRequestEntityTooLarge, errors.New("外观配置过大，请减少主题套数后再保存"))
+				return
+			}
 			fail(c, http.StatusBadRequest, err)
 			return
 		}

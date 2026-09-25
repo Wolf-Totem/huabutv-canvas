@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, normalizeOSSConnectionTestInput } from "../src/lib/oss-settings";
+import { backendProvider, changesRequireOSSRetest, DEFAULT_OSS_PATH_PREFIX, getS3PresetHints, normalizeOSSConnectionTestInput, storageModeFromSetting } from "../src/lib/oss-settings";
 
 describe("OSS settings helpers", () => {
     test("provides editable S3 endpoint hints for known presets", () => {
@@ -16,6 +16,14 @@ describe("OSS settings helpers", () => {
 
     test("uses the product path prefix by default", () => {
         expect(DEFAULT_OSS_PATH_PREFIX).toBe("open-ai-canvas");
+    });
+
+    test("maps first-class R2 mode to s3+r2 without emitting provider r2", () => {
+        expect(backendProvider("r2")).toBe("s3");
+        expect(backendProvider("s3")).toBe("s3");
+        expect(storageModeFromSetting({ enabled: true, provider: "s3", s3Preset: "r2" })).toBe("r2");
+        expect(storageModeFromSetting({ enabled: true, provider: "s3", s3Preset: "aws" })).toBe("s3");
+        expect(storageModeFromSetting({ enabled: false, provider: "s3", s3Preset: "r2" })).toBe("local");
     });
 
     test("normalizes a Tencent COS test draft when S3-only fields are not mounted", () => {

@@ -7,9 +7,8 @@ import { RotateCcw, Send, Sun, X } from "lucide-react";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { canvasThemes, useCanvasColorTheme } from "@/lib/canvas-theme";
 import { useCopyText } from "@/hooks/use-copy-text";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 export type CanvasImageLightingOptions = {
     azimuth: number;
@@ -141,7 +140,7 @@ function buildLightingPrompt(input: {
 }
 
 export function CanvasNodeLightingPanel({ dataUrl, onClose, onConfirm }: { dataUrl: string; onClose: () => void; onConfirm: (options: CanvasImageLightingOptions, prompt: string) => void }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const reducedMotion = useReducedMotion();
     const copyText = useCopyText();
     const [options, setOptions] = useState(defaultLightingOptions);

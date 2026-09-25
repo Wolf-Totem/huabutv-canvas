@@ -58,6 +58,8 @@ type LogicalModelFormValues = {
     capabilitySpec: CapabilitySpec;
     defaultOptions: Record<string, unknown>;
     routes: RouteRuleRow[];
+    agentShareEnabled: boolean;
+    agentSharePercent: number;
 };
 export default function LogicalModelsPage() {
     const { message, modal } = App.useApp();
@@ -150,6 +152,8 @@ export default function LogicalModelsPage() {
                       capabilitySpec: emptyCapabilitySpec(capability),
                       defaultOptions: {},
                       routes: [],
+                      agentShareEnabled: false,
+                      agentSharePercent: 100,
                   },
         );
         setEditingModel(item || null);
@@ -430,6 +434,12 @@ export default function LogicalModelsPage() {
                                     </Form.Item>
                                     <Form.Item name="sortOrder" label="前台排序">
                                         <InputNumber className="w-full" precision={0} />
+                                    </Form.Item>
+                                    <Form.Item name="agentShareEnabled" label="代理定价比" valuePropName="checked">
+                                        <Switch />
+                                    </Form.Item>
+                                    <Form.Item name="agentSharePercent" label="比例 %" extra="打开后所有代理在该模型的返利再乘这个百分比。关 = 100%。">
+                                        <InputNumber min={1} max={100} className="w-full" />
                                     </Form.Item>
                                 </EditorSection>
                             </>
@@ -713,6 +723,8 @@ function logicalModelToForm(item: AdminLogicalModel): LogicalModelFormValues {
         capabilitySpec: item.capabilitySpec,
         defaultOptions: item.defaultOptions,
         routes: (item.routes || []).map((route) => ({ channelModelId: route.channelModelId, enabled: route.enabled, priority: route.priority, weight: route.weight })),
+        agentShareEnabled: Boolean(item.agentShareEnabled),
+        agentSharePercent: Math.round((item.agentShareBps || 10000) / 100),
     };
 }
 
@@ -735,6 +747,8 @@ function logicalModelPayload(values: LogicalModelFormValues, sourceSpecs: Capabi
         capabilitySpec,
         defaultOptions: sanitizeDefaults(capabilitySpec, values.defaultOptions),
         routes: values.routes.map((route) => ({ ...route, priority: route.priority || 0, weight: route.weight || 0 })),
+        agentShareEnabled: Boolean(values.agentShareEnabled),
+        agentShareBps: Math.round((values.agentSharePercent || 100) * 100),
     };
 }
 

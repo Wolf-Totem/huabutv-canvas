@@ -239,9 +239,9 @@ function inferCapabilityFromModel(model: string): ModelCapabilityChoice {
 
 function defaultProtocolForCapability(capability: ModelCapabilityChoice, availableProtocols: ModelProtocolDefinition[]): ModelProtocol {
     const standardProtocols: Record<string, string[]> = {
-        text: ["chat-completion", "openai-response"],
-        image: ["openai-image"],
-        video: ["newapi-channel-2", "newapi"],
+        text: ["jiasu-chat", "chat-completion", "openai-response"],
+        image: ["jiasu-image", "openai-image"],
+        video: ["jiasu-video", "newapi-channel-2", "newapi"],
         audio: ["openai-audio"],
     };
     const preferred = standardProtocols[capability] || [];
@@ -253,9 +253,9 @@ function defaultProtocolForCapability(capability: ModelCapabilityChoice, availab
     const matched = availableProtocols.find((p) => p.capability === capability && p.enabled !== false);
     if (matched) return matched.value;
     const fallbackMap: Record<string, string> = {
-        text: "chat-completion",
-        image: "openai-image",
-        video: "newapi-channel-2",
+        text: "jiasu-chat",
+        image: "jiasu-image",
+        video: "jiasu-video",
         audio: "openai-audio",
     };
     return fallbackMap[capability] || "chat-completion";

@@ -3,15 +3,14 @@ import { Button, Card, message } from "antd";
 import { Mic, Send } from "lucide-react";
 
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
-import { canvasThemes } from "@/lib/canvas-theme";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 
 /**
  * 语音录制功能测试页面
  * 验证输入行内联波形录制和 STT 转写闭环
  */
 export default function TestVoiceRecording() {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = useCanvasColorTheme();
     const [prompt, setPrompt] = useState("");
     const [sending, setSending] = useState(false);
 

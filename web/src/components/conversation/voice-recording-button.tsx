@@ -6,8 +6,7 @@ import { Mic } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { VoiceRecordingInline } from "./voice-recording-inline";
-import { canvasThemes } from "@/lib/canvas-theme";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 
 type VoiceRecordingButtonProps = {
     /** 转写完成回调，返回转写文本 */
@@ -22,7 +21,7 @@ type VoiceRecordingButtonProps = {
  * 使用局部状态，多个输入行可独立使用
  */
 export function VoiceRecordingButton({ onTranscribed, disabled, className }: VoiceRecordingButtonProps) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const [open, setOpen] = useState(false);
 
     return (

@@ -69,3 +69,18 @@ func TestModelsIncludeCloudAgentCanvasMutation(t *testing.T) {
 	}
 	t.Fatal("Models must include CloudAgentCanvasMutation")
 }
+
+func TestModelsIncludeStreamerTables(t *testing.T) {
+	var streamer, skin bool
+	for _, item := range Models() {
+		switch item.(type) {
+		case *model.Streamer:
+			streamer = true
+		case *model.SiteSkin:
+			skin = true
+		}
+	}
+	if !streamer || !skin {
+		t.Fatal("Models must include Streamer and SiteSkin")
+	}
+}

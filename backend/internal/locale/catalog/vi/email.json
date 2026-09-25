@@ -1,0 +1,16 @@
+{
+  "register.subject": "Xác minh email {{brand}}",
+  "register.title": "Xác minh email của bạn",
+  "register.hello": "{{email}}, xin chào:",
+  "register.lead": "Nhập mã xác minh sau để tiếp tục",
+  "register.expiry": "Mã sẽ hết hạn sau 10 phút.",
+  "register.ignore": "Nếu bạn không yêu cầu, hãy bỏ qua email này.",
+  "register.footer": "Email này được gửi bởi {{brand}}. Vui lòng không trả lời.",
+  "reset.subject": "Đặt lại mật khẩu {{brand}}",
+  "reset.title": "Đặt lại mật khẩu",
+  "reset.hello": "{{email}}, xin chào:",
+  "reset.lead": "Nhập mã xác minh sau để đặt lại mật khẩu",
+  "reset.expiry": "Mã sẽ hết hạn sau 10 phút.",
+  "reset.ignore": "Nếu bạn không yêu cầu, hãy bỏ qua email này và bảo vệ tài khoản.",
+  "reset.footer": "Email này được gửi bởi {{brand}}. Vui lòng không trả lời."
+}

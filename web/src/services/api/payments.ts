@@ -38,6 +38,8 @@ export type PaymentOrder = {
     amountFen: number;
     currency: "CNY" | string;
     creditsMicrocredits: number;
+    productKind?: "credit_topup" | "membership" | string;
+    planSku?: string;
     status: PaymentOrderStatus;
     providerStatus?: string;
     providerTradeNo?: string;
@@ -83,7 +85,7 @@ export function listTopupProducts() {
     return http.get<{ products: TopupProduct[] }>("/payments/products");
 }
 
-export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string }) {
+export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string; productKind?: "credit_topup" | "membership" }) {
     return http.post<{ order: PaymentOrder }>("/payments/orders", input);
 }
 

@@ -4,13 +4,12 @@ import { AudioLines, Check, ListVideo, Plus, Scissors, SkipBack, SkipForward, Tr
 import { nanoid } from "nanoid";
 
 import { ModelPicker } from "@/components/model-picker";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { buildTimelineImportSegments, type CanvasTimelineSegmentItem } from "@/lib/canvas/canvas-video-timeline-segments";
 import { listVideoReferenceModels } from "@/lib/canvas/canvas-video-regeneration";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { modelRequestOptions, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { cacheResourceObjectUrl } from "@/services/resource-blob-cache";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
@@ -47,7 +46,7 @@ const MIN_SEGMENT_MS = 100;
 
 export function CanvasVideoSegmentDialog({ node, nodes, connections, open, mode, config, timeline, onClose, onConfirm }: CanvasVideoSegmentDialogProps) {
     const { message } = App.useApp();
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const videoRef = useRef<HTMLVideoElement>(null);
     const segmentsSeededRef = useRef(false);
     const [videoUrl, setVideoUrl] = useState("");

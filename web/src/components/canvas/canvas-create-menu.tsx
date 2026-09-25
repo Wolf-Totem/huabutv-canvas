@@ -2,9 +2,8 @@ import { motion, useReducedMotion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 export type CanvasCreateCommand = {
     id: string;
@@ -16,7 +15,7 @@ export type CanvasCreateCommand = {
 };
 
 export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[] }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const projectCommands = commands.filter((command) => command.section === "project");
     const nodeCommands = commands.filter((command) => command.section === "node");
     const workflowCommands = commands.filter((command) => command.section === "workflow");
@@ -59,7 +58,7 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
 }
 
 function CanvasCreateCommandGrid({ commands, variant }: { commands: CanvasCreateCommand[]; variant: "node" | "compact" | "workflow" }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const reducedMotion = useReducedMotion();
 
     return (

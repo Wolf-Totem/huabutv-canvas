@@ -82,6 +82,8 @@ export type AdminLogicalModel = PublicLogicalModel & {
     revisionVersion: number;
     configurationError?: string;
     availabilityError?: string;
+    agentShareEnabled?: boolean;
+    agentShareBps?: number;
     routes: AdminLogicalRoute[];
 };
 
@@ -119,6 +121,8 @@ export type LogicalModelMutation = {
     capabilitySpec: CapabilitySpec;
     defaultOptions: Record<string, unknown>;
     routes: Array<{ channelModelId: string; enabled: boolean; priority: number; weight: number }>;
+    agentShareEnabled?: boolean;
+    agentShareBps?: number;
 };
 
 export type RouteSimulationResult = {

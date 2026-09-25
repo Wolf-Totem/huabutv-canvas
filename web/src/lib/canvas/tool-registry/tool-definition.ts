@@ -52,6 +52,7 @@ export type ToolbarHandlers = {
     onUpload: () => void;
     onOpenMyAssets: () => void;
     onOpenProjectCharacters: () => void;
+    onOpenWorkspace?: () => void;
     // 主工具栏——外观
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;

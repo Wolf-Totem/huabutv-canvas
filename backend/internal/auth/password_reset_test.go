@@ -43,10 +43,10 @@ func TestPasswordResetChangesPasswordConsumesCodeAndRevokesSessions(t *testing.T
 		deliveredCode = codeFromEmailBody(body)
 		return nil
 	})
-	if err := svc.SendPasswordResetEmailCode(" Creator@Example.com "); err != nil {
+	if err := svc.SendPasswordResetEmailCode(" Creator@Example.com ", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.SendPasswordResetEmailCode(user.Email); err != nil {
+	if err := svc.SendPasswordResetEmailCode(user.Email, ""); err != nil {
 		t.Fatalf("repeat send should keep the public response generic: %v", err)
 	}
 	if len(deliveredCode) != 6 {
@@ -110,7 +110,7 @@ func TestPasswordResetSendDoesNotRevealAccountEligibility(t *testing.T) {
 		return nil
 	})
 	for _, email := range []string{"missing@example.com", "oauth@example.com", "disabled@example.com"} {
-		if err := svc.SendPasswordResetEmailCode(email); err != nil {
+		if err := svc.SendPasswordResetEmailCode(email, ""); err != nil {
 			t.Fatalf("SendPasswordResetEmailCode(%q) error = %v", email, err)
 		}
 	}
@@ -177,7 +177,7 @@ func TestPasswordResetDeliveryFailureRemovesUnusableCode(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc.SetMailSender(func(_ EmailSettingValue, _ string, _ string, _ string) error { return errors.New("smtp unavailable") })
-	if err := svc.SendPasswordResetEmailCode(user.Email); err != nil {
+	if err := svc.SendPasswordResetEmailCode(user.Email, ""); err != nil {
 		t.Fatalf("delivery failure should keep the public response generic: %v", err)
 	}
 	var count int64
@@ -246,10 +246,10 @@ func assertRegistrationAndPasswordResetEmailBrand(t *testing.T, fromName, wantNa
 		deliveries = append(deliveries, delivery{fromName: setting.FromName, recipient: recipient, subject: subject, body: body})
 		return nil
 	})
-	if err := svc.SendRegistrationEmailCode("new-member@example.com"); err != nil {
+	if err := svc.SendRegistrationEmailCode("new-member@example.com", "zh", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.SendPasswordResetEmailCode(resetUser.Email); err != nil {
+	if err := svc.SendPasswordResetEmailCode(resetUser.Email, "zh"); err != nil {
 		t.Fatal(err)
 	}
 	if len(deliveries) != 2 {
@@ -260,10 +260,10 @@ func assertRegistrationAndPasswordResetEmailBrand(t *testing.T, fromName, wantNa
 			t.Fatalf("email did not use resolved sender name %q: %#v", wantName, delivered)
 		}
 	}
-	if deliveries[0].subject != wantName+"注册验证码" || deliveries[1].subject != wantName+"密码重置验证码" {
+	if deliveries[0].subject != wantName+"邮箱验证邮件" || deliveries[1].subject != wantName+"密码重置验证邮件" {
 		t.Fatalf("unexpected branded subjects: %#v", deliveries)
 	}
-	if !strings.Contains(deliveries[0].body, "你正在注册"+wantName+"。") {
+	if !strings.Contains(deliveries[0].body, wantName) || !strings.Contains(deliveries[0].body, "验证您的邮箱") {
 		t.Fatalf("registration body did not use resolved sender name: %q", deliveries[0].body)
 	}
 }
@@ -274,7 +274,7 @@ func newPasswordResetTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.EmailVerificationCode{}, &model.SystemSetting{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.AuthSession{}, &model.EmailVerificationCode{}, &model.SmsVerificationCode{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	settingJSON, err := json.Marshal(EmailSettingValue{Enabled: true, Host: "smtp.example.com", Port: 587, Encryption: "starttls", FromEmail: "noreply@example.com", FromName: "影策", RegistrationAllowedDomains: []string{"example.com"}})

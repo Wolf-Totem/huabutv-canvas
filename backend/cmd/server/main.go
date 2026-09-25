@@ -27,6 +27,12 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	if len(os.Args) > 1 && os.Args[1] == "plaza-seed" {
+		if err := runPlazaSeed(ctx); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if err := run(ctx); err != nil {
 		log.Fatal(err)
 	}
@@ -264,6 +270,14 @@ func parseCORSPolicy(raw string) (corsPolicy, error) {
 			policy.allowAny = true
 			continue
 		}
+		if strings.Contains(value, "*") {
+			normalized, err := normalizeWildcardCORSOrigin(value)
+			if err != nil {
+				return corsPolicy{}, fmt.Errorf("CANVAS_CORS_ORIGINS contains invalid origin %q: %w", value, err)
+			}
+			policy.origins[normalized] = struct{}{}
+			continue
+		}
 		normalized, err := normalizeCORSOrigin(value)
 		if err != nil {
 			return corsPolicy{}, fmt.Errorf("CANVAS_CORS_ORIGINS contains invalid origin %q: %w", value, err)
@@ -310,9 +324,77 @@ func allowedOriginWithPolicy(c *gin.Context, origin string, policy corsPolicy) b
 	if _, ok := policy.origins[normalizedOrigin]; ok {
 		return true
 	}
+	if corsOriginMatchesConfiguredSubdomain(normalizedOrigin, policy) {
+		return true
+	}
 	if len(policy.origins) > 0 {
 		return false
 	}
 	host := strings.ToLower(parsed.Hostname())
 	return (host == "localhost" || host == "127.0.0.1" || host == "::1") && (parsed.Scheme == "http" || parsed.Scheme == "https")
+}
+
+func normalizeWildcardCORSOrigin(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if !strings.Contains(value, "://*.") {
+		return "", fmt.Errorf("wildcard origin must look like https://*.example.com")
+	}
+	replaced := strings.Replace(value, "://*.", "://wildcard.", 1)
+	normalized, err := normalizeCORSOrigin(replaced)
+	if err != nil {
+		return "", err
+	}
+	return strings.Replace(normalized, "://wildcard.", "://*.", 1), nil
+}
+
+func corsOriginMatchesConfiguredSubdomain(origin string, policy corsPolicy) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	scheme := strings.ToLower(parsed.Scheme)
+	labels := strings.Split(host, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	parent := strings.Join(labels[1:], ".")
+	if _, ok := policy.origins[scheme+"://"+parent]; ok {
+		return true
+	}
+	if _, ok := policy.origins[scheme+"://*."+parent]; ok {
+		return true
+	}
+	for configured := range policy.origins {
+		item, err := url.Parse(configured)
+		if err != nil {
+			continue
+		}
+		configuredHost := strings.ToLower(item.Hostname())
+		if item.Scheme != "" && strings.ToLower(item.Scheme) != scheme {
+			continue
+		}
+		if strings.HasPrefix(configuredHost, "*.") {
+			if host == strings.TrimPrefix(configuredHost, "*.") || strings.HasSuffix(host, "."+strings.TrimPrefix(configuredHost, "*.")) && strings.Count(host, ".") == strings.Count(configuredHost, ".") {
+				return true
+			}
+			continue
+		}
+		configuredParent := corsRegistrableParent(configuredHost)
+		if configuredParent != "" && parent == configuredParent && len(labels) == strings.Count(configuredParent, ".")+2 {
+			return true
+		}
+	}
+	return false
+}
+
+func corsRegistrableParent(host string) string {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(host)), ".")
+	if len(parts) >= 3 {
+		return strings.Join(parts[1:], ".")
+	}
+	if len(parts) == 2 {
+		return host
+	}
+	return ""
 }

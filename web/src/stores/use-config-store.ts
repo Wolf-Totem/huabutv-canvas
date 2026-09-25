@@ -11,6 +11,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { CapabilitySpec, PublicLogicalModelPriceTier } from "@/services/api/logical-models";
 
 export type ApiCallFormat = "openai" | "gemini" | "claude";
+export type UserChannelConnection = "openai" | "gemini" | "jiasu";
 export type ChannelInterfaceType = ModelProtocol;
 export type ChannelHeader = { name: string; value: string };
 export type RunningHubCapability = "image" | "video" | "audio";
@@ -351,6 +352,8 @@ export type ModelChannel = {
     secretKey?: string;
     headers?: ChannelHeader[];
     apiFormat: ApiCallFormat;
+    // 个人渠道目录预设：佳速走 OpenAI 兼容目录，但默认 Base URL 与展示与 OpenAI 官方不同。
+    catalogConnection?: UserChannelConnection;
     interfaceType?: ChannelInterfaceType;
     models: string[];
     // 仅平台目录使用：将已保存的旧 SKU 选择重定向到当前模型家族。
@@ -423,6 +426,7 @@ export type ModelCapability = "image" | "video" | "text" | "audio";
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+export const JIASU_BASE_URL = "https://ai.jiasuapi.com";
 const LEGACY_DEFAULT_MODEL_NAMES = new Set(["gpt-image-2", "grok-imagine-video", "gpt-5.5", "gpt-4o-mini-tts"]);
 
 export const defaultConfig: AiConfig = {
@@ -726,17 +730,19 @@ export function effectiveConfigForCustomChannels(config: AiConfig, customChannel
 
 export function createModelChannel(channel?: Partial<ModelChannel>): ModelChannel {
     const apiFormat = normalizeApiFormat(channel?.apiFormat);
+    const catalogConnection = normalizeCatalogConnection(channel?.catalogConnection);
     const interfaceType = normalizeChannelInterfaceType(channel?.interfaceType);
     const providedBaseUrl = channel?.baseUrl?.trim();
     return {
         id: channel?.id?.trim() || nanoid(),
         name: channel?.name?.trim() || "新渠道",
         sortOrder: channel?.sortOrder ?? 0,
-        baseUrl: providedBaseUrl || (interfaceType ? defaultBaseUrlForChannelInterface(interfaceType) : defaultBaseUrlForApiFormat(apiFormat)),
+        baseUrl: providedBaseUrl || (interfaceType ? defaultBaseUrlForChannelInterface(interfaceType) : catalogConnection === "jiasu" ? JIASU_BASE_URL : defaultBaseUrlForApiFormat(apiFormat)),
         apiKey: channel?.apiKey || "",
         secretKey: channel?.secretKey || "",
         headers: Array.isArray(channel?.headers) ? channel.headers.map((header) => ({ name: String(header.name || ""), value: String(header.value || "") })) : [],
         apiFormat,
+        catalogConnection,
         interfaceType,
         models: uniqueRawModels(channel?.models || []),
         scope: channel?.scope === "system" ? "system" : "user",
@@ -915,6 +921,7 @@ export function defaultBaseUrlForChannelInterface(interfaceType?: ChannelInterfa
     if (interfaceType === "volcengine-ark-image" || interfaceType === "volcengine-ark-video") return "https://ark.cn-beijing.volces.com/api/v3";
     if (interfaceType === "volcengine-jimeng-image" || interfaceType === "volcengine-jimeng-video") return "https://visual.volcengineapi.com";
     if (interfaceType === "minimax-video") return "https://api.minimaxi.com";
+    if (interfaceType === "jiasu-chat" || interfaceType === "jiasu-image" || interfaceType === "jiasu-video") return JIASU_BASE_URL;
     if (interfaceType === "grok-image" || interfaceType === "newapi" || interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2" || interfaceType === "xai-video") return "";
     return OPENAI_BASE_URL;
 }
@@ -925,6 +932,10 @@ function capabilityForChannelInterface(interfaceType?: ChannelInterfaceType): Mo
 
 function normalizeApiFormat(apiFormat: unknown): ApiCallFormat {
     return apiFormat === "gemini" || apiFormat === "claude" ? apiFormat : "openai";
+}
+
+function normalizeCatalogConnection(value: unknown): UserChannelConnection | undefined {
+    return value === "openai" || value === "gemini" || value === "jiasu" ? value : undefined;
 }
 
 function normalizeChannelInterfaceType(value: unknown): ChannelInterfaceType | undefined {

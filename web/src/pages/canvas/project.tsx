@@ -36,6 +36,7 @@ import { CanvasCloudAgentPanel } from "@/components/canvas/canvas-cloud-agent-pa
 import { CanvasActiveTaskPanel } from "@/components/canvas/canvas-active-task-panel";
 import { CanvasAssetTray } from "@/components/canvas/canvas-asset-tray";
 import { CanvasProjectSidebar } from "@/components/canvas/canvas-project-sidebar";
+import { CanvasWorkspacePanel } from "@/components/canvas/canvas-workspace-panel";
 import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asset-modal";
 import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
@@ -66,6 +67,8 @@ import { AssetPickerModal } from "@/components/canvas/asset-picker-modal";
 import { getProject } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { CanvasShareModal } from "@/components/canvas/canvas-share-modal";
+import { CanvasPlazaApplyModal } from "@/components/canvas/canvas-plaza-apply-modal";
+import { getPlazaSettings } from "@/services/api/plaza";
 import { CanvasScriptEditor, CanvasScriptNodeContent } from "@/components/canvas/canvas-script-node";
 import { CanvasBatchTableNodeContent } from "@/components/canvas/canvas-batch-table-node";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardMinNodeHeight, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
@@ -304,6 +307,8 @@ function InfiniteCanvasPage() {
     const workspaceMode: CanvasWorkspaceMode = "professional";
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
     const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [plazaApplyOpen, setPlazaApplyOpen] = useState(false);
+    const [plazaApplyEnabled, setPlazaApplyEnabled] = useState(false);
     const [tapNowImportOpen, setTapNowImportOpen] = useState(false);
     const [nodeSearchOpen, setNodeSearchOpen] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
@@ -333,6 +338,7 @@ function InfiniteCanvasPage() {
     const [titleDraft, setTitleDraft] = useState("");
     const [shortcutRequestNonce, setShortcutRequestNonce] = useState(0);
     const [cinematicAgentEntry, setCinematicAgentEntry] = useState(false);
+    const [workspaceOpen, setWorkspaceOpen] = useState(true);
     const { assistantOpen, closeAgent, openAgent } = useCanvasAssistantVisibility();
     const agentMentionReferences = useMemo(() => buildCanvasAgentMentionReferences(nodes), [nodes]);
 
@@ -351,6 +357,16 @@ function InfiniteCanvasPage() {
     useEffect(() => {
         persistCanvasMediaPerformanceMode(mediaPerformanceMode);
     }, [mediaPerformanceMode]);
+
+    useEffect(() => {
+        let active = true;
+        getPlazaSettings().then(({ settings }) => {
+            if (active) setPlazaApplyEnabled(settings.applyEnabled);
+        }).catch(() => {
+            if (active) setPlazaApplyEnabled(false);
+        });
+        return () => { active = false; };
+    }, []);
 
     useEffect(() => {
         didInitialCenterRef.current = false;
@@ -2123,6 +2139,10 @@ function InfiniteCanvasPage() {
                         onRetryBatchItem={(batchId, itemId) => retryFailedBatchItems(contentNode.id, batchId, itemId)}
                         onStopBatch={(batchId) => stopRemainingBatchItems(contentNode.id, batchId)}
                         onAddRow={() => addScriptRow(contentNode.id)}
+                        onImportRows={(rows, mode) => {
+                            const current = contentNode.metadata?.storyboard?.rows || [];
+                            replaceScriptRows(contentNode.id, mode === "replace" ? rows : [...current, ...rows]);
+                        }}
                         onRemoveRow={(rowId) => removeScriptRow(contentNode.id, rowId)}
                         onUpdateRow={(rowId, patch) => updateScriptRow(contentNode.id, rowId, patch)}
                         onPromptChange={(composerContent) => handleConfigNodeChange(contentNode.id, { composerContent })}
@@ -2341,7 +2361,34 @@ function InfiniteCanvasPage() {
                 跳转到画布主内容
             </a>
             <main id="canvas-main" tabIndex={-1} className="flex h-full min-h-0 overflow-hidden outline-none" style={{ background: resolvedCanvasAppearance.background, color: theme.node.text }}>
-                {!focusMode && shortDramaEnabled && currentProject?.projectId ? (
+                {!focusMode ? (
+                    <CanvasWorkspacePanel
+                        key={projectId}
+                        open={workspaceOpen}
+                        onOpen={() => setWorkspaceOpen(true)}
+                        onInsertAssets={handleProjectAssetsInsert}
+                        projectId={projectId}
+                        nodes={nodes}
+                        selectedNodeIds={selectedNodeIds}
+                        onClose={() => setWorkspaceOpen(false)}
+                        onAssets={() => openCanvasAssetLibrary()}
+                        onProjectAssets={currentProject?.projectId ? () => openProjectAssets() : undefined}
+                        onCancelTask={cancelCanvasTask}
+                        onFocus={(nodeId) => {
+                            const target = nodeById.get(nodeId);
+                            const parent = target?.parentId ? nodeById.get(target.parentId) : null;
+                            if (parent?.metadata?.frame?.collapsed) toggleFrameCollapsed(parent.id);
+                            const batchRoot = target?.metadata?.batchRootId ? nodeById.get(target.metadata.batchRootId) : null;
+                            if (batchRoot && !batchRoot.metadata?.imageBatchExpanded) toggleBatchExpanded(batchRoot.id);
+                            const selection = new Set([nodeId]);
+                            selectedNodeIdsRef.current = selection;
+                            setSelectedNodeIds(selection);
+                            setSelectedConnectionId(null);
+                            focusCanvasNode(nodeId);
+                        }}
+                    />
+                ) : null}
+                {!workspaceOpen && !focusMode && shortDramaEnabled && currentProject?.projectId ? (
                     <CanvasProjectSidebar projectId={currentProject.projectId} detail={linkedProjectQuery.data} onAddChapter={handleProjectChapterInsert} onLocateStyle={locateProjectStyleNode} onOpenAssets={() => openProjectAssets()} />
                 ) : null}
                 <CanvasOverlayLayerProvider>
@@ -2367,6 +2414,7 @@ function InfiniteCanvasPage() {
                                 onUndo={undoCanvas}
                                 onRedo={redoCanvas}
                                 onShare={() => setShareModalOpen(true)}
+                                onPlazaApply={plazaApplyEnabled ? () => setPlazaApplyOpen(true) : undefined}
                                 shortcutRequestNonce={shortcutRequestNonce}
                                 mediaPerformanceMode={mediaPerformanceMode}
                                 onMediaPerformanceModeChange={setMediaPerformanceMode}
@@ -2408,6 +2456,7 @@ function InfiniteCanvasPage() {
                         ) : null}
 
                         <CanvasShareModal projectId={projectId} open={shareModalOpen} onClose={() => setShareModalOpen(false)} beforeCreate={saveCanvasProject} />
+                        <CanvasPlazaApplyModal projectId={projectId} title={currentProject?.title || titleDraft || "未命名画布"} nodes={nodes} open={plazaApplyOpen} onClose={() => setPlazaApplyOpen(false)} beforeSubmit={saveCanvasProject} />
                         <LibTVImportDialog open={libTVImportOpen} projectId={projectId} viewport={viewport} viewportSize={size} onClose={() => setLibTVImportOpen(false)} onApply={applyLibTVImport} />
                         <TapNowImportDialog open={tapNowImportOpen} projectId={projectId} viewport={viewport} viewportSize={size} onClose={() => setTapNowImportOpen(false)} onApply={applyTapNowImport} />
 
@@ -2589,6 +2638,7 @@ function InfiniteCanvasPage() {
                                             openCanvasAssetLibrary();
                                         }}
                                         onOpenProjectCharacters={() => openProjectAssets("character")}
+                                        onOpenWorkspace={() => setWorkspaceOpen((value) => !value)}
                                     />
                                 ) : null}
                             </div>
@@ -3009,6 +3059,11 @@ function InfiniteCanvasPage() {
                             open={Boolean(activeScriptNode)}
                             onClose={() => setScriptEditorNodeId(null)}
                             onUpdateRows={(rows) => activeScriptNode && replaceScriptRows(activeScriptNode.id, rows)}
+                            onImportRows={(rows, mode) => {
+                                if (!activeScriptNode) return;
+                                const current = activeScriptNode.metadata?.storyboard?.rows || [];
+                                replaceScriptRows(activeScriptNode.id, mode === "replace" ? rows : [...current, ...rows]);
+                            }}
                             onVisibleColumnsChange={(visibleColumns: StoryboardColumn[]) => {
                                 if (!activeScriptNode || !visibleColumns.length) return;
                                 setNodes((prev) =>

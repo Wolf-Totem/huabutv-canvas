@@ -3,16 +3,20 @@ package model
 import "time"
 
 type User struct {
-	ID           string     `json:"id" gorm:"primaryKey;size:36"`
-	Username     string     `json:"username" gorm:"uniqueIndex;size:80"`
-	Email        string     `json:"email,omitempty" gorm:"size:160"`
-	DisplayName  string     `json:"displayName" gorm:"size:80"`
-	Role         UserRole   `json:"role" gorm:"index;size:24"`
-	Status       UserStatus `json:"status" gorm:"index;size:24"`
-	PasswordHash string     `json:"-"`
-	LastLoginAt  *time.Time `json:"lastLoginAt"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
+	ID                  string     `json:"id" gorm:"primaryKey;size:36"`
+	Username            string     `json:"username" gorm:"uniqueIndex;size:80"`
+	Email               string     `json:"email,omitempty" gorm:"size:160"`
+	Phone               string     `json:"phone,omitempty" gorm:"index;size:20;not null;default:''"`
+	DisplayName         string     `json:"displayName" gorm:"size:80"`
+	Role                UserRole   `json:"role" gorm:"index;size:24"`
+	Status              UserStatus `json:"status" gorm:"index;size:24"`
+	Locale              string     `json:"locale,omitempty" gorm:"size:16"`
+	PasswordHash        string     `json:"-"`
+	InvitedByStreamerID *string    `json:"invitedByStreamerId,omitempty" gorm:"index;size:36"`
+	InvitedAt           *time.Time `json:"invitedAt,omitempty"`
+	LastLoginAt         *time.Time `json:"lastLoginAt"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
 }
 
 type AuthSession struct {
@@ -55,3 +59,15 @@ type EmailVerificationCode struct {
 	UsedAt    *time.Time `json:"usedAt" gorm:"index"`
 	CreatedAt time.Time  `json:"createdAt" gorm:"index"`
 }
+
+type SmsVerificationCode struct {
+	ID        string     `json:"id" gorm:"primaryKey;size:36"`
+	Phone     string     `json:"phone" gorm:"index;size:20"`
+	CodeHash  string     `json:"-" gorm:"size:64"`
+	Purpose   string     `json:"purpose" gorm:"index;size:32"`
+	ExpiresAt time.Time  `json:"expiresAt" gorm:"index"`
+	UsedAt    *time.Time `json:"usedAt" gorm:"index"`
+	CreatedAt time.Time  `json:"createdAt" gorm:"index"`
+}
+
+func (SmsVerificationCode) TableName() string { return "sms_verification_codes" }

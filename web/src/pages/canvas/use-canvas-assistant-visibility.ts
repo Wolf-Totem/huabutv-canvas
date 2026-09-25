@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 
 export function useCanvasAssistantVisibility() {
-    const [assistantOpen, setAssistantOpen] = useState(false);
+    const [assistantOpen, setAssistantOpen] = useState(true);
 
     const openAgent = useCallback(() => {
         setAssistantOpen(true);

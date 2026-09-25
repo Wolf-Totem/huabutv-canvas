@@ -12,6 +12,7 @@ import { buildCameraPrompt } from "@/lib/canvas/camera-prompt-library";
 import { buildTextRewritePrompt } from "@/lib/prompts";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationErrorMessage, generationFailureMetadata } from "@/lib/generation-error";
+import { userChannelDisconnectNotice } from "@/lib/generation-user-channel";
 import { modelCompatibilityError, modelGroupReferenceLimits, modelPromptLengthError, modelRequestOptions, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
@@ -84,7 +85,7 @@ export function useCanvasGenerationExecutor({
             new Promise<boolean>((resolve) => {
                 modal.confirm({
                     title: "再次生成相同内容？",
-                    content: "当前节点已使用相同提示词、模型、参数和参考素材提交过任务。再次生成会新建任务，并可能再次消耗积分。",
+                    content: `当前节点已使用相同提示词、模型、参数和参考素材提交过任务。再次生成会新建任务，并可能再次消耗积分。${userChannelDisconnectNotice(effectiveConfig, effectiveConfig.model, "generic")}`,
                     okText: "仍然生成",
                     cancelText: "取消",
                     centered: true,
@@ -92,7 +93,7 @@ export function useCanvasGenerationExecutor({
                     onCancel: () => resolve(false),
                 });
             }),
-        [modal],
+        [effectiveConfig, modal],
     );
 
     return useCallback(
@@ -331,6 +332,10 @@ export function useCanvasGenerationExecutor({
                     };
 
                     try {
+                        if (mode === "video") {
+                            const notice = userChannelDisconnectNotice(effectiveConfig, generationConfig.model, "video");
+                            if (notice) message.warning(notice);
+                        }
                         if (mode === "image") await executeImageGeneration(execution);
                         else if (mode === "video") await executeVideoGeneration(execution);
                         else if (mode === "audio") await executeAudioGeneration(execution);

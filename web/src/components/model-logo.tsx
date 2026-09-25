@@ -4,7 +4,10 @@ import { Cpu, Search, X } from "lucide-react";
 
 import { toc } from "@lobehub/icons/es/toc";
 
+import { FEATURED_MODEL_LOGOS } from "@/lib/model-logo-ids";
 import { cn } from "@/lib/utils";
+
+export { FEATURED_MODEL_LOGOS, inferBrandIcon } from "@/lib/model-logo-ids";
 
 type LobeIconComponent = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
 
@@ -43,21 +46,22 @@ function loadIcon(icon?: string) {
 }
 
 export function ModelLogo({ icon, size = 18, className }: { icon?: string; size?: number; className?: string }) {
-    const [Icon, setIcon] = useState<LobeIconComponent | undefined>(() => (icon ? iconRegistry.get(icon) : undefined));
+    const resolvedIcon = icon || "";
+    const [Icon, setIcon] = useState<LobeIconComponent | undefined>(() => (resolvedIcon ? iconRegistry.get(resolvedIcon) : undefined));
     useEffect(() => {
         let cancelled = false;
-        setIcon(icon ? iconRegistry.get(icon) : undefined);
-        if (!icon || !iconLoaders[icon])
+        setIcon(resolvedIcon ? iconRegistry.get(resolvedIcon) : undefined);
+        if (!resolvedIcon || !iconLoaders[resolvedIcon])
             return () => {
                 cancelled = true;
             };
-        void loadIcon(icon).then((loaded) => {
+        void loadIcon(resolvedIcon).then((loaded) => {
             if (!cancelled) setIcon(loaded);
         });
         return () => {
             cancelled = true;
         };
-    }, [icon]);
+    }, [resolvedIcon]);
     if (!Icon) return <Cpu className={cn("shrink-0 text-foreground/45", className)} size={size} aria-hidden />;
     return <Icon size={size} className={cn("shrink-0", className)} aria-hidden />;
 }
@@ -76,9 +80,16 @@ export function ModelIconPicker({ value, onChange }: { value?: string; onChange?
         }
     }, [open]);
 
+    const featuredIcons = useMemo(
+        () => FEATURED_MODEL_LOGOS.map((item) => iconOptions.find((option) => option.id === item.id)).filter((item): item is (typeof iconOptions)[number] => Boolean(item)),
+        [],
+    );
+
     const filteredIcons = useMemo(() => {
         const query = keyword.trim().toLowerCase();
-        return query ? iconOptions.filter((item) => `${item.id} ${item.title}`.toLowerCase().includes(query)) : iconOptions;
+        if (!query) return iconOptions;
+        const featuredAliases = new Map(FEATURED_MODEL_LOGOS.map((item) => [item.id, item.aliases]));
+        return iconOptions.filter((item) => `${item.id} ${item.title} ${featuredAliases.get(item.id) || ""}`.toLowerCase().includes(query));
     }, [keyword]);
 
     const selectedOption = useMemo(() => (value ? iconOptions.find((item) => item.id === value) : undefined), [value]);
@@ -147,6 +158,35 @@ export function ModelIconPicker({ value, onChange }: { value?: string; onChange?
                         placeholder="搜索品牌或模型名称（如 OpenAI, Claude, Google, Flux...）"
                         allowClear
                     />
+                    {!keyword.trim() && featuredIcons.length ? (
+                        <div>
+                            <p className="mb-2 text-xs font-medium text-foreground/55">常用品牌</p>
+                            <div className="mb-3 grid grid-cols-6 gap-2 sm:grid-cols-6">
+                                {featuredIcons.map((item) => {
+                                    const selected = value === item.id;
+                                    return (
+                                        <button
+                                            key={`featured-${item.id}`}
+                                            type="button"
+                                            title={item.title}
+                                            className={cn(
+                                                "flex h-16 flex-col items-center justify-center gap-1 rounded-lg border border-border/50 bg-surface px-1 text-foreground/75 transition-all hover:border-primary/60 hover:bg-surface-active",
+                                                selected && "border-primary bg-primary/10 text-primary ring-1 ring-primary",
+                                            )}
+                                            onClick={() => {
+                                                onChange?.(item.id);
+                                                setOpen(false);
+                                            }}
+                                        >
+                                            <ModelLogo icon={item.id} size={22} />
+                                            <span className="max-w-full truncate text-[10px] leading-none">{item.id === "Doubao" ? "豆包" : item.id === "Volcengine" ? "火山" : item.id === "Minimax" ? "MiniMax" : item.id}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="mb-2 text-xs font-medium text-foreground/55">全部 Logo</p>
+                        </div>
+                    ) : null}
                     <div
                         className="grid max-h-[380px] grid-cols-8 gap-2 overflow-y-auto pr-1 sm:grid-cols-9"
                         role="listbox"

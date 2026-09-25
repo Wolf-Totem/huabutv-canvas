@@ -1,25 +1,33 @@
 import { type FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { App, Button, Divider, Input } from "antd";
-import { ArrowRight, Info, LockKeyhole, Mail, ShieldCheck, TriangleAlert, UserRound } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router";
+import { ArrowRight, Info, LockKeyhole, Mail, ShieldCheck, Smartphone, TriangleAlert, UserRound } from "lucide-react";
+import { useSearchParams } from "react-router";
 
-import { getAuthSession, getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode } from "@/services/api/auth";
+import { useTranslation } from "react-i18next";
+
+import { canvasWorkspaceURL, isAgentHost, isStreamerMarketingHost } from "@/lib/public-hosts";
+import { getAuthSession, getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode, sendRegistrationSmsCode } from "@/services/api/auth";
 import { LinuxDOIcon } from "./auth-scene";
 import { ApiError } from "@/services/api/request";
+import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
 
 type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
 
-export default function RegisterPage() {
-    const navigate = useNavigate();
+export default function RegisterPage({ embedded = false }: { embedded?: boolean }) {
+    const { i18n } = useTranslation();
     const [params] = useSearchParams();
     const { message } = App.useApp();
     const [settings, setSettings] = useState<AuthSettings | null>(null);
     const [username, setUsername] = useState("");
+    const [channel, setChannel] = useState<"email" | "sms">("email");
     const [email, setEmail] = useState("");
     const [emailCode, setEmailCode] = useState("");
+    const [phone, setPhone] = useState("");
+    const [smsCode, setSmsCode] = useState("");
     const [displayName, setDisplayName] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [inviteCode, setInviteCode] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [sendingCode, setSendingCode] = useState(false);
     const [countdown, setCountdown] = useState(0);
@@ -31,7 +39,11 @@ export default function RegisterPage() {
     useEffect(() => {
         let cancelled = false;
         void getAuthSettings()
-            .then((value) => !cancelled && setSettings(value))
+            .then((value) => {
+                if (cancelled) return;
+                setSettings(value);
+                if (!value.firstUser && value.smsEnabled && !value.emailEnabled) setChannel("sms");
+            })
             .catch((error) => !cancelled && message.error(error instanceof Error ? error.message : "读取注册设置失败"));
         return () => {
             cancelled = true;
@@ -46,16 +58,26 @@ export default function RegisterPage() {
 
     const sendCode = async () => {
         if (sending.current || countdown > 0) return;
-        if (!email.trim()) {
+        if (activeChannel === "sms") {
+            if (!phone.trim()) {
+                message.warning("请先输入手机号");
+                return;
+            }
+        } else if (!email.trim()) {
             message.warning("请先输入邮箱");
             return;
         }
         sending.current = true;
         setSendingCode(true);
         try {
-            await sendRegistrationEmailCode(email.trim());
+            if (activeChannel === "sms") {
+                await sendRegistrationSmsCode(phone.trim());
+                message.success("验证码已发送，请查看短信");
+            } else {
+                await sendRegistrationEmailCode(email.trim(), i18n.language);
+                message.success("验证码已发送，请检查邮箱");
+            }
             setCountdown(60);
-            message.success("验证码已发送，请检查邮箱");
         } catch (error) {
             if (error instanceof ApiError && error.status === 429) setCountdown(Math.max(1, Math.ceil((error.retryAfterMs ?? 60000) / 1000)));
             message.error(error instanceof Error ? error.message : "发送验证码失败");
@@ -75,12 +97,22 @@ export default function RegisterPage() {
         registering.current = true;
         setSubmitting(true);
         try {
-            await register({ username, email, emailCode, displayName, password });
+            await register(
+                activeChannel === "sms"
+                    ? { username, phone, smsCode, channel: "sms", displayName, password, inviteCode: inviteCode.trim() || undefined }
+                    : { username, email, emailCode, channel: "email", displayName, password, inviteCode: inviteCode.trim() || undefined },
+            );
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             if (!settings?.firstUser) window.sessionStorage.setItem("infinite-canvas:model-setup-guide", "1");
             message.success(settings?.firstUser ? "管理员账号已创建" : "注册成功");
-            navigate(next, { replace: true });
+            if (isAgentHost()) window.location.replace("/agent");
+            else if (isStreamerMarketingHost()) window.location.replace(canvasWorkspaceURL());
+            else if (embedded) {
+                useAuthDialogStore.getState().closeAuth();
+                const target = next.startsWith("/") ? next : "/";
+                if (target !== `${window.location.pathname}${window.location.search}`) window.location.assign(target);
+            } else window.location.replace(next.startsWith("/") ? next : "/");
         } catch (error) {
             if (error instanceof ApiError && error.status === 429) setRegisterCountdown(Math.max(1, Math.ceil((error.retryAfterMs ?? 60000) / 1000)));
             message.error(error instanceof Error ? error.message : "注册失败");
@@ -97,15 +129,27 @@ export default function RegisterPage() {
     }, [registerCountdown]);
 
     const registrationClosed = settings?.registrationEnabled === false;
+    const emailAvailable = Boolean(settings?.firstUser || settings?.emailEnabled);
+    const smsAvailable = Boolean(settings?.firstUser || settings?.smsEnabled);
     const mailUnavailable = Boolean(settings && !settings.firstUser && settings.emailCodeRequired && !settings.emailEnabled);
-    const disabled = registrationClosed || mailUnavailable;
-    const requireCode = Boolean(settings && !settings.firstUser && settings.emailCodeRequired);
+    const smsUnavailable = Boolean(settings && !settings.firstUser && settings.smsCodeRequired && !settings.smsEnabled);
+    const noChannel = Boolean(settings && !settings.firstUser && !emailAvailable && !smsAvailable);
+    const activeChannel = !emailAvailable && smsAvailable ? "sms" : channel === "sms" && smsAvailable ? "sms" : "email";
+    const disabled = registrationClosed || (activeChannel === "sms" ? smsUnavailable : mailUnavailable) || noChannel;
+    const showChannelTabs = emailAvailable && smsAvailable && !settings?.firstUser;
+    const inviteLocked = settings?.inviteLocked === true;
+    const requireCode = Boolean(settings && !settings.firstUser && (activeChannel === "sms" ? settings.smsCodeRequired !== false : settings.emailCodeRequired));
 
     return (
         <form onSubmit={submit} className="space-y-4">
             {settings?.firstUser ? (
                 <Notice icon={<Info className="size-3.5" />} tone="blue">
-                    首个账号自动成为管理员，邮箱验证码暂不要求。
+                    首个账号自动成为管理员，验证码暂不要求。
+                </Notice>
+            ) : null}
+            {inviteLocked ? (
+                <Notice icon={<Info className="size-3.5" />} tone="blue">
+                    {settings?.inviteDisplayName || "主播"}欢迎您的加入
                 </Notice>
             ) : null}
             {registrationClosed ? (
@@ -113,10 +157,29 @@ export default function RegisterPage() {
                     当前已关闭普通注册，请联系管理员创建账号。
                 </Notice>
             ) : null}
-            {mailUnavailable ? (
+            {noChannel ? (
+                <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
+                    管理员尚未配置邮箱或短信验证，暂时无法注册。
+                </Notice>
+            ) : activeChannel === "sms" && smsUnavailable ? (
+                <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
+                    管理员尚未配置注册短信。
+                </Notice>
+            ) : mailUnavailable && activeChannel === "email" ? (
                 <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
                     管理员尚未配置注册邮件，普通邮箱注册暂不可用。
                 </Notice>
+            ) : null}
+
+            {showChannelTabs ? (
+                <div className="grid grid-cols-2 gap-2">
+                    <Button type={activeChannel === "email" ? "primary" : "default"} onClick={() => setChannel("email")}>
+                        邮箱注册
+                    </Button>
+                    <Button type={activeChannel === "sms" ? "primary" : "default"} onClick={() => setChannel("sms")}>
+                        短信注册
+                    </Button>
+                </div>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -128,39 +191,83 @@ export default function RegisterPage() {
                 </AuthField>
             </div>
 
-            <AuthField label="邮箱">
-                <Input
-                    size="large"
-                    prefix={<Mail className="size-4 text-white/35" />}
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="用于登录与安全验证"
-                    autoComplete="email"
-                    required={!settings?.firstUser}
-                    disabled={disabled}
-                />
-            </AuthField>
-
-            {requireCode ? (
-                <AuthField label="邮箱验证码">
-                    <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
+            {activeChannel === "sms" ? (
+                <>
+                    <AuthField label="手机号">
                         <Input
                             size="large"
-                            prefix={<ShieldCheck className="size-4 text-white/35" />}
-                            value={emailCode}
-                            onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                            placeholder="6 位验证码"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            required
+                            prefix={<Smartphone className="size-4 text-white/35" />}
+                            value={phone}
+                            onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 11))}
+                            placeholder="中国大陆 11 位手机号"
+                            inputMode="tel"
+                            autoComplete="tel"
+                            required={!settings?.firstUser}
                             disabled={disabled}
                         />
-                        <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
-                            {countdown > 0 ? `${countdown}s` : "获取验证码"}
-                        </Button>
-                    </div>
-                </AuthField>
-            ) : null}
+                    </AuthField>
+                    {requireCode ? (
+                        <AuthField label="短信验证码">
+                            <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
+                                <Input
+                                    size="large"
+                                    prefix={<ShieldCheck className="size-4 text-white/35" />}
+                                    value={smsCode}
+                                    onChange={(event) => setSmsCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                                    placeholder="6 位验证码"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    required
+                                    disabled={disabled}
+                                />
+                                <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
+                                    {countdown > 0 ? `${countdown}s` : "获取验证码"}
+                                </Button>
+                            </div>
+                        </AuthField>
+                    ) : null}
+                </>
+            ) : (
+                <>
+                    <AuthField label="邮箱">
+                        <Input
+                            size="large"
+                            prefix={<Mail className="size-4 text-white/35" />}
+                            value={email}
+                            onChange={(event) => setEmail(event.target.value)}
+                            placeholder="用于登录与安全验证"
+                            autoComplete="email"
+                            required={!settings?.firstUser}
+                            disabled={disabled}
+                        />
+                    </AuthField>
+                    {requireCode ? (
+                        <AuthField label="邮箱验证码">
+                            <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
+                                <Input
+                                    size="large"
+                                    prefix={<ShieldCheck className="size-4 text-white/35" />}
+                                    value={emailCode}
+                                    onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                                    placeholder="6 位验证码"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    required
+                                    disabled={disabled}
+                                />
+                                <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
+                                    {countdown > 0 ? `${countdown}s` : "获取验证码"}
+                                </Button>
+                            </div>
+                        </AuthField>
+                    ) : null}
+                </>
+            )}
+
+            <AuthField label="邀请码（可选）">
+                <Input size="large" value={inviteCode} onChange={(event) => setInviteCode(event.target.value)} placeholder="填写邀请码可接受一对一指导和优先服务" disabled={disabled} />
+                <span className="block pt-1 text-[11px] leading-5 text-white/45">填写邀请码可接受一对一指导和优先服务</span>
+            </AuthField>
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <AuthField label="密码">

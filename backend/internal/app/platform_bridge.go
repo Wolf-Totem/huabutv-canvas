@@ -2,12 +2,16 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/platform"
+
+	"gorm.io/gorm"
 )
 
 type (
@@ -30,6 +34,7 @@ const (
 	FeaturePluginCenter          = platform.FeaturePluginCenter
 	FeatureSystemPlugins         = platform.FeatureSystemPlugins
 	FeatureTimelineTranscription = platform.FeatureTimelineTranscription
+	FeatureCloudAgent            = platform.FeatureCloudAgent
 )
 
 type platformHost struct {
@@ -109,6 +114,36 @@ func (s *Service) ResetRuntimePolicySetting(actor *model.User) (*PublicRuntimePo
 
 func (s *Service) FeatureAvailability() (*PublicFeatureAvailability, error) {
 	return s.platformDomain().FeatureAvailability()
+}
+
+func (s *Service) FeatureAvailabilityForUser(user *model.User) (*PublicFeatureAvailability, error) {
+	features, err := s.FeatureAvailability()
+	if err != nil || features == nil || user == nil || strings.TrimSpace(user.ID) == "" {
+		return features, err
+	}
+	streamer, streamerErr := s.repo.StreamerByUserID(user.ID)
+	if streamerErr != nil {
+		if errors.Is(streamerErr, gorm.ErrRecordNotFound) {
+			return features, nil
+		}
+		return nil, streamerErr
+	}
+	features.CustomChannelsEnabled = features.CustomChannelsEnabled && streamer.CustomChannelsEnabled
+	return features, nil
+}
+
+func (s *Service) RequireFeatureForUser(user *model.User, feature string) error {
+	if feature != FeatureCustomChannels {
+		return s.RequireFeature(feature)
+	}
+	features, err := s.FeatureAvailabilityForUser(user)
+	if err != nil {
+		return err
+	}
+	if features != nil && features.CustomChannelsEnabled {
+		return nil
+	}
+	return kernel.Forbidden("自定义渠道暂未开放")
 }
 
 func (s *Service) AdminFeatureAvailability(actor *model.User) (*PublicFeatureAvailability, error) {

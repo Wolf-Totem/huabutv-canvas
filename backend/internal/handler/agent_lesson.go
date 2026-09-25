@@ -14,6 +14,8 @@ import (
 )
 
 func RegisterAgentMemoryRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r = r.Group("")
+	r.Use(RequireFeature(svc, service.FeatureCloudAgent))
 	r.GET("/agent/memories", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

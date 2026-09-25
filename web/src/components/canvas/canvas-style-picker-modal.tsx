@@ -6,7 +6,7 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { nanoid } from "nanoid";
 
 import { StyleProfileEditorModal } from "@/components/canvas/style-profile-editor-modal";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { canvasThemes, useCanvasColorTheme } from "@/lib/canvas-theme";
 import { createStyleProfileSnapshot, parseStyleProfile, serializeStyleProfile, type StyleProfileSnapshot } from "@/lib/canvas/style-profile";
 import {
     compileCanvasStylePreset,
@@ -16,7 +16,6 @@ import {
     type ProjectStyleSelection,
 } from "@/lib/canvas/canvas-style-system";
 import { createStyleProfile, deleteStyleProfile, listStyleProfiles, setStyleProfileFavorite, touchStyleProfile, updateStyleProfile, type UserStyleProfile } from "@/services/api/style-profiles";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 export type { CanvasStylePreset } from "@/lib/canvas/canvas-style-system";
 
@@ -437,7 +436,7 @@ export function CanvasStylePickerModal({ open, value, currentProfile, startInEdi
 }) {
     const { message, modal } = App.useApp();
     const queryClient = useQueryClient();
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const [detailPreset, setDetailPreset] = useState<CanvasStylePreset | null>(null);
     const [tab, setTab] = useState<StyleCenterTab>("system");
     const [query, setQuery] = useState("");
@@ -670,7 +669,7 @@ function editableCopy(profile: StyleProfileSnapshot, entityId?: string, title?: 
 }
 
 export function CanvasStyleDetailModal({ open, preset, selected = false, onClose, onSelect }: { open: boolean; preset: CanvasStylePreset | null; selected?: boolean; onClose: () => void; onSelect?: (preset: CanvasStylePreset) => void }) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const sections = preset ? parseStyleSections(preset.prompt) : [];
     return (
         <AppModal rootClassName="canvas-style-detail-modal" open={open} title={null} footer={null} centered destroyOnHidden width="min(820px, calc(100vw - 24px))" onCancel={onClose} flush>

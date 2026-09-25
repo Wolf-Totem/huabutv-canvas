@@ -7,12 +7,17 @@ import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
+import { formatMembershipStorage } from "@/lib/membership";
 import { createAdminRedeemBatch, disableAdminRedeemBatch, disableAdminRedeemCode, listAdminRedeemBatchCodes, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 
-type RedeemFormValues = { amount?: number | null; count?: number | null; note?: string; expiresAt?: string };
+type RedeemKind = "credits" | "membership" | "storage";
+type RedeemFormValues = { kind?: RedeemKind; planSku?: string; amount?: number | null; storageGiB?: number | null; count?: number | null; note?: string; expiresAt?: string };
 type PendingRedeemBatch = {
+    kind: RedeemKind;
+    planSku?: string;
     amountMicrocredits: number;
+    storageQuotaBytes?: number;
     count: number;
     totalMicrocredits: number;
     note?: string;
@@ -22,7 +27,9 @@ type BatchValidity = "all" | "active" | "expired";
 type DetailStatus = "all" | "available" | "redeemed" | "expired" | "disabled";
 
 const MICRO_CREDITS_PER_CREDIT = 1_000_000;
-const DEFAULT_CREATE_VALUES: RedeemFormValues = { amount: 10, count: 10 };
+const GIB = 1024 ** 3;
+const MAX_STORAGE_GIB = 3 * 1024;
+const DEFAULT_CREATE_VALUES: RedeemFormValues = { kind: "credits", amount: 10, storageGiB: 1, count: 10 };
 const GENERATED_PREVIEW_LIMIT = 200;
 const DETAIL_STATUS_LABELS: Record<DetailStatus, string> = {
     all: "全部状态",
@@ -56,6 +63,8 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
     const batchMutationsRef = useRef(new Set<string>());
     const watchedAmount = Form.useWatch("amount", form);
     const watchedCount = Form.useWatch("count", form);
+    const watchedKind = Form.useWatch("kind", form);
+    const watchedStorageGiB = Form.useWatch("storageGiB", form);
 
     const draftTotal = useMemo(() => {
         const amount = Number(watchedAmount);
@@ -117,12 +126,23 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
     };
 
     const previewCreate = (values: RedeemFormValues) => {
-        const amount = Number(values.amount);
+        const kind: RedeemKind = values.kind === "membership" ? "membership" : values.kind === "storage" ? "storage" : "credits";
         const count = Number(values.count);
-        const amountMicrocredits = Math.round(amount * MICRO_CREDITS_PER_CREDIT);
+        const amount = Number(values.amount);
+        const amountMicrocredits = kind === "credits" ? Math.round(amount * MICRO_CREDITS_PER_CREDIT) : 0;
         const totalMicrocredits = amountMicrocredits * count;
-        if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMicrocredits) || amountMicrocredits <= 0 || !Number.isInteger(count) || count < 1 || count > 5000 || !Number.isSafeInteger(totalMicrocredits)) {
+        const storageGiB = Number(values.storageGiB);
+        const storageQuotaBytes = kind === "storage" ? Math.round(storageGiB * GIB) : 0;
+        if (kind === "credits" && (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMicrocredits) || amountMicrocredits <= 0 || !Number.isInteger(count) || count < 1 || count > 5000 || !Number.isSafeInteger(totalMicrocredits))) {
             message.error("积分面额或生成数量超出可安全处理的范围");
+            return;
+        }
+        if (kind === "membership" && (!values.planSku || !Number.isInteger(count) || count < 1 || count > 5000)) {
+            message.error("请选择订阅套餐并填写 1–5000 的数量");
+            return;
+        }
+        if (kind === "storage" && (!Number.isFinite(storageGiB) || storageGiB <= 0 || storageGiB > MAX_STORAGE_GIB || !Number.isSafeInteger(storageQuotaBytes) || storageQuotaBytes <= 0 || !Number.isInteger(count) || count < 1 || count > 5000)) {
+            message.error("容量需为 1–3072 GiB，数量 1–5000");
             return;
         }
         let expiresAt: string | undefined;
@@ -134,7 +154,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             }
             expiresAt = timestamp.toISOString();
         }
-        setPendingCreate({ amountMicrocredits, count, totalMicrocredits, note: values.note?.trim() || undefined, expiresAt });
+        setPendingCreate({ kind, planSku: values.planSku, amountMicrocredits, storageQuotaBytes: storageQuotaBytes || undefined, count, totalMicrocredits, note: values.note?.trim() || undefined, expiresAt });
     };
 
     const createBatch = async () => {
@@ -143,7 +163,10 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         setCreating(true);
         try {
             const result = await createAdminRedeemBatch({
+                kind: pendingCreate.kind,
+                planSku: pendingCreate.planSku,
                 amountMicrocredits: pendingCreate.amountMicrocredits,
+                storageQuotaBytes: pendingCreate.storageQuotaBytes,
                 count: pendingCreate.count,
                 note: pendingCreate.note,
                 expiresAt: pendingCreate.expiresAt,
@@ -212,7 +235,8 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 </div>
             ),
         },
-        { title: "单码积分", dataIndex: "amountMicrocredits", width: 120, align: "center", render: (value) => <span className="font-medium tabular-nums">{formatCredits(value)}</span> },
+        { title: "类型", dataIndex: "kind", width: 120, align: "center", render: (value, batch) => value === "membership" ? (batch.planSku || "订阅") : value === "storage" ? "容量" : "积分" },
+        { title: "面额", dataIndex: "amountMicrocredits", width: 140, align: "center", render: (value, batch) => <span className="font-medium tabular-nums">{batch.kind === "storage" ? formatMembershipStorage(batch.storageQuotaBytes || 0) : formatCredits(value)}</span> },
         { title: "总数", dataIndex: "count", width: 80, align: "center", render: (value) => <span className="tabular-nums">{value}</span> },
         { title: "状态分布", width: 300, align: "center", render: (_, batch) => <BatchStatusDistribution batch={batch} /> },
         { title: "过期时间", dataIndex: "expiresAt", width: 180, align: "center", render: (value) => (value ? formatTime(value) : <AdminStatusBadge label="永久有效" tone="info" />) },
@@ -361,6 +385,8 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 form={form}
                 watchedAmount={watchedAmount}
                 watchedCount={watchedCount}
+                watchedKind={watchedKind}
+                watchedStorageGiB={watchedStorageGiB}
                 draftTotal={draftTotal}
                 onClose={closeCreateDrawer}
                 onPreview={previewCreate}
@@ -388,6 +414,8 @@ function CreateRedeemBatchDrawer({
     form,
     watchedAmount,
     watchedCount,
+    watchedKind,
+    watchedStorageGiB,
     draftTotal,
     onClose,
     onPreview,
@@ -400,6 +428,8 @@ function CreateRedeemBatchDrawer({
     form: ReturnType<typeof Form.useForm<RedeemFormValues>>[0];
     watchedAmount?: number | null;
     watchedCount?: number | null;
+    watchedKind?: RedeemKind;
+    watchedStorageGiB?: number | null;
     draftTotal: number | null;
     onClose: () => void;
     onPreview: (values: RedeemFormValues) => void;
@@ -445,6 +475,31 @@ function CreateRedeemBatchDrawer({
                             <p>积分最多保留 6 位小数；单批最多生成 5,000 个兑换码。</p>
                         </div>
                         <div className="admin-redemption-form-grid">
+                            <Form.Item name="kind" label="兑换类型" rules={[{ required: true }]}>
+                                <Select options={[{ value: "credits", label: "积分" }, { value: "membership", label: "订阅套餐" }, { value: "storage", label: "存储容量" }]} />
+                            </Form.Item>
+                            {watchedKind === "membership" ? (
+                                <Form.Item name="planSku" label="订阅套餐" rules={[{ required: true, message: "请选择套餐" }]}>
+                                    <Select options={[{ value: "permanent", label: "永久订阅" }, { value: "advanced_month", label: "月卡" }, { value: "advanced_quarter", label: "季卡" }, { value: "advanced_year", label: "年卡" }]} />
+                                </Form.Item>
+                            ) : watchedKind === "storage" ? (
+                                <Form.Item
+                                    name="storageGiB"
+                                    label="每个兑换码增加的容量"
+                                    extra="叠加到用户当前平台容量，上限 3TiB。"
+                                    rules={[
+                                        { required: true, message: "请填写容量" },
+                                        {
+                                            validator: (_, value) => {
+                                                const numberValue = Number(value);
+                                                return Number.isFinite(numberValue) && numberValue > 0 && numberValue <= MAX_STORAGE_GIB ? Promise.resolve() : Promise.reject(new Error("请输入 1–3072 的 GiB"));
+                                            },
+                                        },
+                                    ]}
+                                >
+                                    <InputNumber className="w-full" min={1} max={MAX_STORAGE_GIB} precision={0} addonAfter="GiB" placeholder="例如 5" />
+                                </Form.Item>
+                            ) : (
                             <Form.Item
                                 name="amount"
                                 label="每个兑换码的积分"
@@ -461,6 +516,7 @@ function CreateRedeemBatchDrawer({
                             >
                                 <InputNumber className="w-full" min={0.000001} precision={6} placeholder="例如 10" />
                             </Form.Item>
+                            )}
                             <Form.Item
                                 name="count"
                                 label="生成数量"
@@ -495,8 +551,8 @@ function CreateRedeemBatchDrawer({
                         </Form.Item>
                         <dl className="admin-redemption-live-summary" aria-label="待生成批次摘要">
                             <div>
-                                <dt>单码积分</dt>
-                                <dd>{Number(watchedAmount) > 0 ? formatCredits(Math.round(Number(watchedAmount) * MICRO_CREDITS_PER_CREDIT)) : "--"}</dd>
+                                <dt>{watchedKind === "storage" ? "单码容量" : "单码积分"}</dt>
+                                <dd>{watchedKind === "storage" ? (Number(watchedStorageGiB) > 0 ? formatMembershipStorage(Number(watchedStorageGiB) * GIB) : "--") : Number(watchedAmount) > 0 ? formatCredits(Math.round(Number(watchedAmount) * MICRO_CREDITS_PER_CREDIT)) : "--"}</dd>
                             </div>
                             <div>
                                 <dt>生成数量</dt>
@@ -504,7 +560,7 @@ function CreateRedeemBatchDrawer({
                             </div>
                             <div className="is-emphasis">
                                 <dt>批次总面值</dt>
-                                <dd>{draftTotal !== null ? formatCredits(draftTotal) : "--"}</dd>
+                                <dd>{watchedKind === "storage" ? (Number(watchedStorageGiB) > 0 && Number(watchedCount) > 0 ? formatMembershipStorage(Number(watchedStorageGiB) * Number(watchedCount) * GIB) : "--") : draftTotal !== null ? formatCredits(draftTotal) : "--"}</dd>
                             </div>
                         </dl>
                     </section>
@@ -532,8 +588,12 @@ function CreateRedeemBatchDrawer({
                         <p className="admin-operation-confirmation-copy">请核对本批次的总发放额度和有效期。确认后会立即生成，不能撤销整批记录。</p>
                         <dl className="admin-operation-confirmation-grid">
                             <div>
-                                <dt>单码积分</dt>
-                                <dd>{formatCredits(pending.amountMicrocredits)}</dd>
+                                <dt>类型</dt>
+                                <dd>{pending.kind === "storage" ? "存储容量" : pending.kind === "membership" ? "订阅套餐" : "积分"}</dd>
+                            </div>
+                            <div>
+                                <dt>{pending.kind === "storage" ? "单码容量" : "单码积分"}</dt>
+                                <dd>{pending.kind === "storage" ? formatMembershipStorage(pending.storageQuotaBytes || 0) : formatCredits(pending.amountMicrocredits)}</dd>
                             </div>
                             <div>
                                 <dt>生成数量</dt>
@@ -541,7 +601,7 @@ function CreateRedeemBatchDrawer({
                             </div>
                             <div>
                                 <dt>批次总面值</dt>
-                                <dd className="is-positive">{formatCredits(pending.totalMicrocredits)}</dd>
+                                <dd className="is-positive">{pending.kind === "storage" ? formatMembershipStorage((pending.storageQuotaBytes || 0) * pending.count) : formatCredits(pending.totalMicrocredits)}</dd>
                             </div>
                             <div>
                                 <dt>过期时间</dt>
@@ -866,6 +926,9 @@ function isMutationResultUncertain(error: unknown) {
 
 function formatBatchDisableImpact(batch: RedeemBatch) {
     const availableCount = batch.availableCount ?? 0;
+    if (batch.kind === "storage") {
+        return `将禁用当前 ${availableCount} 个可用兑换码（单码 ${formatMembershipStorage(batch.storageQuotaBytes || 0)}）`;
+    }
     const affectedMicrocredits = batch.amountMicrocredits * availableCount;
     const total = Number.isSafeInteger(affectedMicrocredits) ? `，面值合计 ${formatCredits(affectedMicrocredits)} 积分` : "";
     return `将禁用当前 ${availableCount} 个可用兑换码（单码 ${formatCredits(batch.amountMicrocredits)} 积分${total}）`;

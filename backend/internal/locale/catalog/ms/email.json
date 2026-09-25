@@ -1,0 +1,16 @@
+{
+  "register.subject": "Pengesahan e-mel {{brand}}",
+  "register.title": "Sahkan e-mel anda",
+  "register.hello": "{{email}}, hai:",
+  "register.lead": "Masukkan kod pengesahan ini untuk teruskan",
+  "register.expiry": "Kod akan luput dalam 10 minit.",
+  "register.ignore": "Jika ini bukan anda, abaikan e-mel ini.",
+  "register.footer": "E-mel ini dihantar oleh {{brand}}. Jangan balas.",
+  "reset.subject": "Tetapan semula kata laluan {{brand}}",
+  "reset.title": "Tetapkan semula kata laluan",
+  "reset.hello": "{{email}}, hai:",
+  "reset.lead": "Masukkan kod pengesahan ini untuk tetapkan semula kata laluan",
+  "reset.expiry": "Kod akan luput dalam 10 minit.",
+  "reset.ignore": "Jika ini bukan anda, abaikan e-mel ini dan jaga keselamatan akaun.",
+  "reset.footer": "E-mel ini dihantar oleh {{brand}}. Jangan balas."
+}

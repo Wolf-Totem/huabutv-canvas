@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -123,6 +124,15 @@ func (r *Repository) UserStorageUsage(userID string) (UserStorageUsage, error) {
 }
 
 // Create 是低层兼容入口；业务写路径应优先使用带领域约束的显式方法。
+func (r *Repository) Transaction(fn func(*Repository) error) error {
+	if r == nil || r.db == nil {
+		return errors.New("repository is not initialized")
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(&Repository{db: tx})
+	})
+}
+
 func (r *Repository) Create(value any) error {
 	return r.db.Create(value).Error
 }
@@ -130,6 +140,10 @@ func (r *Repository) Create(value any) error {
 // Save 是低层兼容入口；涉及状态机或权限边界的写入不得绕过显式事务方法。
 func (r *Repository) Save(value any) error {
 	return r.db.Save(value).Error
+}
+
+func (r *Repository) UpdateUserLocale(userID, locale string) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).Update("locale", locale).Error
 }
 
 func (r *Repository) AllTasks() ([]model.Task, error) {
@@ -193,7 +207,27 @@ func (r *Repository) User(id string) (*model.User, error) {
 
 func (r *Repository) UserByAccount(account string) (*model.User, error) {
 	var user model.User
-	if err := r.db.Where("lower(username) = lower(?) OR lower(email) = lower(?)", account, account).First(&user).Error; err != nil {
+	account = strings.TrimSpace(account)
+	if kernel.IsChinaMobile(account) {
+		if found, err := r.UserByPhone(account); err == nil {
+			return found, nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+	if err := r.db.Where("lower(username) = lower(?) OR (email <> '' AND lower(email) = lower(?))", account, account).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *Repository) UserByPhone(phone string) (*model.User, error) {
+	var user model.User
+	phone = kernel.NormalizeChinaMobile(phone)
+	if phone == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if err := r.db.Where("phone <> '' AND phone = ?", phone).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil
@@ -229,7 +263,7 @@ func (r *Repository) AdminUsers(keyword string, role model.UserRole, status mode
 		pattern := "%" + strings.ToLower(value) + "%"
 		query = query.Where("lower(username) LIKE ? OR lower(display_name) LIKE ? OR lower(email) LIKE ?", pattern, pattern, pattern)
 	}
-	if role == model.UserRoleAdmin || role == model.UserRoleUser {
+	if model.ValidUserRole(role) {
 		query = query.Where("role = ?", role)
 	}
 	if status == model.UserStatusActive || status == model.UserStatusDisabled {
@@ -294,6 +328,31 @@ func (r *Repository) MarkEmailVerificationCodeUsed(id string, usedAt time.Time) 
 
 func (r *Repository) DeleteEmailVerificationCode(id string) error {
 	return r.db.Delete(&model.EmailVerificationCode{}, "id = ?", id).Error
+}
+
+func (r *Repository) LatestSmsVerificationCode(phone string, purpose string) (*model.SmsVerificationCode, error) {
+	var code model.SmsVerificationCode
+	if err := r.db.Where("phone = ? AND purpose = ? AND used_at IS NULL", kernel.NormalizeChinaMobile(phone), purpose).Order("created_at desc").First(&code).Error; err != nil {
+		return nil, err
+	}
+	return &code, nil
+}
+
+func (r *Repository) DeleteSmsVerificationCode(id string) error {
+	return r.db.Delete(&model.SmsVerificationCode{}, "id = ?", id).Error
+}
+
+func (r *Repository) CreateUserWithSmsVerification(user *model.User, verificationCodeID string, usedAt time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.SmsVerificationCode{}).Where("id = ? AND used_at IS NULL AND expires_at > ?", verificationCodeID, usedAt).Update("used_at", usedAt)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("sms verification code is no longer valid")
+		}
+		return tx.Create(user).Error
+	})
 }
 
 func (r *Repository) CreateUserWithEmailVerification(user *model.User, verificationCodeID string, usedAt time.Time) error {
@@ -437,6 +496,55 @@ func (r *Repository) RenewTaskLease(id string, owner string, leaseDuration time.
 		return errors.New("任务租约已失效")
 	}
 	return nil
+}
+
+func (r *Repository) ConsumeTaskTicket(userID, taskID, providerRequestID string, now time.Time) (*model.Task, error) {
+	taskID = strings.TrimSpace(taskID)
+	userID = strings.TrimSpace(userID)
+	providerRequestID = strings.TrimSpace(providerRequestID)
+	if taskID == "" || userID == "" || providerRequestID == "" {
+		return nil, ErrTicketNotFound
+	}
+	var task model.Task
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND user_id = ?", taskID, userID).First(&task).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrTicketNotFound
+			}
+			return err
+		}
+		if task.TicketConsumedAt != nil || strings.TrimSpace(task.ProviderRequestID) != "" {
+			return ErrTicketConsumed
+		}
+		if task.TicketExpiresAt != nil && !now.Before(*task.TicketExpiresAt) {
+			return ErrTicketExpired
+		}
+		if task.Status != model.TaskStatusQueued && task.Status != model.TaskStatusRunning {
+			return ErrTicketConsumed
+		}
+		nextPoll := now
+		result := tx.Model(&model.Task{}).
+			Where("id = ? AND user_id = ? AND ticket_consumed_at IS NULL AND (provider_request_id IS NULL OR provider_request_id = '')", taskID, userID).
+			Updates(map[string]any{
+				"provider_request_id": providerRequestID,
+				"ticket_consumed_at":  now,
+				"stage":               "后台继续查询",
+				"progress":            20,
+				"next_poll_at":        nextPoll,
+				"updated_at":          now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrTicketConsumed
+		}
+		return tx.Where("id = ? AND user_id = ?", taskID, userID).First(&task).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
 }
 
 func (r *Repository) UpdateTaskProviderState(id string, providerRequestID string, pollStage string, nextPollAt *time.Time) error {
@@ -1159,6 +1267,14 @@ func (r *Repository) CanvasProjectSummaries(userID string) ([]model.CanvasProjec
 func (r *Repository) CanvasProjectForUser(userID string, id string) (*model.CanvasProject, error) {
 	var project model.CanvasProject
 	if err := r.db.First(&project, "id = ? AND user_id = ?", id, userID).Error; err != nil {
+		return nil, err
+	}
+	return &project, nil
+}
+
+func (r *Repository) CanvasProject(id string) (*model.CanvasProject, error) {
+	var project model.CanvasProject
+	if err := r.db.First(&project, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 	return &project, nil

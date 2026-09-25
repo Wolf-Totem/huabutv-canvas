@@ -7,8 +7,7 @@ import { Check, Mic, Square, X } from "lucide-react";
 import { AudioWaveform } from "./audio-waveform";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useVoiceRecording } from "@/hooks/use-voice-recording";
-import { canvasThemes } from "@/lib/canvas-theme";
-import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useCanvasColorTheme } from "@/lib/canvas-theme";
 
 type VoiceRecordingInlineProps = {
     /** 转写完成回调，返回转写文本 */
@@ -24,7 +23,7 @@ type TranscribeState = "idle" | "transcribing" | "done" | "error";
  * 挂载后自动开始录音，显示波形动画；点击停止后自动转写为文字（浏览器 Web Speech API，无需后端与 API Key）
  */
 export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecordingInlineProps) {
-    const theme = canvasThemes[useActiveTheme()];
+    const theme = useCanvasColorTheme();
     const {
         state,
         waveform,

@@ -1,9 +1,11 @@
+import { importWithChunkRecovery } from "@/lib/chunk-load";
+
 const workspaceRouteLoaders = {
-    assets: () => import("@/pages/assets"),
-    canvas: () => import("@/pages/canvas"),
-    create: () => import("@/pages/create"),
-    projects: () => import("@/pages/projects"),
-    projectDetail: () => import("@/pages/projects/detail"),
+    assets: () => importWithChunkRecovery(() => import("@/pages/assets")),
+    canvas: () => importWithChunkRecovery(() => import("@/pages/canvas")),
+    create: () => importWithChunkRecovery(() => import("@/pages/create")),
+    projects: () => importWithChunkRecovery(() => import("@/pages/projects")),
+    projectDetail: () => importWithChunkRecovery(() => import("@/pages/projects/detail")),
 };
 
 export const loadAssetsPage = workspaceRouteLoaders.assets;

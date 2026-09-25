@@ -7,6 +7,7 @@ const (
 	AppearanceAssetDarkLogo            = app.AppearanceAssetDarkLogo
 	AppearanceAssetLogo                = app.AppearanceAssetLogo
 	AppearanceAssetPoster              = app.AppearanceAssetPoster
+	AppearanceAssetLandingVideo        = app.AppearanceAssetLandingVideo
 	AppearanceAssetVideo               = app.AppearanceAssetVideo
 	AssetSourceCanvas                  = app.AssetSourceCanvas
 	AssetSourceUploaded                = app.AssetSourceUploaded
@@ -35,6 +36,7 @@ const (
 	ErrCodeModelPriceNotConfigured     = app.ErrCodeModelPriceNotConfigured
 	ErrCodeModelRouteUnavailable       = app.ErrCodeModelRouteUnavailable
 	ErrCodeProviderRequestFailed       = app.ErrCodeProviderRequestFailed
+	FeatureCloudAgent                  = app.FeatureCloudAgent
 	FeatureCredits                     = app.FeatureCredits
 	FeatureCustomChannels              = app.FeatureCustomChannels
 	FeatureFrontendModels              = app.FeatureFrontendModels

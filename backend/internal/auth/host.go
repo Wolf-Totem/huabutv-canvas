@@ -23,6 +23,9 @@ type Host interface {
 	RecordActivity(userID string, event string, count int)
 	AllowRequest(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
 	RequestRetryAfter(ctx context.Context, key string, window time.Duration) time.Duration
+	StreamerByHost(host string) (*model.Streamer, error)
+	ActiveStreamerByInvite(code string) (*model.Streamer, error)
+	BindUserStreamerInvite(userID, streamerID string) error
 }
 
 type nopHost struct{}
@@ -44,12 +47,17 @@ func (nopHost) AllowRequest(context.Context, string, int, time.Duration) (bool, 
 func (nopHost) RequestRetryAfter(context.Context, string, time.Duration) time.Duration {
 	return 0
 }
+func (nopHost) StreamerByHost(string) (*model.Streamer, error)         { return nil, nil }
+func (nopHost) ActiveStreamerByInvite(string) (*model.Streamer, error) { return nil, nil }
+func (nopHost) BindUserStreamerInvite(string, string) error            { return nil }
 
 type Service struct {
 	repo           *repository.Repository
 	host           Host
 	mailSender     func(EmailSettingValue, string, string, string) error
+	smsSender      func(SMSSettingValue, string, string) error
 	emailCodeMu    sync.Mutex
+	smsCodeMu      sync.Mutex
 	registrationMu sync.Mutex
 }
 
@@ -65,6 +73,13 @@ func (s *Service) SetMailSender(fn func(EmailSettingValue, string, string, strin
 		return
 	}
 	s.mailSender = fn
+}
+
+func (s *Service) SetSMSSender(fn func(SMSSettingValue, string, string) error) {
+	if s == nil {
+		return
+	}
+	s.smsSender = fn
 }
 
 type brandHost struct {

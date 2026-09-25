@@ -243,6 +243,21 @@ func (s *Service) TestLibTV(actor *model.User, projectUUID string) error {
 	return err
 }
 
+func (s *Service) FetchLibTV(projectUUID string) (*LibTVImportResult, error) {
+	_, value, err := s.readLibTVSetting()
+	if err != nil {
+		return nil, err
+	}
+	if !value.Enabled || value.Token == "" {
+		return nil, kernel.BadAuthRequest("画布导入尚未启用或未配置凭据")
+	}
+	detail, err := s.fetchLibTVDetail(strings.TrimSpace(projectUUID), value.Token)
+	if err != nil {
+		return nil, err
+	}
+	return adaptLibTVDetail(detail)
+}
+
 func (s *Service) ImportLibTV(userID, canvasProjectID, projectUUID string) (*LibTVImportResult, error) {
 	userID = strings.TrimSpace(userID)
 	canvasProjectID = strings.TrimSpace(canvasProjectID)
@@ -344,7 +359,7 @@ func (s *Service) fetchLibTVDetail(projectUUID, token string) (*libTVDetail, err
 		if msg == "" {
 			msg = "LibTV 返回业务错误"
 		}
-		return nil, errors.New(msg)
+		return nil, kernel.BadAuthRequest(msg)
 	}
 	var detail libTVDetail
 	if err := json.Unmarshal(envelope.Data, &detail); err != nil {
@@ -354,7 +369,7 @@ func (s *Service) fetchLibTVDetail(projectUUID, token string) (*libTVDetail, err
 		detail.ProjectMeta.UUID = projectUUID
 	}
 	if !detail.ProjectMeta.Effective.CanRead || !detail.ProjectMeta.Effective.CanCopy {
-		return nil, errors.New("当前 LibTV 画布不允许复制")
+		return nil, kernel.BadAuthRequest("当前 LibTV 画布不允许复制")
 	}
 	return &detail, nil
 }

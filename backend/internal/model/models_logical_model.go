@@ -31,6 +31,8 @@ type LogicalModel struct {
 	InputPriceMicrocredits  int64  `json:"inputPriceMicrocredits"`
 	OutputPriceMicrocredits int64  `json:"outputPriceMicrocredits"`
 	CachedPriceMicrocredits int64  `json:"cachedPriceMicrocredits"`
+	AgentShareEnabled       bool   `json:"agentShareEnabled" gorm:"not null;default:false"`
+	AgentShareBps           int    `json:"agentShareBps" gorm:"not null;default:10000"`
 	// LegacyModelIDsJSON 用于创作端把已保存的旧 SKU 选择无缝映射到新的模型家族。
 	// 这只是目录兼容信息，任务、路由尝试和账单仍固定引用其创建时的 ID 快照。
 	LegacyModelIDsJSON string `json:"-" gorm:"type:text"`

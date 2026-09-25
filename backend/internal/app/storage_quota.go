@@ -9,22 +9,36 @@ import (
 )
 
 type AccountFileStorageUsage struct {
-	UsedBytes  int64 `json:"usedBytes"`
-	TotalBytes int64 `json:"totalBytes"`
+	UsedBytes                int64  `json:"usedBytes"`
+	TotalBytes               int64  `json:"totalBytes"`
+	QuotaSource              string `json:"quotaSource"`
+	EffectiveStoredFileBytes int64  `json:"effectiveStoredFileBytes"`
+	PersonalStoredFileBytes  int64  `json:"personalStoredFileBytes,omitempty"`
 }
 
 func (s *Service) AccountFileStorageUsage(userID string) (*AccountFileStorageUsage, error) {
-	policy, err := s.RuntimePolicy()
+	resolved, err := s.ResolveEffectiveStoredFileBytes(userID)
 	if err != nil {
 		return nil, err
 	}
-	usedBytes, err := s.repo.UserStoredFileBytes(userID)
+	usedBytes, err := s.repo.UserPlatformStoredFileBytes(userID)
 	if err != nil {
 		return nil, err
+	}
+	totalReady, err := s.repo.UserStoredFileBytes(userID)
+	if err != nil {
+		return nil, err
+	}
+	personal := totalReady - usedBytes
+	if personal < 0 {
+		personal = 0
 	}
 	return &AccountFileStorageUsage{
-		UsedBytes:  usedBytes,
-		TotalBytes: gigabytes(policy.Resource.StoredFileGB),
+		UsedBytes:                usedBytes,
+		TotalBytes:               resolved.Bytes,
+		QuotaSource:              resolved.Source,
+		EffectiveStoredFileBytes: resolved.Bytes,
+		PersonalStoredFileBytes:  personal,
 	}, nil
 }
 

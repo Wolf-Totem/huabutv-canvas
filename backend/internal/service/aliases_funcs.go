@@ -9,6 +9,7 @@ var (
 	ApplyDefaultOutboundHeaders                = app.ApplyDefaultOutboundHeaders
 	ApplyOutboundHeaders                       = app.ApplyOutboundHeaders
 	BadAuthRequest                             = app.BadAuthRequest
+	RequestCountryCode                         = app.RequestCountryCode
 	CapabilitySpecFromModelCapabilityConfig    = app.CapabilitySpecFromModelCapabilityConfig
 	ChannelAPIURL                              = app.ChannelAPIURL
 	ChannelAPIURLForProtocol                   = app.ChannelAPIURLForProtocol
@@ -25,6 +26,11 @@ var (
 	EncodeOutboundHeadersJSON                  = app.EncodeOutboundHeadersJSON
 	EnsureChatCompletionStreamUsageRequest     = app.EnsureChatCompletionStreamUsageRequest
 	Forbidden                                  = app.Forbidden
+	PublicParentDomain                         = app.PublicParentDomain
+	PublicAgentHost                            = app.PublicAgentHost
+	PublicCanvasHost                           = app.PublicCanvasHost
+	StreamerLandingHost                        = app.StreamerLandingHost
+	FailedPrecondition                         = app.FailedPrecondition
 	FormatModelError                           = app.FormatModelError
 	GetModelErrorCode                          = app.GetModelErrorCode
 	HasValidPrice                              = app.HasValidPrice

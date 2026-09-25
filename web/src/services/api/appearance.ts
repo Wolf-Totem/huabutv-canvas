@@ -1,4 +1,6 @@
 import { http } from "@/services/api/request";
+import type { HomeNavItem } from "@/lib/home-navigation";
+import type { ManchuangLanding } from "@/lib/manchuang-landing";
 import type { SkinDefinition } from "@/lib/skin-themes";
 
 export type PublicAppearance = {
@@ -15,12 +17,21 @@ export type PublicAppearance = {
     authVideoAutoplay: boolean;
     skinId: string;
     activeSkin: SkinDefinition;
+    enabledSkins?: SkinDefinition[];
+    workspaceSkins?: SkinDefinition[];
+    defaultMode?: "light" | "dark";
     seoTitle: string;
     seoDescription: string;
     seoKeywords: string;
     footerCopyright: string;
     icpFilingEnabled: boolean;
     icpFilingNumber: string;
+    publicHomepage?: "welcome" | "manchuang";
+    homeNavItems?: HomeNavItem[];
+    homeCtaLabel?: string;
+    homeCtaHref?: string;
+    landing?: Partial<ManchuangLanding>;
+    landingVideoUrl?: string;
     logoConfigured: boolean;
     darkLogoConfigured: boolean;
     authVideoConfigured: boolean;
@@ -44,12 +55,20 @@ export type AdminAppearance = {
     authVideoAutoplay: boolean;
     skinId: string;
     skinThemes: SkinDefinition[];
+    enabledSkins?: string[];
+    defaultMode?: "light" | "dark";
     seoTitle: string;
     seoDescription: string;
     seoKeywords: string;
     footerCopyright: string;
     icpFilingEnabled: boolean;
     icpFilingNumber: string;
+    publicHomepage?: "welcome" | "manchuang";
+    homeNavItems?: HomeNavItem[];
+    homeCtaLabel?: string;
+    homeCtaHref?: string;
+    landing?: Partial<ManchuangLanding>;
+    landingVideoResourceId?: string;
     public: PublicAppearance;
     configured: boolean;
     updatedBy?: string;
@@ -57,7 +76,7 @@ export type AdminAppearance = {
     updatedAt?: string;
 };
 
-export type AppearanceAssetSlot = "logo" | "logo-dark" | "video" | "poster";
+export type AppearanceAssetSlot = "logo" | "logo-dark" | "video" | "poster" | "landing-video";
 
 export type AppearanceResource = {
     id: string;
@@ -92,12 +111,20 @@ export async function updateAdminAppearance(
         | "authVideoAutoplay"
         | "skinId"
         | "skinThemes"
+        | "enabledSkins"
+        | "defaultMode"
         | "seoTitle"
         | "seoDescription"
         | "seoKeywords"
         | "footerCopyright"
         | "icpFilingEnabled"
         | "icpFilingNumber"
+        | "publicHomepage"
+        | "homeNavItems"
+        | "homeCtaLabel"
+        | "homeCtaHref"
+        | "landing"
+        | "landingVideoResourceId"
     >,
 ) {
     const result = await http.patch<{ setting: AdminAppearance }>("/admin/settings/appearance", input);

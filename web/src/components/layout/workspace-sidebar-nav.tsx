@@ -1,9 +1,10 @@
 import { Popover } from "antd";
-import { Bell, ChevronDown, ChevronRight, CircleUserRound, History as HistoryIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, CircleUserRound, History as HistoryIcon, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
+import { useTranslation } from "react-i18next";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
@@ -12,8 +13,11 @@ import { SystemAnnouncementCenter } from "@/components/layout/system-announcemen
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
+import { hasPermission, PERMISSIONS } from "@/lib/access";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
+import { getPlazaSettings } from "@/services/api/plaza";
 import { WorkspaceAccountCard } from "./workspace-account-card";
 import { WorkspaceSidebarCheckin } from "./workspace-sidebar-checkin";
 import { WorkspaceSidebarStorageMeter } from "./workspace-sidebar-storage-meter";
@@ -40,21 +44,27 @@ function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
     return { id: slug, title: tool?.label ?? slug, icon: tool?.icon, to };
 }
 
-function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+function buildNav(features: FeatureAvailability, role: string | undefined, permissions: string[], t: (key: string) => string, plazaEnabled: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+    const allow = (key: string) => hasPermission(role, permissions, key);
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { ...toolItem("create", "/"), id: "home", title: "创作" },
-                { ...toolItem("projects", "/projects"), title: "短剧 Agent" },
-                { ...toolItem("canvas", "/canvas"), title: "自由画布" },
+                ...(allow(PERMISSIONS.workspaceCreate) ? [{ ...toolItem("create", "/create"), id: "home", title: t("nav.create") }] : []),
+                ...(allow(PERMISSIONS.workspaceProjects) ? [{ ...toolItem("projects", "/projects"), title: t("nav.projects") }] : []),
+                ...(allow(PERMISSIONS.workspaceCanvas) ? [{ ...toolItem("canvas", "/canvas"), title: t("nav.canvas") }] : []),
+                ...(plazaEnabled ? [{ ...toolItem("plaza", "/create#plaza"), title: t("nav.plaza") }] : []),
             ],
         },
         {
-            heading: "资源与工具",
-            items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("skills", "/skills"), title: "技能" }, ...(features.pluginCenterEnabled || isAdmin ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
+            heading: t("nav.resources"),
+            items: [
+                ...(allow(PERMISSIONS.workspaceAssets) ? [{ ...toolItem("assets", "/assets"), title: t("nav.assets") }] : []),
+                ...(allow(PERMISSIONS.workspaceSkills) ? [{ ...toolItem("skills", "/skills"), title: t("nav.skills") }] : []),
+                ...((features.pluginCenterEnabled || allow(PERMISSIONS.adminAccess)) && allow(PERMISSIONS.workspacePlugins) ? [{ ...toolItem("plugins", "/plugins"), title: t("nav.plugins") }] : []),
+            ],
         },
-        ...(features.taskCenterEnabled ? [{ items: [{ ...toolItem("tasks", "/tasks"), title: "创作历史", icon: HistoryIcon }] }] : []),
-    ];
+        ...(features.taskCenterEnabled && allow(PERMISSIONS.workspaceTasks) ? [{ items: [{ ...toolItem("tasks", "/tasks"), title: t("nav.history"), icon: HistoryIcon }] }] : []),
+    ].filter((group) => group.items.length > 0);
 
     // 管理、设置和退出登录不再占据参考站式侧栏底部，而是通过用户卡片菜单进入。
     // 路由和写操作仍保留，避免把用户端导航变成无法访问的装饰。
@@ -65,12 +75,13 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
     const [failed, setFailed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const avatarUrl = /^https?:\/\//i.test(user?.avatarUrl || "") ? user?.avatarUrl : "";
-    const profileName = user?.displayName || user?.username || "未登录";
+    const { t } = useTranslation("common");
+    const profileName = user?.displayName || user?.username || t("guest.login");
 
     useEffect(() => setFailed(false), [avatarUrl]);
 
     if (!user) {
-        return <Link to="/login" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span>登录</span></Link>;
+        return <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label={t("action.login")} title={t("action.login")} onClick={() => useAuthDialogStore.getState().openAuth({ tab: "login", next: "/create" })}><CircleUserRound className="size-5" /><span>{t("action.login")}</span></button>;
     }
 
     const avatar = avatarUrl && !failed ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <CircleUserRound aria-hidden />;
@@ -82,9 +93,9 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
             <WorkspaceSidebarStorageMeter collapsed={collapsed} />
             <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
                 <Popover open={menuOpen} onOpenChange={setMenuOpen} trigger="click" placement="topLeft" rootClassName="workspace-account-popover" content={content}>
-                    <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" title={profileName}>
+                    <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label={t("account.menu")} title={profileName}>
                         <span className="app-workspace-sidebar-profile-avatar">{avatar}</span>
-                        {!collapsed ? <span className="app-workspace-sidebar-profile-copy"><strong>{profileName}</strong><span>创作工作台</span></span> : null}
+                        {!collapsed ? <span className="app-workspace-sidebar-profile-copy"><strong>{profileName}</strong><span>{t("nav.workbench", { ns: "sidebar" })}</span></span> : null}
                     </button>
                 </Popover>
                 {!collapsed ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-sidebar-notification" /> : <span className="app-workspace-sidebar-notification-spacer" aria-hidden />}
@@ -94,12 +105,13 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
 }
 
 function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
+    const { t } = useTranslation("sidebar");
     const appearance = useAppearanceStore((state) => state.appearance);
 
     if (collapsed) {
         return (
             <div className="app-workspace-sidebar-rail-header shrink-0">
-                <button type="button" className="app-workspace-sidebar-rail-button" aria-label="展开侧栏菜单" title="展开侧栏菜单" onClick={onExpand}>
+                <button type="button" className="app-workspace-sidebar-rail-button" aria-label={t("nav.expand")} title={t("nav.expand")} onClick={onExpand}>
                     <PanelLeftOpen className="size-4" strokeWidth={1.7} />
                 </button>
             </div>
@@ -108,16 +120,16 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
 
     return (
         <div className="app-workspace-sidebar-brand-row relative shrink-0 px-3 pt-3">
-            <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
+            <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={t("nav.homeAria", { brand: appearance.brandName })}>
                 <span className="flex min-w-0 items-center gap-2">
-                    <BrandLogoFrame className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />} />
+                    <BrandLogoFrame className="app-workspace-brand-mark grid size-11 shrink-0 place-items-center rounded-[var(--r-sm)]" logoClassName="size-9 object-contain" alt="" fallback={<img src="/logo.png" alt="" className="size-9 object-contain" />} />
                     <span className="flex min-w-0 flex-col">
                         <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-semibold">{appearance.brandName}</span>
-                        <span className="mt-1 truncate text-[var(--fs-label)] leading-none text-foreground/60">创作工作台</span>
+                        <span className="mt-1 truncate text-[var(--fs-label)] leading-none text-foreground/60">{t("nav.workbench")}</span>
                     </span>
                 </span>
             </Link>
-            <button type="button" className="app-workspace-sidebar-collapse-button" aria-label="收起侧栏" title="收起侧栏" onClick={onCollapse}>
+            <button type="button" className="app-workspace-sidebar-collapse-button" aria-label={t("nav.collapse")} title={t("nav.collapse")} onClick={onCollapse}>
                 <PanelLeftClose className="size-4" strokeWidth={1.7} />
             </button>
         </div>
@@ -154,7 +166,7 @@ function NavItem({
     const Icon = item.icon;
     const rowStyle = collapsed ? undefined : ({ paddingLeft: `${level * 12 + 10}px` } as CSSProperties);
 
-    const collapsedTitle = item.id === "home" ? "创作" : item.id === "projects" ? "短剧" : item.id === "canvas" ? "画布" : item.id === "assets" ? "资产" : item.id === "skills" ? "技能" : item.id === "plugins" ? "插件" : item.id === "tasks" ? "历史" : item.title.slice(0, 2);
+    const collapsedTitle = item.title;
     const rowContent = (
         <>
             <span className="app-workspace-nav-main flex min-w-0 items-center gap-2.5">
@@ -220,7 +232,15 @@ function NavItem({
                     style={rowStyle}
                     aria-label={collapsed ? item.title : undefined}
                     title={collapsed ? item.title : undefined}
-                    onClick={handleClick}
+                    onClick={(event) => {
+                        const guest = !useUserStore.getState().user;
+                        if (guest && (linkTo === "/projects" || linkTo === "/canvas" || linkTo.startsWith("/canvas/"))) {
+                            event.preventDefault();
+                            useAuthDialogStore.getState().openAuth({ tab: "login", next: linkTo });
+                            return;
+                        }
+                        handleClick();
+                    }}
                     onFocus={() => preloadWorkspaceRoute(linkTo)}
                     onPointerDown={() => preloadWorkspaceRoute(linkTo)}
                     onPointerEnter={() => preloadWorkspaceRoute(linkTo)}
@@ -285,12 +305,24 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
 }
 
 export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onOpenSearch: () => void; onExpand: () => void; onCollapse: () => void }) {
+    const { t } = useTranslation("sidebar");
     const { pathname } = useLocation();
     const [searchParams] = useSearchParams();
     const features = useUserStore((state) => state.features);
     const user = useUserStore((state) => state.user);
     const { handleLogout } = useWorkspaceLogout();
-    const { groups, footer } = useMemo(() => buildNav(features, user?.role === "admin"), [features, user?.role]);
+    const permissions = useUserStore((state) => state.permissions);
+    const [plazaEnabled, setPlazaEnabled] = useState(true);
+    useEffect(() => {
+        let active = true;
+        getPlazaSettings().then(({ settings }) => {
+            if (active) setPlazaEnabled(settings.enabled);
+        }).catch(() => {
+            if (active) setPlazaEnabled(true);
+        });
+        return () => { active = false; };
+    }, []);
+    const { groups, footer } = useMemo(() => buildNav(features, user?.role, permissions, t, plazaEnabled), [features, permissions, user?.role, t, plazaEnabled]);
 
     const slug = pathname.split("/").filter(Boolean)[0] || "home";
     const section = searchParams.get("section");

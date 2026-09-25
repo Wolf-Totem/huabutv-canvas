@@ -1,30 +1,43 @@
 import { create } from "zustand";
 
+import { CINEMATIC_SKINS } from "@/lib/cinematic-skins";
+import { DEFAULT_HOME_CTA_HREF, DEFAULT_HOME_CTA_LABEL, DEFAULT_HOME_NAV_ITEMS, normalizeHomeNavItems } from "@/lib/home-navigation";
+import { DEFAULT_MANCHUANG_LANDING, mergeManchuangLanding } from "@/lib/manchuang-landing";
 import type { PublicAppearance } from "@/services/api/appearance";
-import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
+import { applySkinTheme, cinematicSkinDefinition, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
+
+const DEFAULT_ENABLED_LOADER_SKINS = CINEMATIC_SKINS.map((skin) => cinematicSkinDefinition(skin.id));
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
-    schemaVersion: 7,
+    schemaVersion: 9,
     brandName: "影策",
     brandSlug: "open-ai-canvas",
     authHeroTitle: "让一个故事，\n从文字走向银幕。",
     authHeroDescription: "",
-    logoUrl: "/logo.svg",
-    darkLogoUrl: "/logo.svg",
-    logoFrameEnabled: true,
+    logoUrl: "/logo.png",
+    darkLogoUrl: "/logo.png",
+    logoFrameEnabled: false,
     authVideoUrl: "https://boss-shjd.biliapi.net/updream/aniforge/video/video_bbcb00bd-650d-4249-9346-5cd21fd2484c_m1hc-u0-1pu13x-3v1s.mp4",
     authVideoPosterUrl: "https://i0.hdslb.com/bfs/aitool/aniforge/image/02933f26-5f1b-49ff-a811-b7f95ee5e5b8_m1hc-u0-sau.jpg",
     authVideoAutoplay: true,
-    skinId: "classic",
-    activeSkin: DEFAULT_CLASSIC_SKIN,
+    skinId: "apex",
+    activeSkin: DEFAULT_ENABLED_LOADER_SKINS[0] || DEFAULT_CLASSIC_SKIN,
+    enabledSkins: DEFAULT_ENABLED_LOADER_SKINS,
+    workspaceSkins: DEFAULT_ENABLED_LOADER_SKINS,
+    defaultMode: "dark",
     seoTitle: "影策",
     seoDescription: "影策，面向 AI 影视与短剧创作的工作台。",
     seoKeywords: "",
     footerCopyright: `© ${new Date().getFullYear()} 影策. All rights reserved.`,
     icpFilingEnabled: false,
     icpFilingNumber: "",
-    logoConfigured: false,
-    darkLogoConfigured: false,
+    publicHomepage: "welcome",
+    homeNavItems: DEFAULT_HOME_NAV_ITEMS,
+    homeCtaLabel: DEFAULT_HOME_CTA_LABEL,
+    homeCtaHref: DEFAULT_HOME_CTA_HREF,
+    landing: DEFAULT_MANCHUANG_LANDING,
+    logoConfigured: true,
+    darkLogoConfigured: true,
     authVideoConfigured: false,
     authVideoPosterConfigured: false,
     configured: false,
@@ -60,7 +73,7 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
     return {
         ...DEFAULT_PUBLIC_APPEARANCE,
         ...value,
-        schemaVersion: 7,
+        schemaVersion: 9,
         brandName: resolvedBrandName,
         brandSlug,
         authHeroTitle,
@@ -73,12 +86,22 @@ export function normalizePublicAppearance(value?: Partial<PublicAppearance> | nu
         authVideoAutoplay: value?.authVideoAutoplay !== false,
         skinId: normalizeSkinDefinition(value?.activeSkin).id,
         activeSkin: normalizeSkinDefinition(value?.activeSkin),
+        enabledSkins: Array.isArray(value?.enabledSkins) ? value.enabledSkins.map((skin) => normalizeSkinDefinition(skin)) : DEFAULT_ENABLED_LOADER_SKINS,
+        workspaceSkins: Array.isArray(value?.workspaceSkins) && value.workspaceSkins.length
+            ? value.workspaceSkins.map((skin) => normalizeSkinDefinition(skin))
+            : [normalizeSkinDefinition(value?.activeSkin)],
+        defaultMode: value?.defaultMode === "light" ? "light" : "dark",
         seoTitle,
         seoDescription,
         seoKeywords,
         footerCopyright,
         icpFilingEnabled: Boolean(value?.icpFilingEnabled && icpFilingNumber),
         icpFilingNumber,
+        publicHomepage: value?.publicHomepage === "manchuang" ? "manchuang" : "welcome",
+        homeNavItems: normalizeHomeNavItems(value?.homeNavItems),
+        homeCtaLabel: normalizeAppearanceCopy(value?.homeCtaLabel, DEFAULT_HOME_CTA_LABEL) || DEFAULT_HOME_CTA_LABEL,
+        homeCtaHref: normalizeAppearanceCopy(value?.homeCtaHref, DEFAULT_HOME_CTA_HREF) || DEFAULT_HOME_CTA_HREF,
+        landing: mergeManchuangLanding(value?.landing),
         logoConfigured: Boolean(value?.logoConfigured),
         darkLogoConfigured: Boolean(value?.darkLogoConfigured),
         authVideoConfigured: customVideo,
@@ -111,7 +134,7 @@ export function applyAppearanceMetadata(appearance: PublicAppearance, targetDocu
     setMeta(targetDocument, "property", "og:description", appearance.seoDescription);
     setMeta(targetDocument, "property", "og:site_name", appearance.brandName);
     setMeta(targetDocument, "property", "og:type", "website");
-    setMeta(targetDocument, "name", "twitter:card", "summary");
+    setMeta(targetDocument, "name", "twitter:card", "summary_large_image");
     setMeta(targetDocument, "name", "twitter:title", appearance.seoTitle || appearance.brandName);
     setMeta(targetDocument, "name", "twitter:description", appearance.seoDescription);
     const mode = targetDocument.documentElement.classList.contains("dark") ? "dark" : "light";
@@ -133,6 +156,10 @@ export function applyAppearanceMetadata(appearance: PublicAppearance, targetDocu
             targetDocument.head.appendChild(canonical);
         }
         canonical.href = `${location.origin}${location.pathname}`;
+        const shareImage = `${location.origin}/og-image.png`;
+        setMeta(targetDocument, "property", "og:image", shareImage);
+        setMeta(targetDocument, "name", "twitter:image", shareImage);
+        setMeta(targetDocument, "property", "og:url", `${location.origin}${location.pathname}`);
     }
 }
 
@@ -151,7 +178,8 @@ function setMeta(targetDocument: Document, attribute: "name" | "property", key: 
 }
 
 export function appearanceLogoURL(appearance: PublicAppearance, theme: "light" | "dark") {
-    return theme === "dark" ? appearance.darkLogoUrl || appearance.logoUrl : appearance.logoUrl || appearance.darkLogoUrl;
+    const url = theme === "dark" ? appearance.darkLogoUrl || appearance.logoUrl : appearance.logoUrl || appearance.darkLogoUrl;
+    return url === "/logo.svg" ? "/logo.png" : url;
 }
 
 export function brandStudioLabel(appearance: PublicAppearance) {

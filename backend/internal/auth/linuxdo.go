@@ -227,11 +227,11 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string) (*LinuxDO
 			return nil, err
 		}
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
-		registrationEnabled, settingErr := s.RegistrationEnabled()
+		allowed, _, settingErr := s.registrationAllowed("", "")
 		if settingErr != nil {
 			return nil, settingErr
 		}
-		if !registrationEnabled {
+		if !allowed {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
 		}
 		user, identity, err = s.createLinuxDOUser(subject, providerUsername, displayName, profileString(profile, setting.EmailField), avatarURL)

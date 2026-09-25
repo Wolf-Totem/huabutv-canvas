@@ -3,11 +3,14 @@ import { App, Button, Input } from "antd";
 import { ArrowLeft, ArrowRight, LockKeyhole, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
+import { useTranslation } from "react-i18next";
+
 import { getAuthSettings, resetPassword, sendPasswordResetEmailCode } from "@/services/api/auth";
 
 type RecoveryStage = "request" | "reset";
 
 export default function ForgotPasswordPage() {
+    const { i18n } = useTranslation();
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const { message } = App.useApp();
@@ -47,7 +50,7 @@ export default function ForgotPasswordPage() {
         }
         setSendingCode(true);
         try {
-            await sendPasswordResetEmailCode(normalizedEmail);
+            await sendPasswordResetEmailCode(normalizedEmail, i18n.language);
             setEmail(normalizedEmail);
             setCountdown(60);
             if (advance) setStage("reset");

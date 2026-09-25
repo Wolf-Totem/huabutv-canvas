@@ -29,7 +29,7 @@ func TestAppearanceDefaultsPreserveBuiltInBrand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if appearance.Configured || appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != defaultAppearanceBrandName || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.LogoURL != defaultAppearanceLogoURL || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || appearance.AuthVideoURL != defaultAppearanceVideoURL || appearance.AuthVideoPosterURL != defaultAppearancePosterURL || !appearance.AuthVideoAutoplay || appearance.SkinID != defaultAppearanceSkinID || appearance.SEOTitle != defaultAppearanceBrandName || !strings.Contains(appearance.SEODescription, defaultAppearanceBrandName) || !strings.Contains(appearance.FooterCopyright, defaultAppearanceBrandName) || appearance.ICPFilingEnabled {
+	if appearance.Configured || appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != defaultAppearanceBrandName || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.LogoURL != defaultAppearanceLogoURL || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || appearance.AuthVideoURL != defaultAppearanceVideoURL || appearance.AuthVideoPosterURL != defaultAppearancePosterURL || !appearance.AuthVideoAutoplay || appearance.SkinID != defaultAppearanceSkinID || appearance.DefaultMode != "dark" || len(appearance.EnabledSkins) != 10 || appearance.SEOTitle != defaultAppearanceBrandName || !strings.Contains(appearance.SEODescription, defaultAppearanceBrandName) || !strings.Contains(appearance.FooterCopyright, defaultAppearanceBrandName) || appearance.ICPFilingEnabled {
 		t.Fatalf("Appearance() = %#v", appearance)
 	}
 	if appearance.LogoConfigured || appearance.DarkLogoConfigured || appearance.AuthVideoConfigured || appearance.AuthVideoPosterConfigured || appearance.Revision != "builtin" {
@@ -45,8 +45,77 @@ func TestAppearanceDefaultsPreserveBuiltInBrand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(adminAppearance.SkinThemes) != 4 || !adminAppearance.SkinThemes[0].Locked {
+	if len(adminAppearance.SkinThemes) != 10 || adminAppearance.SkinThemes[0].ID != "apex" || !adminAppearance.SkinThemes[0].Locked {
 		t.Fatalf("AdminAppearance() skin library = %#v", adminAppearance.SkinThemes)
+	}
+}
+
+func TestPublicAppearanceHidesDisabledLoaderSkins(t *testing.T) {
+	svc, _, _, admin := newAppearanceTestService(t)
+	appearance, err := svc.Appearance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appearance.DefaultMode != "dark" || len(appearance.EnabledSkins) != 10 {
+		t.Fatalf("public loader skins = %#v", appearance)
+	}
+	for _, skin := range appearance.EnabledSkins {
+		if skin.Film == "" || skin.Poster == "" {
+			t.Fatalf("enabled loader skin missing film: %#v", skin)
+		}
+	}
+	encoded, err := json.Marshal(appearance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"skinThemes"`) {
+		t.Fatalf("public appearance leaked skinThemes: %s", encoded)
+	}
+	if len(appearance.WorkspaceSkins) != 10 {
+		t.Fatalf("public workspace skins = %d, want 10", len(appearance.WorkspaceSkins))
+	}
+	for _, skin := range appearance.WorkspaceSkins {
+		if skin.Film != "" {
+			t.Fatalf("workspace skin leaked loader film: %#v", skin)
+		}
+		if skin.ID == "" || skin.Tokens.Light.Primary == "" {
+			t.Fatalf("workspace skin missing tokens: %#v", skin)
+		}
+	}
+
+	setting, err := svc.AdminAppearance(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setting.AppearanceSetting.EnabledSkins = []string{"apex"}
+	updated, err := svc.UpdateAppearance(admin, setting.AppearanceSetting)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Public.EnabledSkins) != 1 || updated.Public.EnabledSkins[0].ID != "apex" {
+		t.Fatalf("disabled skins leaked to public: %#v", updated.Public.EnabledSkins)
+	}
+	if len(updated.Public.WorkspaceSkins) != 10 {
+		t.Fatalf("workspace skins should stay available after loader filter: %#v", updated.Public.WorkspaceSkins)
+	}
+}
+
+func TestOfficialAppearanceLibraryContainsTenCinematicSkins(t *testing.T) {
+	themes := defaultAppearanceSkinThemes()
+	if len(themes) != 10 || themes[0].ID != "apex" {
+		t.Fatalf("official library = %#v", themes)
+	}
+	for _, skin := range themes {
+		if !skin.Locked || skin.Film == "" || skin.Poster == "" {
+			t.Fatalf("official cinematic skin incomplete: %#v", skin)
+		}
+	}
+	encoded, err := json.Marshal(defaultAppearanceSetting())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) < 20<<10 {
+		t.Fatalf("appearance JSON is %d bytes; official cinematic library should still be a large document", len(encoded))
 	}
 }
 
@@ -107,7 +176,7 @@ func TestAppearanceBackfillsVersionSevenFieldsForExistingSetting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != "旧品牌" || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || !appearance.AuthVideoAutoplay || appearance.SEOTitle != "旧品牌" || !strings.Contains(appearance.SEODescription, "旧品牌") || !strings.Contains(appearance.FooterCopyright, "旧品牌") || appearance.ActiveSkin.ID != "classic" {
+	if appearance.SchemaVersion != appearanceSchemaVersion || appearance.BrandName != "旧品牌" || appearance.BrandSlug != defaultAppearanceBrandSlug || appearance.AuthHeroTitle != defaultAppearanceHeroTitle || appearance.AuthHeroDescription != "" || appearance.DarkLogoURL != defaultAppearanceLogoURL || !appearance.LogoFrameEnabled || !appearance.AuthVideoAutoplay || appearance.SEOTitle != "旧品牌" || !strings.Contains(appearance.SEODescription, "旧品牌") || !strings.Contains(appearance.FooterCopyright, "旧品牌") || appearance.ActiveSkin.ID != "apex" {
 		t.Fatalf("legacy appearance = %#v", appearance)
 	}
 }
@@ -136,7 +205,7 @@ func TestUpdateAppearancePersistsAuditsAndUsesVersionedPublicAssets(t *testing.T
 		AuthVideoResourceID:       "brand-video",
 		AuthVideoPosterResourceID: "brand-poster",
 		AuthVideoAutoplay:         false,
-		SkinID:                    "studio-indigo",
+		SkinID:                    "apex",
 		SEOTitle:                  "HIMA Studio - AI 影视工作台",
 		SEODescription:            "面向 Agent、图片、视频、画布与短剧生产的一体化 AI 创作工作台。",
 		SEOKeywords:               "AI 影视,短剧,画布",
@@ -147,7 +216,7 @@ func TestUpdateAppearancePersistsAuditsAndUsesVersionedPublicAssets(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !updated.Configured || updated.BrandName != "HIMA Studio" || updated.BrandSlug != "hima-studio" || updated.Public.BrandSlug != "hima-studio" || updated.AuthHeroTitle != "把灵感，\n变成可见的故事。" || updated.Public.AuthHeroDescription != "从画布开始，持续推进你的创作。" || !updated.Public.LogoConfigured || !updated.Public.DarkLogoConfigured || updated.Public.LogoFrameEnabled || !updated.Public.AuthVideoConfigured || !updated.Public.AuthVideoPosterConfigured || updated.Public.AuthVideoAutoplay || updated.Public.SkinID != "studio-indigo" || updated.Public.SEOTitle != "HIMA Studio - AI 影视工作台" || updated.Public.SEOKeywords != "AI 影视,短剧,画布" || !updated.Public.ICPFilingEnabled || updated.Public.ICPFilingNumber != "蜀ICP备2026000000号-1" {
+	if !updated.Configured || updated.BrandName != "HIMA Studio" || updated.BrandSlug != "hima-studio" || updated.Public.BrandSlug != "hima-studio" || updated.AuthHeroTitle != "把灵感，\n变成可见的故事。" || updated.Public.AuthHeroDescription != "从画布开始，持续推进你的创作。" || !updated.Public.LogoConfigured || !updated.Public.DarkLogoConfigured || updated.Public.LogoFrameEnabled || !updated.Public.AuthVideoConfigured || !updated.Public.AuthVideoPosterConfigured || updated.Public.AuthVideoAutoplay || updated.Public.SkinID != "apex" || updated.Public.SEOTitle != "HIMA Studio - AI 影视工作台" || updated.Public.SEOKeywords != "AI 影视,短剧,画布" || !updated.Public.ICPFilingEnabled || updated.Public.ICPFilingNumber != "蜀ICP备2026000000号-1" {
 		t.Fatalf("UpdateAppearance() = %#v", updated)
 	}
 	for _, assetURL := range []string{updated.Public.LogoURL, updated.Public.DarkLogoURL, updated.Public.AuthVideoURL, updated.Public.AuthVideoPosterURL} {
@@ -386,9 +455,9 @@ func TestUpdateAppearanceValidatesLoginCopy(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "英文品牌标识") {
 		t.Fatalf("invalid slug error = %v", err)
 	}
-	_, err = svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: "unknown-skin"})
-	if err == nil || !strings.Contains(err.Error(), "皮肤主题") {
-		t.Fatalf("invalid skin error = %v", err)
+	remapped, err := svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: "unknown-skin"})
+	if err != nil || remapped.SkinID != defaultAppearanceSkinID {
+		t.Fatalf("unknown skin remap = %#v, %v", remapped, err)
 	}
 	_, err = svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: defaultAppearanceSkinID, ICPFilingEnabled: true})
 	if err == nil || !strings.Contains(err.Error(), "备案号") {
@@ -396,57 +465,51 @@ func TestUpdateAppearanceValidatesLoginCopy(t *testing.T) {
 	}
 }
 
-func TestAppearanceSkinLibrarySupportsEditableCopiesAndProtectsClassic(t *testing.T) {
+func TestAppearanceSkinLibraryKeepsOfficialCinematicThemesOnly(t *testing.T) {
 	svc, _, _, admin := newAppearanceTestService(t)
 	themes := defaultAppearanceSkinThemes()
-	custom := cloneAppearanceSkin(themes[0], "custom-editorial", "片场夜蓝", "自定义控件与明暗色")
-	custom.Tokens.Light.Primary = "#123456"
-	custom.Tokens.Light.PrimaryHover = "#234567"
-	custom.Tokens.Dark.Primary = "#abcdef"
-	custom.Tokens.Components.ButtonRadius = 14
-	themes = append(themes, custom)
-	legacyCustom := custom
-	legacyCustom.Tokens.Light.SwitchChecked = ""
-	legacyCustom.Tokens.Light.SwitchCheckedHover = ""
-	legacyCustom.Tokens.Light.SwitchCheckedHandle = ""
-	legacyCustom.Tokens.Light.SwitchUnchecked = ""
-	legacyCustom.Tokens.Light.SwitchUncheckedHover = ""
-	legacyCustom.Tokens.Light.SwitchUncheckedHandle = ""
-	legacyCustom.Tokens.Light.DangerHover = ""
-	legacyCustom.Tokens.Light.DangerActive = ""
-	legacyCustom.Tokens.Light.DangerForeground = ""
-	backfilled := normalizeAppearanceSkinThemes([]AppearanceSkinTheme{legacyCustom})[0]
-	if backfilled.Tokens.Light.SwitchChecked != "#123456" || backfilled.Tokens.Light.SwitchCheckedHover != "#234567" || backfilled.Tokens.Light.SwitchUnchecked != legacyCustom.Tokens.Light.ControlBorder || backfilled.Tokens.Light.DangerHover != legacyCustom.Tokens.Light.Danger {
-		t.Fatalf("legacy skin state backfill = %#v", backfilled.Tokens.Light)
+	apex := themes[0]
+	apex.Tokens.Light.Primary = "#123456"
+	apex.Tokens.Light.PrimaryHover = "#234567"
+	apex.Tokens.Dark.Primary = "#abcdef"
+	apex.Tokens.Components.ButtonRadius = 14
+	legacyApex := apex
+	legacyApex.Tokens.Light.SwitchChecked = ""
+	legacyApex.Tokens.Light.SwitchCheckedHover = ""
+	legacyApex.Tokens.Light.SwitchCheckedHandle = ""
+	legacyApex.Tokens.Light.SwitchUnchecked = ""
+	legacyApex.Tokens.Light.SwitchUncheckedHover = ""
+	legacyApex.Tokens.Light.SwitchUncheckedHandle = ""
+	legacyApex.Tokens.Light.DangerHover = ""
+	legacyApex.Tokens.Light.DangerActive = ""
+	legacyApex.Tokens.Light.DangerForeground = ""
+	backfilled := normalizeAppearanceSkinThemes([]AppearanceSkinTheme{legacyApex})[0]
+	if backfilled.ID != "apex" || backfilled.Tokens.Light.SwitchChecked != "#123456" || backfilled.Tokens.Light.SwitchCheckedHover != "#234567" || backfilled.Tokens.Light.SwitchUnchecked != legacyApex.Tokens.Light.ControlBorder || backfilled.Tokens.Light.DangerHover != legacyApex.Tokens.Light.Danger {
+		t.Fatalf("legacy skin state backfill = %#v", backfilled)
 	}
 
+	retired := append([]AppearanceSkinTheme{defaultClassicAppearanceSkin(), cloneAppearanceSkin(apex, "studio-indigo", "青瓷工作室", "旧主题"), cloneAppearanceSkin(apex, "custom-mu72g2ae", "霓光紫境 副本", "复制自 霓光紫境")}, themes...)
+	retired[len(retired)-10].Tokens.Light.Primary = "#123456"
+	retired[len(retired)-10].Tokens.Components.ButtonRadius = 14
 	updated, err := svc.UpdateAppearance(admin, AppearanceSetting{
 		BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle,
-		SkinID: custom.ID, SkinThemes: themes,
+		SkinID: "custom-mu72g2ae", SkinThemes: retired,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Public.ActiveSkin.ID != custom.ID || updated.Public.ActiveSkin.Tokens.Light.Primary != "#123456" || updated.Public.ActiveSkin.Tokens.Components.ButtonRadius != 14 || len(updated.SkinThemes) != 5 {
-		t.Fatalf("custom skin round trip = %#v", updated)
+	if updated.SkinID != "apex" || len(updated.SkinThemes) != 10 || updated.Public.ActiveSkin.ID != "apex" || updated.Public.ActiveSkin.Tokens.Light.Primary != "#123456" || updated.Public.ActiveSkin.Tokens.Components.ButtonRadius != 14 {
+		t.Fatalf("retired library prune = %#v", updated)
 	}
-
-	withoutClassic := append([]AppearanceSkinTheme(nil), themes[1:]...)
-	_, err = svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: custom.ID, SkinThemes: withoutClassic})
-	if err == nil || !strings.Contains(err.Error(), "不能修改或删除") {
-		t.Fatalf("missing classic error = %v", err)
-	}
-
-	mutatedClassic := append([]AppearanceSkinTheme(nil), themes...)
-	mutatedClassic[0].Name = "改名"
-	_, err = svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: custom.ID, SkinThemes: mutatedClassic})
-	if err == nil || !strings.Contains(err.Error(), "不能修改或删除") {
-		t.Fatalf("mutated classic error = %v", err)
+	for _, skin := range updated.SkinThemes {
+		if skin.ID == "classic" || skin.ID == "studio-indigo" || strings.HasPrefix(skin.ID, "custom-") {
+			t.Fatalf("retired skin leaked: %#v", skin)
+		}
 	}
 
 	invalidColor := append([]AppearanceSkinTheme(nil), themes...)
 	invalidColor[len(invalidColor)-1].Tokens.Light.Primary = "red; background:url(x)"
-	_, err = svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: custom.ID, SkinThemes: invalidColor})
+	_, err = svc.UpdateAppearance(admin, AppearanceSetting{BrandName: "HIMA Studio", BrandSlug: "hima-studio", AuthHeroTitle: defaultAppearanceHeroTitle, SkinID: "apex", SkinThemes: invalidColor})
 	if err == nil || !strings.Contains(err.Error(), "十六进制") {
 		t.Fatalf("invalid color error = %v", err)
 	}

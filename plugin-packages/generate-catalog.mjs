@@ -568,6 +568,85 @@ add({
 });
 
 add({
+  id: "jiasu-chat", providerId: "jiasu-chat", name: "佳速大模型推理", vendor: "佳速API", capability: "text",
+  baseUrl: "https://ai.jiasuapi.com", auth: bearer, params: textParams,
+  notes: "佳速公开文本入口兼容 OpenAI Chat Completions：POST /v1/chat/completions，Bearer sk-。不要用厂商原生协议直连上游。",
+  create: jsonCreate("/v1/chat/completions", {
+    model: ref("request.model"), messages: ref("request.messages"),
+    temperature: omit(ref("request.providerOptions.jiasu-chat.temperature")),
+    top_p: omit(ref("request.providerOptions.jiasu-chat.top_p")),
+    max_tokens: omit(coalesce(ref("request.extra.max_tokens"), ref("request.providerOptions.jiasu-chat.max_tokens"))),
+    tools: omit(ref("request.providerOptions.jiasu-chat.tools")),
+    tool_choice: omit(ref("request.providerOptions.jiasu-chat.tool_choice")),
+    response_format: omit(ref("request.providerOptions.jiasu-chat.response_format")),
+    stream: omit(ref("request.providerOptions.jiasu-chat.stream")),
+    extra_body: omit(ref("request.providerOptions.jiasu-chat.extra_body"))
+  }),
+  agent: jsonCreate("/v1/chat/completions", { $merge: [ref("request.extra.agent.chatCompletion"), { model: ref("request.model") }] }),
+  agentResponse: { textPaths: ["choices.0.message.content", "choices.0.text"], reasoningPaths: ["choices.0.message.reasoning_content"], toolCallsPath: "choices.0.message.tool_calls", toolCallIdPaths: ["id"], toolCallNamePaths: ["function.name"], toolCallArgumentsPaths: ["function.arguments"] },
+  response: { status: "succeeded", textPaths: ["choices.0.message.content", "choices.0.text"], reasoningPaths: ["choices.0.message.reasoning_content"], usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
+});
+
+add({
+  id: "jiasu-image", providerId: "jiasu-image", name: "佳速图片", vendor: "佳速API", capability: "image",
+  baseUrl: "https://ai.jiasuapi.com", auth: bearer, params: imageParams, requiresPublicMediaUrls: true,
+  notes: "佳速统一图片入口 POST /v1/images/create。references 为空则文生图，1–16 张参考图则编辑。公开文档同步返回本站短 URL；不要改走 OpenAI /v1/images/generations 或 /edits。",
+  create: jsonCreate("/v1/images/create", {
+    model: ref("request.model"),
+    prompt: ref("request.prompt"),
+    n: omit(conditional(gt(ref("request.imageCount"), 0), ref("request.imageCount"), 1)),
+    size: omit(ref("request.aspectRatio")),
+    quality: omit(ref("request.quality")),
+    ratio: omit(ref("request.providerOptions.jiasu-image.ratio")),
+    resolution: omit(ref("request.resolution")),
+    references: omit(map(sorted(ref("request.images")), "media", ref("media.value")))
+  }),
+  response: {
+    status: "succeeded",
+    images: map(ref("response.data"), "item", { url: omit(coalesce(ref("item.url"), ref("item.b64_json"))) }),
+    usage: ref("response.usage"),
+    errorPaths: ["error.code"],
+    messagePaths: ["error.message"]
+  }
+});
+
+add({
+  id: "jiasu-video", providerId: "jiasu-video", name: "佳速视频", vendor: "佳速API", capability: "video",
+  baseUrl: "https://ai.jiasuapi.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
+  notes: "佳速公开视频协议：POST /v1/video/generations，查询 GET /v1/video/generations/{task_id}。body 使用 duration/ratio/images[{url,name,type}]/videos/audios，不是 NewAPI Channel 2 的 seconds/image_urls。首尾帧用 images[].type=first_frame|end_frame。",
+  create: jsonCreate("/v1/video/generations", {
+    model: ref("request.model"),
+    prompt: ref("request.prompt"),
+    duration: omit(conditional(gt(ref("request.duration"), 0), ref("request.duration"), null)),
+    ratio: omit(coalesce(ref("request.aspectRatio"), ref("request.providerOptions.jiasu-video.ratio"))),
+    resolution: omit(ref("request.resolution")),
+    size: omit(ref("request.providerOptions.jiasu-video.size")),
+    images: omit(map(sorted(ref("request.images")), "media", {
+      url: ref("media.value"),
+      type: omit(conditional({ $in: [ref("media.role"), ["first_frame"]] }, "first_frame", conditional({ $in: [ref("media.role"), ["last_frame", "end_frame"]] }, "end_frame", null)))
+    })),
+    videos: omit(map(sorted(ref("request.videos")), "media", { url: ref("media.value") })),
+    audios: omit(map(sorted(ref("request.audios")), "media", { url: ref("media.value") })),
+    face: omit(ref("request.providerOptions.jiasu-video.face")),
+    materials: omit(ref("request.providerOptions.jiasu-video.materials"))
+  }),
+  poll: { method: "GET", path: "/v1/video/generations/{{taskId}}" },
+  response: asyncResponse("video", {
+    taskId: coalesce(ref("response.data.task_id"), ref("response.data.taskId"), ref("response.data.id"), ref("response.task_id"), ref("response.taskId"), ref("response.id"), ref("taskId")),
+    status: coalesce(ref("response.data.status"), ref("response.status"), ref("response.state"), "pending"),
+    videos: coalesce(
+      ref("response.data.result_urls"),
+      ref("response.result_urls"),
+      ref("response.data.url"),
+      ref("response.data.result_url"),
+      ref("response.data.video_url"),
+      ref("response.data.output_url"),
+      ref("response.url")
+    )
+  })
+});
+
+add({
   id: "rolldek-wan-video", providerId: "rolldek-wan-video", name: "RollDek WAN 3.0 Video", vendor: "RollDek", capability: "video",
   baseUrl: "https://rolldek.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   notes: "该协议严格对应 RollDek WAN 3.0 的 JSON /v1/videos 合同。RollDek 同时暴露的其他兼容创建入口不共享任务查询路径，不能与 NewAPI Video Generations Channel 2 混用。",

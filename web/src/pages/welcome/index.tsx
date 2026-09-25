@@ -5,6 +5,7 @@ import { ArrowDown, ArrowRight, ArrowUpRight, Code2, Menu, Pause, Play, X } from
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/base/buttons";
 import { getAntThemeConfig } from "@/lib/app-theme";
+import { DEFAULT_HOME_CTA_HREF, DEFAULT_HOME_CTA_LABEL, DEFAULT_HOME_NAV_ITEMS } from "@/lib/home-navigation";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 import { WelcomeContributorsCard } from "./contributors-card";
@@ -39,12 +40,20 @@ export default function WelcomePage() {
     };
     return (
         <ConfigProvider theme={getAntThemeConfig(true, appearance.activeSkin)}>
-            <WelcomeExperience key={look.id} look={look} brandName={appearance.brandName} onLookChange={changeLook} />
+            <WelcomeExperience
+                key={look.id}
+                look={look}
+                brandName={appearance.brandName}
+                navItems={appearance.homeNavItems?.length ? appearance.homeNavItems : DEFAULT_HOME_NAV_ITEMS}
+                ctaLabel={appearance.homeCtaLabel || DEFAULT_HOME_CTA_LABEL}
+                ctaHref={appearance.homeCtaHref || DEFAULT_HOME_CTA_HREF}
+                onLookChange={changeLook}
+            />
         </ConfigProvider>
     );
 }
 
-function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLook; brandName: string; onLookChange: (id: string) => void }) {
+function WelcomeExperience({ look, brandName, navItems, ctaLabel, ctaHref, onLookChange }: { look: WelcomeLook; brandName: string; navItems: { label: string; href: string; openInNewTab?: boolean }[]; ctaLabel: string; ctaHref: string; onLookChange: (id: string) => void }) {
     const storyRef = useRef<HTMLElement>(null);
     const progressRef = useRef(0);
     const [chapter, setChapter] = useState(0);
@@ -58,7 +67,7 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
-        document.title = "影策 · 让一个故事从文字走向银幕";
+        document.title = `${brandName} · 让一个故事从文字走向银幕`;
         const media = window.matchMedia("(prefers-reduced-motion: reduce)");
         const onMotion = () => setReduced(media.matches);
         media.addEventListener("change", onMotion);
@@ -78,7 +87,7 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
             window.removeEventListener("scroll", onScroll);
             window.removeEventListener("resize", onScroll);
         };
-    }, []);
+    }, [brandName]);
 
     useEffect(() => {
         if (!playing) return;
@@ -100,16 +109,19 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
         <div className="welcome-page">
             <a className="welcome-skip" href="#workbench">前往工作台介绍</a>
             <header className="welcome-header">
-                <a className="welcome-brand" href="/welcome" aria-label={`${brandName}首页`}>
+                <a className="welcome-brand" href="/" aria-label={`${brandName}首页`}>
                     <BrandLogo theme="dark" className="welcome-brand-logo" alt="" fallback={<span className="welcome-brand-logo is-fallback" />} />
                     {brandName}
                 </a>
                 <nav className={menu ? "welcome-nav is-open" : "welcome-nav"} aria-label="首页导航">
-                    <a href="#workbench" onClick={() => setMenu(false)}>工作台</a>
-                    <a href="#contributors" onClick={() => setMenu(false)}>贡献者</a>
-                    <a href={github} target="_blank" rel="noreferrer">GitHub<ArrowUpRight size={13} /></a>
+                    {navItems.map((item) => (
+                        <a key={`${item.label}-${item.href}`} href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noreferrer" : undefined} onClick={() => setMenu(false)}>
+                            {item.label}
+                            {item.openInNewTab ? <ArrowUpRight size={13} /> : null}
+                        </a>
+                    ))}
                 </nav>
-                <Button className="welcome-header-cta" type="primary" href="/create" icon={<ArrowUpRight size={16} />} iconPlacement="end">开始创作</Button>
+                <Button className="welcome-header-cta" type="primary" href={ctaHref} icon={<ArrowUpRight size={16} />} iconPlacement="end">{ctaLabel}</Button>
                 <IconButton className="welcome-icon mobile-menu" variant="ghost" size="lg" icon={menu ? X : Menu} aria-label={menu ? "关闭菜单" : "打开菜单"} aria-expanded={menu} onClick={() => setMenu(!menu)} />
             </header>
             <aside className="welcome-look-picker" aria-label="首页素材版本">
@@ -118,14 +130,14 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
             </aside>
 
             <main>
-                <section ref={storyRef} id="story" className="welcome-story" aria-label="影策创作之旅">
+                <section ref={storyRef} id="story" className="welcome-story" aria-label={`${brandName}创作之旅`}>
                     <div className={`welcome-stage chapter-${chapter}${staticScene ? " is-static" : ""}`}>
                         <div className={`welcome-poster${ready && !staticScene ? " is-ready" : ""}`} aria-hidden="true"><img src={look.frames[staticScene ? chapter * 2 : 0]} alt="" fetchPriority="high" /></div>
                         {!staticScene && <SceneBoundary onError={() => setFailed(true)}><Suspense fallback={null}><StoryReel look={look} progress={progressRef} paused={paused} onReady={() => setReady(true)} onError={() => setFailed(true)} /></Suspense></SceneBoundary>}
                         <div className="welcome-stage-shade" aria-hidden="true" />
                         {chapters.map((item, index) => (
                             <section key={item.id} className={`welcome-chapter ${index === 0 ? "welcome-opening" : ""} ${index === chapter ? "is-active" : ""}`} aria-hidden={index !== chapter}>
-                                {index === 0 ? <h1>{item.title}</h1> : <h2>{item.title.split("，").map((part, partIndex, parts) => <span key={part}>{part}{partIndex < parts.length - 1 ? "，" : ""}</span>)}</h2>}
+                                {index === 0 ? <h1>{brandName}</h1> : <h2>{item.title.split("，").map((part, partIndex, parts) => <span key={part}>{part}{partIndex < parts.length - 1 ? "，" : ""}</span>)}</h2>}
                                 {"subtitle" in item && <><p className="welcome-subtitle">{item.subtitle}</p>{look.video && <Button type="text" className="welcome-film-link" onClick={() => setPlaying(true)} tabIndex={chapter === 0 ? 0 : -1} icon={<span className="welcome-play-mark"><Play size={17} fill="currentColor" /></span>}>观看片段</Button>}</>}
                             </section>
                         ))}
@@ -147,7 +159,7 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
                 <section className="welcome-ending"><h2>你的故事，<br />现在开始。</h2>
                 <WelcomeContributorsCard /></section>
             </main>
-            <footer className="welcome-footer"><a href="/welcome">{brandName}</a><span>开源 AI 影视创作工作台</span><a href={`${github}/blob/main/LICENSE`} target="_blank" rel="noreferrer">Open Source · MIT License<ArrowUpRight size={12} /></a></footer>
+            <footer className="welcome-footer"><a href="/">{brandName}</a><span>开源 AI 影视创作工作台</span><a href={`${github}/blob/main/LICENSE`} target="_blank" rel="noreferrer">Open Source · MIT License<ArrowUpRight size={12} /></a></footer>
             {look.credit && <div className="welcome-media-credit"><a href={`/welcome/credits.html#${look.id}`} target="_blank" rel="noreferrer">{look.credit} · 署名与许可<ArrowUpRight size={12} /></a></div>}
             {playing && look.video && <FilmDialog look={look} onClose={() => setPlaying(false)} videoRef={videoRef} />}
         </div>

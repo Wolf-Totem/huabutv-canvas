@@ -13,7 +13,7 @@ export type CreditAccount = {
 export type CreditLedgerEntry = {
     id: string;
     userId: string;
-    type: "redeem" | "payment_topup" | "admin_grant" | "consume" | "refund" | "admin_adjustment" | "signup_bonus" | "checkin_bonus";
+    type: "redeem" | "payment_topup" | "admin_grant" | "consume" | "refund" | "admin_adjustment" | "signup_bonus" | "checkin_bonus" | "streamer_rebate";
     amountMicrocredits: number;
     availableAfterMicrocredits: number;
     reservedAfterMicrocredits: number;
@@ -131,6 +131,7 @@ export type LinuxDOSetting = {
 
 export type RegistrationSetting = {
     enabled: boolean;
+    inviteSubdomainEnabled?: boolean;
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -155,7 +156,10 @@ export type EmailSetting = {
 
 export type RedeemBatch = {
     id: string;
+    kind?: "credits" | "membership" | "storage" | string;
+    planSku?: string;
     amountMicrocredits: number;
+    storageQuotaBytes?: number;
     count: number;
     note?: string;
     createdBy: string;
@@ -227,8 +231,14 @@ export function getWallet(page = 1, pageSize = 30, type = "all") {
     return http.get<WalletSummary>("/wallet", { params: { type, page, pageSize } });
 }
 
+export type RedeemOutcome = {
+    account: CreditAccount;
+    membership?: import("@/lib/membership").MembershipStatus;
+    granted?: { kind: string; planSku?: string; creditsMicrocredits: number; storageQuotaBytes?: number };
+};
+
 export function redeemCredits(code: string) {
-    return http.post<{ account: CreditAccount }>("/wallet/redeem", { code });
+    return http.post<RedeemOutcome>("/wallet/redeem", { code });
 }
 
 export function checkinCredits() {
@@ -255,8 +265,8 @@ export function getAdminRegistrationSetting() {
     return http.get<{ setting: RegistrationSetting }>("/admin/settings/registration");
 }
 
-export function updateAdminRegistrationSetting(enabled: boolean) {
-    return http.patch<{ setting: RegistrationSetting }>("/admin/settings/registration", { enabled });
+export function updateAdminRegistrationSetting(input: { enabled: boolean; inviteSubdomainEnabled?: boolean }) {
+    return http.patch<{ setting: RegistrationSetting }>("/admin/settings/registration", input);
 }
 
 export function getAdminEmailSetting() {
@@ -265,6 +275,34 @@ export function getAdminEmailSetting() {
 
 export function updateAdminEmailSetting(input: Partial<EmailSetting>) {
     return http.patch<{ setting: EmailSetting }>("/admin/settings/email", input);
+}
+
+export function sendAdminEmailTest(email: string, locale = "zh") {
+    return http.post<{ sent: boolean; to: string }>("/admin/settings/email/test", { email, locale });
+}
+
+export type SmsSetting = {
+    enabled: boolean;
+    accessKeyId: string;
+    hasAccessKeySecret: boolean;
+    signName: string;
+    templateCode: string;
+    region: string;
+    updatedBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+export function getAdminSmsSetting() {
+    return http.get<{ setting: SmsSetting }>("/admin/settings/sms");
+}
+
+export function updateAdminSmsSetting(input: Partial<SmsSetting> & { accessKeySecret?: string }) {
+    return http.patch<{ setting: SmsSetting }>("/admin/settings/sms", input);
+}
+
+export function sendAdminSmsTest(phone: string) {
+    return http.post<{ sent: boolean; to: string }>("/admin/settings/sms/test", { phone });
 }
 
 export function listAdminChannelModels(channelId: string) {
@@ -310,7 +348,7 @@ export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
     return http.get<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
 }
 
-export function createAdminRedeemBatch(input: { amountMicrocredits: number; count: number; note?: string; expiresAt?: string }) {
+export function createAdminRedeemBatch(input: { kind?: "credits" | "membership" | "storage"; planSku?: string; amountMicrocredits?: number; storageQuotaBytes?: number; count: number; note?: string; expiresAt?: string }) {
     return http.post<{ batch: RedeemBatch; codes: string[] }>("/admin/redeem-batches", input, { timeout: 30_000 });
 }
 

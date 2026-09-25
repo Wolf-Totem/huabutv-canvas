@@ -57,8 +57,8 @@
 }
 
 [data-admin-root] .admin-sidebar-brand-mark {
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     border-radius: var(--admin-radius);
     box-shadow: none !important;
 }

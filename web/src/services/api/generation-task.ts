@@ -1,7 +1,8 @@
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
-import { createGenerationTask, waitForGenerationTask, type GenerationTask, type CreateTaskInput } from "@/services/api/task-center";
+import { createGenerationTask, reportTaskProviderRequest, waitForGenerationTask, type GenerationTask, type CreateTaskInput } from "@/services/api/task-center";
+import { createVideoGenerationTask } from "@/services/api/video";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveGenerationWorkflowExecution, type GenerationWorkflowExecution } from "@/lib/generation-workflow-execution";
@@ -262,7 +263,23 @@ async function createAndWaitGenerationTask(options: BackendGenerationTaskOptions
 async function createBackendGenerationTask(options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences, dependencies: GenerationTaskDependencies) {
     const task = await dependencies.createTask(backendGenerationTaskInput(options, prepared));
     options.onTaskUpdate?.(task);
+    if (task.clientSubmit) await submitUserChannelProviderCreate(task, options, prepared);
     return task;
+}
+
+async function submitUserChannelProviderCreate(task: GenerationTask, options: BackendGenerationTaskOptions, prepared: PreparedGenerationReferences) {
+    if (options.mode !== "video") return;
+    const created = await createVideoGenerationTask(
+        options.config,
+        options.prompt,
+        prepared.referenceImages,
+        prepared.referenceVideos,
+        prepared.referenceAudios,
+        { signal: options.signal },
+    );
+    if (!created.id) throw new Error("厂商没有返回任务 ID");
+    const updated = await reportTaskProviderRequest(task.id, created.id);
+    options.onTaskUpdate?.(updated);
 }
 
 export async function prepareBackendGenerationTask(options: BackendGenerationTaskOptions): Promise<CreateTaskInput> {

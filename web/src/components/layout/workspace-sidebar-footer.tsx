@@ -12,6 +12,8 @@ import { applyUserSession } from "@/lib/user-session";
 import { cn } from "@/lib/utils";
 import { logout } from "@/services/api/auth";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { canAccessAdmin, hasPermission, PERMISSIONS } from "@/lib/access";
+import { agentConsoleURL } from "@/lib/public-hosts";
 import { useUserStore, type LocalUser } from "@/stores/use-user-store";
 
 type WorkspaceSidebarFooterProps = {
@@ -25,6 +27,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
+    const permissions = useUserStore((state) => state.permissions);
     const hydrated = useUserStore((state) => state.hydrated);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const navigate = useNavigate();
@@ -41,7 +44,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
             await applyUserSession({ user: null });
             setMenuOpen(false);
             message.success("已退出登录");
-            navigate("/login", { replace: true });
+            navigate("/", { replace: true });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "退出失败");
         }
@@ -76,9 +79,10 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                                 </div>
                             </div>
 
-                            {user.role === "admin" ? (
+                            {hasPermission(user.role, permissions, PERMISSIONS.agentConsole) || canAccessAdmin(user.role, permissions) ? (
                                 <nav className="py-2" aria-label="管理工具">
-                                    <MenuLink to="/admin" icon={<ShieldCheck />} label="管理员后台" onNavigate={() => setMenuOpen(false)} />
+                                    {hasPermission(user.role, permissions, PERMISSIONS.agentConsole) ? <a href={agentConsoleURL()} onClick={() => setMenuOpen(false)} className="flex h-9 items-center gap-2.5 rounded px-2 text-xs text-foreground/62 hover:bg-surface-hover hover:text-foreground [&_svg]:size-3.5 [&_svg]:shrink-0"><ShieldCheck /><span className="flex-1">代理后台</span><ChevronRight className="!size-3 text-foreground/25" /></a> : null}
+                                    {canAccessAdmin(user.role, permissions) ? <MenuLink to="/admin" icon={<ShieldCheck />} label="管理员后台" onNavigate={() => setMenuOpen(false)} /> : null}
                                 </nav>
                             ) : null}
 
@@ -105,7 +109,7 @@ export function WorkspaceSidebarFooter({ expandedClassName, collapsedClassName, 
                     </button>
                 </Popover>
             ) : (
-                <Link to="/login" className={cn("flex h-10 items-center rounded-md text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground", collapsedClassName)} title="登录">
+                <Link to="/?auth=login" className={cn("flex h-10 items-center rounded-md text-xs text-foreground/65 hover:bg-surface-hover hover:text-foreground", collapsedClassName)} title="登录">
                     <LogIn className="size-4 shrink-0" /><span className={expandedClassName}>登录</span>
                 </Link>
             )}
