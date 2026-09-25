@@ -4,6 +4,13 @@ export type LandingTextCard = { title: string; text: string; imageUrl?: string }
 export type LandingStep = { step: string; phase: string; title: string; tagline: string; description: string; imageUrl: string; tags: string[] };
 export type LandingRailCard = { id: string; imageUrl: string; previewUrl?: string; label?: string };
 export type LandingPricingTier = { id: string; name: string; tagline: string; price: string; unit: string; note: string; cta: string; featured?: boolean; badge?: string; features: string[] };
+export type LandingHeroBanner = { id: string; title: string; imageUrl: string; href: string; openInNewTab?: boolean; workId?: string };
+export type LandingHeroTile = { id: string; title: string; subtitle: string; badge?: string; href: string; icon?: string };
+export type LandingHeroShowcase = {
+    banners: LandingHeroBanner[];
+    create: { title: string; subtitle: string; href: string };
+    tiles: LandingHeroTile[];
+};
 
 export type ManchuangLanding = {
     heroKicker: string;
@@ -30,6 +37,7 @@ export type ManchuangLanding = {
     pricingLead: string;
     pricingTiers: LandingPricingTier[];
     rail: LandingRailCard[];
+    heroShowcase: LandingHeroShowcase;
 };
 
 const img = (name: string) => `/manchuang/${name}`;
@@ -41,6 +49,26 @@ const featuredRail = (): LandingRailCard[] =>
         previewUrl: String(item.previewUrl || ""),
         label: String(item.name || ""),
     }));
+
+const defaultHeroShowcase = (): LandingHeroShowcase => {
+    const banners = featuredRail().slice(0, 8).map((item) => ({
+        id: item.id,
+        title: item.label || "精选画布",
+        imageUrl: item.imageUrl,
+        href: `/plaza/${encodeURIComponent(item.id)}`,
+        workId: item.id,
+    }));
+    return {
+        banners: banners.length ? banners : [{ id: "banner-1", title: "精选画布", imageUrl: img("carousel-1.webp"), href: "/create" }],
+        create: { title: "开始创作", subtitle: "打开画布，组织图片与视频创作", href: "/create" },
+        tiles: [
+            { id: "tile-model", title: "新模型", subtitle: "全新增模与视频能力", badge: "全新上线", href: "/create" },
+            { id: "tile-agent", title: "Agent 助手", subtitle: "一句话开始，自动规划并执行创作", badge: "智能创作", href: "/agent" },
+            { id: "tile-director", title: "导演台", subtitle: "虚拟现场、三维场面与镜头控制", href: "/create" },
+            { id: "tile-review", title: "逐帧拉片", subtitle: "上传参考视频，逐帧拉片快建参考", badge: "独家", href: "/create" },
+        ],
+    };
+};
 
 export const DEFAULT_MANCHUANG_LANDING: ManchuangLanding = {
     heroKicker: "企业级 AI 在线画布协作平台",
@@ -91,6 +119,7 @@ export const DEFAULT_MANCHUANG_LANDING: ManchuangLanding = {
         { id: "svip", name: "SVIP", tagline: "为重度创作与商用项目而生", price: "¥68", unit: "/ 月卡", note: "6,888 积分 / 整期", cta: "微信购买 SVIP", featured: true, badge: "最受欢迎", features: ["80 GB 云端存储空间", "解锁全部模型与生成能力", "生成、上传、导出全功能开放", "额度用完可继续叠加积分"] },
     ],
     rail: featuredRail(),
+    heroShowcase: defaultHeroShowcase(),
 };
 
 export function mergeManchuangLanding(value?: Partial<ManchuangLanding> | null): ManchuangLanding {
@@ -105,6 +134,15 @@ export function mergeManchuangLanding(value?: Partial<ManchuangLanding> | null):
         resourceCards: value.resourceCards?.length ? value.resourceCards : base.resourceCards,
         pricingTiers: value.pricingTiers?.length ? value.pricingTiers : base.pricingTiers,
         rail: value.rail?.length ? value.rail : base.rail,
+        heroShowcase: {
+            banners: value.heroShowcase?.banners?.length ? value.heroShowcase.banners : base.heroShowcase.banners,
+            create: {
+                title: value.heroShowcase?.create?.title?.trim() || base.heroShowcase.create.title,
+                subtitle: value.heroShowcase?.create?.subtitle?.trim() || base.heroShowcase.create.subtitle,
+                href: value.heroShowcase?.create?.href?.trim() || base.heroShowcase.create.href,
+            },
+            tiles: value.heroShowcase?.tiles?.length ? value.heroShowcase.tiles : base.heroShowcase.tiles,
+        },
         heroVideoUrl: value.heroVideoUrl?.trim() || base.heroVideoUrl,
         heroPosterUrl: value.heroPosterUrl?.trim() || base.heroPosterUrl,
         productStageUrl: value.productStageUrl?.trim() || base.productStageUrl,

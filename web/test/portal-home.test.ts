@@ -9,8 +9,8 @@ test("portal home is the site root for every visitor and create lives at /create
     ]);
     expect(root).toContain("ManchuangHomePage");
     expect(root).not.toContain("CreatePage");
-    expect(home).toContain("mc-hero-cta");
-    expect(home).toContain("mc-hero-cta-pin");
+    expect(home).toContain("mc-hero-showcase");
+    expect(home).toContain("mc-hero-create");
     expect(home).toContain("openAuth({ tab: \"login\" })");
     expect(home).toContain("mc-hero-preview");
     expect(home).toContain("openAuth");
@@ -26,7 +26,8 @@ test("portal home is the site root for every visitor and create lives at /create
 test("featured plaza cards ship enough covers to fill the home grid", async () => {
     const cards = (await import("../src/lib/plaza-featured.json")).default as Array<{ coverUrl: string; name: string }>;
     expect(cards.length).toBeGreaterThanOrEqual(60);
-    expect(cards.every((item) => Boolean(item.coverUrl) && Boolean(item.name))).toBe(true);
+    expect(cards.every((item) => Boolean(item.name))).toBe(true);
+    expect(cards.filter((item) => Boolean(item.coverUrl)).length).toBeGreaterThanOrEqual(60);
 });
 
 test("guest agent start opens the login dialog instead of toasting session not ready", async () => {

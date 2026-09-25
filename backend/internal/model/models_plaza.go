@@ -86,6 +86,8 @@ type PlazaWork struct {
 	CategoryID       string     `json:"categoryId" gorm:"index;size:36"`
 	CoverAssetID     string     `json:"coverAssetId" gorm:"size:36"`
 	WatchAssetID     string     `json:"watchAssetId" gorm:"size:36"`
+	CoverExternalURL string     `json:"coverExternalUrl,omitempty" gorm:"size:1000"`
+	WatchExternalURL string     `json:"watchExternalUrl,omitempty" gorm:"size:1000"`
 	Status           string     `json:"status" gorm:"index;size:24"`
 	AllowWatch       bool       `json:"allowWatch"`
 	AllowProcessView bool       `json:"allowProcessView"`

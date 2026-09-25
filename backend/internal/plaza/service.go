@@ -821,9 +821,13 @@ func (s *Service) publicWorks(items []model.PlazaWork, viewerID string) ([]Publi
 		}
 		if item.CoverAssetID != "" {
 			view.CoverURL = plazaAssetURL(item.ID, item.CoverAssetID)
+		} else if strings.TrimSpace(item.CoverExternalURL) != "" {
+			view.CoverURL = strings.TrimSpace(item.CoverExternalURL)
 		}
 		if item.WatchAssetID != "" && item.AllowWatch {
 			view.WatchURL = plazaAssetURL(item.ID, item.WatchAssetID)
+		} else if item.AllowWatch && strings.TrimSpace(item.WatchExternalURL) != "" {
+			view.WatchURL = strings.TrimSpace(item.WatchExternalURL)
 		}
 		if author, ok := users[item.AuthorID]; ok {
 			view.Author = publicAuthor(author, identities[author.ID])

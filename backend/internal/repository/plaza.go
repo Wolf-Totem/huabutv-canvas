@@ -255,3 +255,54 @@ func (r *Repository) CreatePlazaLike(like *model.PlazaLike) (bool, error) {
 func (r *Repository) DeletePlazaLike(workID, userID string) error {
 	return r.db.Delete(&model.PlazaLike{}, "work_id = ? AND user_id = ?", workID, userID).Error
 }
+
+func (r *Repository) FirstAdmin() (*model.User, error) {
+	var user model.User
+	if err := r.db.Where("role = ?", model.UserRoleAdmin).Order("created_at asc").First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *Repository) DeleteImportedPlazaWorks() (int, error) {
+	var works []model.PlazaWork
+	if err := r.db.Where("source_project_id LIKE ?", "ext:%").Find(&works).Error; err != nil {
+		return 0, err
+	}
+	if len(works) == 0 {
+		return 0, nil
+	}
+	ids := make([]string, 0, len(works))
+	for _, work := range works {
+		ids = append(ids, work.ID)
+	}
+	err := r.Transaction(func(tx *Repository) error {
+		if err := tx.db.Where("work_id IN ?", ids).Delete(&model.PlazaLike{}).Error; err != nil {
+			return err
+		}
+		if err := tx.db.Where("work_id IN ?", ids).Delete(&model.PlazaEvent{}).Error; err != nil {
+			return err
+		}
+		if err := tx.db.Where("work_id IN ?", ids).Delete(&model.PlazaWorkTag{}).Error; err != nil {
+			return err
+		}
+		var snapshots []model.PlazaSnapshot
+		if err := tx.db.Where("work_id IN ?", ids).Find(&snapshots).Error; err != nil {
+			return err
+		}
+		snapshotIDs := make([]string, 0, len(snapshots))
+		for _, snapshot := range snapshots {
+			snapshotIDs = append(snapshotIDs, snapshot.ID)
+		}
+		if len(snapshotIDs) > 0 {
+			if err := tx.db.Where("snapshot_id IN ?", snapshotIDs).Delete(&model.PlazaSnapshotAsset{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.db.Where("work_id IN ?", ids).Delete(&model.PlazaSnapshot{}).Error; err != nil {
+			return err
+		}
+		return tx.db.Where("id IN ?", ids).Delete(&model.PlazaWork{}).Error
+	})
+	return len(works), err
+}

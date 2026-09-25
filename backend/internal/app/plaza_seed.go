@@ -1,10 +1,12 @@
 package app
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/auth"
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/plaza"
 )
@@ -21,7 +23,12 @@ type PlazaExternalSeedItem struct {
 type PlazaSeedReport struct {
 	Imported int      `json:"imported"`
 	Failed   int      `json:"failed"`
+	Reset    int      `json:"reset,omitempty"`
 	Errors   []string `json:"errors,omitempty"`
+}
+
+func (s *Service) ResetImportedPlazaWorks() (int, error) {
+	return s.repo.DeleteImportedPlazaWorks()
 }
 
 func (s *Service) AdminSeedPlazaExternal(actor *model.User, items []PlazaExternalSeedItem) (*PlazaSeedReport, error) {
@@ -33,11 +40,21 @@ func (s *Service) AdminSeedPlazaExternal(actor *model.User, items []PlazaExterna
 
 func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem) (*PlazaSeedReport, error) {
 	report := &PlazaSeedReport{}
+	adminID := ""
+	if admin, err := s.repo.FirstAdmin(); err == nil && admin != nil {
+		adminID = admin.ID
+	}
 	for _, item := range items {
+		if report.Imported >= 80 {
+			break
+		}
 		item.UUID = strings.TrimSpace(item.UUID)
 		item.Slug = strings.TrimSpace(item.Slug)
 		item.Title = strings.TrimSpace(item.Title)
 		item.AuthorID = strings.TrimSpace(item.AuthorID)
+		if item.AuthorID == "" || item.AuthorID == "plaza-demo" {
+			item.AuthorID = adminID
+		}
 		if item.AuthorID == "" {
 			item.AuthorID = "plaza-demo"
 		}
@@ -64,6 +81,11 @@ func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem) (*PlazaSeedRe
 			item.Title = name
 		}
 		doc := canvasDocumentFromLibTV(item.Title, imported)
+		if err := s.saveImportedCanvasProject(item.AuthorID, item.Title, doc); err != nil {
+			report.Failed++
+			report.Errors = append(report.Errors, item.Slug+": "+err.Error())
+			continue
+		}
 		if err := s.plazaDomain().SaveImportedDocument(plaza.ExternalSeedItem{
 			UUID: item.UUID, Slug: item.Slug, Title: item.Title, Subtitle: item.Subtitle,
 			CategoryID: item.CategoryID, AuthorID: item.AuthorID,
@@ -75,6 +97,31 @@ func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem) (*PlazaSeedRe
 		report.Imported++
 	}
 	return report, nil
+}
+
+func (s *Service) saveImportedCanvasProject(userID, title string, doc map[string]any) error {
+	userID = strings.TrimSpace(userID)
+	if userID == "" || userID == "plaza-demo" {
+		return nil
+	}
+	now := time.Now()
+	id := kernel.StringValue(doc["id"])
+	if id == "" {
+		id = kernel.NewID()
+		doc["id"] = id
+	}
+	payload, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	return s.repo.UpsertCanvasProject(&model.CanvasProject{
+		ID:          id,
+		UserID:      userID,
+		Title:       title,
+		PayloadJSON: string(payload),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
 }
 
 func canvasDocumentFromLibTV(title string, imported *auth.LibTVImportResult) map[string]any {

@@ -33,6 +33,19 @@ func runPlazaSeed(_ context.Context) error {
 	repo := repository.New(db)
 	svc := service.New(repo, dataDir)
 	defer svc.Close()
+	resetImported := false
+	for _, arg := range os.Args[2:] {
+		if arg == "--reset-imported" {
+			resetImported = true
+		}
+	}
+	if resetImported {
+		removed, err := svc.ResetImportedPlazaWorks()
+		if err != nil {
+			return fmt.Errorf("清理导入作品失败: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "reset imported plaza works: %d\n", removed)
+	}
 	decoder := json.NewDecoder(os.Stdin)
 	var items []app.PlazaExternalSeedItem
 	if err := decoder.Decode(&items); err != nil {

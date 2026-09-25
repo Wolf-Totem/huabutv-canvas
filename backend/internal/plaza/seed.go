@@ -17,6 +17,8 @@ type ExternalSeedItem struct {
 	Subtitle   string
 	CategoryID string
 	AuthorID   string
+	CoverURL   string
+	WatchURL   string
 }
 
 func (s *Service) SaveImportedDocument(item ExternalSeedItem, doc map[string]any) error {
@@ -68,6 +70,13 @@ func (s *Service) SaveImportedDocument(item ExternalSeedItem, doc map[string]any
 	work.ListedAt = &listed
 	work.UpdatedAt = now
 	work.Score = workScore(work)
+	cover, watch := importedCoverWatch(item, doc)
+	if cover != "" {
+		work.CoverExternalURL = cover
+	}
+	if watch != "" {
+		work.WatchExternalURL = watch
+	}
 	return s.repo.Transaction(func(tx *repository.Repository) error {
 		if err := tx.Save(work); err != nil {
 			return err
@@ -77,6 +86,34 @@ func (s *Service) SaveImportedDocument(item ExternalSeedItem, doc map[string]any
 		}
 		return tx.ReplacePlazaWorkTags(work.ID, []string{item.CategoryID})
 	})
+}
+
+func importedCoverWatch(item ExternalSeedItem, doc map[string]any) (string, string) {
+	cover := strings.TrimSpace(item.CoverURL)
+	watch := strings.TrimSpace(item.WatchURL)
+	rawNodes, _ := doc["nodes"].([]any)
+	for _, raw := range rawNodes {
+		node, _ := raw.(map[string]any)
+		meta, _ := node["metadata"].(map[string]any)
+		content := strings.TrimSpace(kernel.StringValue(meta["content"]))
+		if content == "" || !strings.HasPrefix(content, "http") {
+			continue
+		}
+		switch kernel.StringValue(node["type"]) {
+		case "image":
+			if cover == "" {
+				cover = content
+			}
+		case "video":
+			if watch == "" {
+				watch = content
+			}
+			if cover == "" {
+				cover = content
+			}
+		}
+	}
+	return cover, watch
 }
 
 func importedMediaCount(doc map[string]any) int {

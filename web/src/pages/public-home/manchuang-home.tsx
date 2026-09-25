@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { LANDING_NAV, mergeManchuangLanding, type LandingRailCard } from "@/lib/manchuang-landing";
+import { LANDING_NAV, mergeManchuangLanding, type LandingHeroShowcase, type LandingRailCard } from "@/lib/manchuang-landing";
 import { ossProcessedImage } from "@/lib/oss-image";
 import { DEFAULT_HOME_CTA_HREF, DEFAULT_HOME_CTA_LABEL } from "@/lib/home-navigation";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
@@ -212,9 +212,17 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                         <p className="mc-hero-lead">{landing.heroLead}</p>
                     </div>
                 </div>
-                <div className="mc-hero-cta-pin">
-                    <button type="button" className="mc-btn mc-btn-primary mc-hero-cta" onClick={() => openWorkspace(ctaHref.startsWith("/") ? ctaHref : "/create")}>{ctaLabel}</button>
-                </div>
+                <HeroShowcase
+                    showcase={landing.heroShowcase}
+                    onOpen={(href) => {
+                        if (!href) return;
+                        if (href.startsWith("http://") || href.startsWith("https://")) {
+                            window.open(href, "_blank", "noopener,noreferrer");
+                            return;
+                        }
+                        openWorkspace(href.startsWith("/") ? href : "/create");
+                    }}
+                />
                 <HeroRail items={landing.rail} onOpen={(id) => openWorkspace(`/plaza/${encodeURIComponent(id)}`)} />
             </section>
 
@@ -327,6 +335,78 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                     ))}
                 </div>
             </section>
+        </div>
+    );
+}
+
+function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onOpen: (href: string) => void }) {
+    const banners = showcase.banners || [];
+    const [index, setIndex] = useState(0);
+    const count = banners.length;
+    const go = (next: number) => {
+        if (!count) return;
+        setIndex(((next % count) + count) % count);
+    };
+    useEffect(() => {
+        if (count < 2) return;
+        const timer = window.setInterval(() => go(index + 1), 5000);
+        return () => window.clearInterval(timer);
+    }, [count, index]);
+    const at = (offset: number) => (count ? banners[((index + offset) % count + count) % count] : null);
+    const prev = at(-1);
+    const current = at(0);
+    const next = at(1);
+    return (
+        <div className="mc-hero-showcase">
+            <div className="mc-hero-banners">
+                {prev && count > 1 ? (
+                    <button type="button" className="mc-hero-banner is-side is-left" onClick={() => onOpen(prev.href)}>
+                        <img src={ossProcessedImage(prev.imageUrl, 720) || prev.imageUrl} alt="" />
+                    </button>
+                ) : null}
+                {current ? (
+                    <button type="button" className="mc-hero-banner is-main" onClick={() => onOpen(current.href)}>
+                        <img src={ossProcessedImage(current.imageUrl, 1200) || current.imageUrl} alt={current.title} />
+                        {current.title ? <span>{current.title}</span> : null}
+                    </button>
+                ) : null}
+                {next && count > 1 ? (
+                    <button type="button" className="mc-hero-banner is-side is-right" onClick={() => onOpen(next.href)}>
+                        <img src={ossProcessedImage(next.imageUrl, 720) || next.imageUrl} alt="" />
+                    </button>
+                ) : null}
+                {count > 1 ? (
+                    <>
+                        <button type="button" className="mc-hero-banner-nav is-prev" aria-label="上一张" onClick={() => go(index - 1)}>‹</button>
+                        <button type="button" className="mc-hero-banner-nav is-next" aria-label="下一张" onClick={() => go(index + 1)}>›</button>
+                    </>
+                ) : null}
+            </div>
+            {count > 1 ? (
+                <div className="mc-hero-banner-dots">
+                    {banners.map((item, dot) => (
+                        <button key={item.id || String(dot)} type="button" className={dot === index ? "is-on" : undefined} aria-label={item.title} onClick={() => setIndex(dot)} />
+                    ))}
+                </div>
+            ) : null}
+            <div className="mc-hero-actions">
+                <button type="button" className="mc-hero-create" onClick={() => onOpen(showcase.create.href || "/create")}>
+                    <span className="mc-hero-create-plus">+</span>
+                    <span>
+                        <strong>{showcase.create.title}</strong>
+                        <em>{showcase.create.subtitle}</em>
+                    </span>
+                </button>
+                <div className="mc-hero-tiles">
+                    {showcase.tiles.map((tile) => (
+                        <button key={tile.id} type="button" className="mc-hero-tile" onClick={() => onOpen(tile.href)}>
+                            {tile.badge ? <b>{tile.badge}</b> : null}
+                            <strong>{tile.title}</strong>
+                            <em>{tile.subtitle}</em>
+                        </button>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }
