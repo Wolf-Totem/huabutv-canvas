@@ -125,7 +125,20 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         });
         resize();
 
+        let flowFrame = 0;
+        const tickFlow = () => {
+            flowFrame = window.requestAnimationFrame(tickFlow);
+            const liveOverlay = overlayRef.current;
+            if (!liveOverlay?.draft.visible) return;
+            if (container.dataset.canvasViewportInteracting === "true") return;
+            if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+            const current = Number(liveOverlay.draft.dashOffset || 0);
+            liveOverlay.draft.dashOffset = (current - 2.4) % 134;
+        };
+        flowFrame = window.requestAnimationFrame(tickFlow);
+
         return () => {
+            window.cancelAnimationFrame(flowFrame);
             unsubscribe();
             unsubscribeSelection();
             unsubscribeNodeDrag();
@@ -344,7 +357,8 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
             ),
             stroke: props.theme.accent.primary,
             strokeCap: "round",
-            opacity: 0.72,
+            dashPattern: [16, 118],
+            opacity: 0.84,
         });
     }
 
@@ -364,8 +378,8 @@ function syncOverlayContent(scene: OverlayScene, props: CanvasLeaferGraphicsLaye
             strokeWidth: 1.4,
             strokeScaleFixed: true,
             strokeCap: "round",
-            dashPattern: [8, 8],
-            opacity: 0.72,
+            dashPattern: [16, 118],
+            opacity: 0.84,
             hittable: false,
         }));
     });
@@ -399,7 +413,7 @@ function syncViewport(viewport: ViewportTransform, width: number, height: number
         dashPattern: [4 / scale, 4 / scale],
         opacity: 0.68,
     });
-    overlay.draft.set({ strokeWidth: 1.4 / scale, dashPattern: [8 / scale, 8 / scale] });
+    overlay.draft.set({ strokeWidth: 2.2 / scale, dashPattern: [16 / scale, 118 / scale] });
     overlay.guides.set({
         visible: typeof props.alignmentGuides.vertical === "number" || typeof props.alignmentGuides.horizontal === "number",
         path: guidePath(viewport, width, height, props.alignmentGuides),

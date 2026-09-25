@@ -161,10 +161,45 @@ func TestAdaptLibTVDetailGeneratesDistinctBatchIDs(t *testing.T) {
 	}
 }
 
+func TestAdaptLibTVDetailKeepsTextNodesSoConnectionsSurvive(t *testing.T) {
+	detail := &libTVDetail{NodeList: []libTVRawNode{
+		{
+			NodeKey: "note-1",
+			Name:    "分镜说明",
+			Data:    `{"type":"text","params":{"prompt":"角色从左入画"}}`,
+			Position: struct {
+				X string `json:"positionX"`
+				Y string `json:"positionY"`
+			}{X: "10", Y: "20"},
+		},
+		{
+			NodeKey: "image-1",
+			Data:    `{"type":"image","url":["https://example.com/image.png"]}`,
+			Position: struct {
+				X string `json:"positionX"`
+				Y string `json:"positionY"`
+			}{X: "400", Y: "20"},
+		},
+	}, ConnectionList: []libTVRawConnection{
+		{ConnectionID: "edge-1", Source: "note-1", Target: "image-1"},
+	}}
+
+	result, err := adaptLibTVDetail(detail)
+	if err != nil {
+		t.Fatalf("adaptLibTVDetail() error = %v", err)
+	}
+	if result.ImportedNodeCount != 2 || result.ImportedConnectionCount != 1 {
+		t.Fatalf("counts = (%d, %d), want (2, 1)", result.ImportedNodeCount, result.ImportedConnectionCount)
+	}
+	if result.Nodes[0].Type != "text" || result.Nodes[0].Content != "角色从左入画" {
+		t.Fatalf("text node = %#v", result.Nodes[0])
+	}
+}
+
 func TestAdaptLibTVDetailRejectsCanvasWithoutImportableNodes(t *testing.T) {
 	detail := &libTVDetail{NodeList: []libTVRawNode{{
-		NodeKey: "unsupported",
-		Data:    `{"type":"text","url":[]}`,
+		NodeKey: "",
+		Data:    `{"type":"image","url":[]}`,
 	}}}
 
 	if _, err := adaptLibTVDetail(detail); err == nil {

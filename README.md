@@ -15,6 +15,8 @@
 
 画布TV 是面向影视与短剧创作的在线画布：用自由画布组织灵感，用结构化工作流管理剧本、角色、场景和分镜，并通过统一任务系统完成图片、视频、音频与文本生成。
 
+本项目基于 [ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)（影策）二次开发，上游版权与署名见 [NOTICE](NOTICE) 与 [LICENSE](LICENSE)。
+
 > 项目仍在快速迭代。生产环境请按部署文档配置存储、渠道和访问控制后再对外开放。
 
 官网：[https://canvas.j11.net](https://canvas.j11.net)
@@ -177,17 +179,9 @@ cd backend && go test ./...
 cd docs && bun run types:check
 ```
 
-## 交流与反馈
-
-Issue 反馈、技术讨论和产品升级建议可以在微信交流群中沟通；群内也会不定期组织 AI 学习与培训交流会。
-
-<p align="center">
-  <img src="assets/wx.jpg" alt="画布TV 微信交流群" width="100%">
-</p>
-
 ## 许可证和上游
 
-本项目采用 [MIT](LICENSE) 协议。画布TV 在开源画布项目基础上二次开发，上游作者和贡献者保留其对应代码的权利与署名，详见 [NOTICE](NOTICE)。
+本项目采用 [MIT](LICENSE) 协议。画布TV 基于 [ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)（影策）二次开发；影策本身基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本。上游作者和贡献者保留其对应代码的权利与署名，完整声明见 [NOTICE](NOTICE)。
 
 ---
 

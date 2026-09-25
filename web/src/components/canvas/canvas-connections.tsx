@@ -35,11 +35,12 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     const emphasized = active || hovered;
     const showVisual = !hideVisual && (visualMode === "full" || hovered);
     const showEmphasis = !hideVisual && emphasized;
+    const showFlow = !hideVisual;
     const gradientId = `canvas-flow-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
     return (
         <g>
-            {showEmphasis ? <defs>
+            {showFlow ? <defs>
                 <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={startX} y1={startY} x2={endX} y2={endY}>
                     <stop offset="0%" stopColor={theme.node.muted} stopOpacity={0.18} />
                     <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={0.58} />
@@ -111,7 +112,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? 0.9 : 0.72} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
                 <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? 0.9 : 0.72} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
             </> : null}
-            {showVisual && emphasized ? <path
+            {showFlow ? <path
                 className="canvas-connection-flow"
                 d={pathD}
                 stroke={`url(#${gradientId})`}
@@ -126,7 +127,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             /> : null}
             {/* 流光：一小段高亮沿路径跑。周期与虚线流动刻意不同（2.1s vs 1.25s），
                 两者错拍才像有光在走；同频会锁成一条整体平移的虚线。 */}
-            {showEmphasis ? <path
+            {showFlow ? <path
                 className="canvas-connection-comet"
                 d={pathD}
                 stroke={`url(#${gradientId}-comet)`}

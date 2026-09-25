@@ -60,8 +60,8 @@ func adaptLibTVDetail(detail *libTVDetail) (*LibTVImportResult, error) {
 			// 风格素材没有普通生成 URL，但有可复用封面时可以降级为宿主图片参考节点。
 			kind = "image"
 		} else if kind != "image" && kind != "video" {
-			result.SkippedNodes = append(result.SkippedNodes, LibTVImportIssue{ID: nodeKey, Name: raw.Name, Reason: "暂不支持的节点类型"})
-			continue
+			// 文本、分组等仍要进画布，否则连线两端对不上，流程图会丢光。
+			kind = "text"
 		}
 		mediaURL, mediaIndex := firstLibTVMediaURL(data.URL)
 		if mediaURL == "" && sourceType == "material-style" {
@@ -116,7 +116,10 @@ func adaptLibTVDetail(detail *libTVDetail) (*LibTVImportResult, error) {
 			}
 		}
 		item.MimeType = inferMediaMime(kind, mediaURL)
-		if mediaURL == "" {
+		if kind == "text" && mediaURL == "" {
+			item.Content = kernel.FirstNonEmpty(item.Prompt, strings.TrimSpace(data.StyleName), item.Title)
+		}
+		if mediaURL == "" && kind != "text" {
 			result.PlaceholderNodeCount++
 			if taskStatus == 3 {
 				// 没有历史结果的失败节点仍保留拓扑，并以失败占位状态呈现。

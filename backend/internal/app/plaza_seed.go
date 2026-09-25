@@ -55,6 +55,11 @@ func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem) (*PlazaSeedRe
 			report.Errors = append(report.Errors, item.Slug+": "+err.Error())
 			continue
 		}
+		if imported.ImportedNodeCount < 4 || imported.ImportedConnectionCount < 1 {
+			report.Failed++
+			report.Errors = append(report.Errors, item.Slug+": 流程图不完整（需要至少 4 个节点和 1 条连线）")
+			continue
+		}
 		if name := strings.TrimSpace(imported.ProjectName); name != "" && (item.Title == "" || item.Title == item.UUID || len([]rune(item.Title)) <= 8) {
 			item.Title = name
 		}
@@ -78,6 +83,8 @@ func canvasDocumentFromLibTV(title string, imported *auth.LibTVImportResult) map
 		kind := "image"
 		if strings.EqualFold(node.Type, "video") {
 			kind = "video"
+		} else if strings.EqualFold(node.Type, "text") {
+			kind = "text"
 		}
 		nodes = append(nodes, map[string]any{
 			"id":       node.ID,
