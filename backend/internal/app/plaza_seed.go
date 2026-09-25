@@ -72,9 +72,9 @@ func (s *Service) SeedPlazaExternal(items []PlazaExternalSeedItem) (*PlazaSeedRe
 			report.Errors = append(report.Errors, item.Slug+": "+err.Error())
 			continue
 		}
-		if imported.ImportedNodeCount < 4 || imported.ImportedConnectionCount < 1 {
+		if imported.ImportedNodeCount < 3 && imported.ImportedConnectionCount < 1 {
 			report.Failed++
-			report.Errors = append(report.Errors, item.Slug+": 流程图不完整（需要至少 4 个节点和 1 条连线）")
+			report.Errors = append(report.Errors, item.Slug+": 流程图不完整")
 			continue
 		}
 		if name := strings.TrimSpace(imported.ProjectName); name != "" && (item.Title == "" || item.Title == item.UUID || len([]rune(item.Title)) <= 8) {
