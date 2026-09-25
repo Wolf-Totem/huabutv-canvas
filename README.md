@@ -1,25 +1,23 @@
 <p align="center">
-  <img src="web/public/logo.svg" width="88" alt="影策 logo">
+  <img src="web/public/logo.png" width="96" alt="画布TV logo">
 </p>
 
-<h1 align="center">影策</h1>
+<h1 align="center">画布TV</h1>
 
-<p align="center">让一个故事，从文字走向银幕</p>
+<p align="center">AI 影视与短剧创作工作台 · 绘无限 造未来</p>
 
 <p align="center">
-  <a href="https://github.com/ddcat-ai/open-ai-canvas">GitHub</a> ·
+  <a href="https://github.com/hyc0122/huabutv-canvas">GitHub</a> ·
+  <a href="https://canvas.j11.net">官网</a> ·
   <a href="docs/content/docs/overview/features.mdx">功能</a> ·
-  <a href="docs/content/docs/overview/quick-start.mdx">文档</a> ·
-  <a href="SECURITY.md">安全策略</a>
+  <a href="docs/content/docs/overview/quick-start.mdx">文档</a>
 </p>
 
-影策是一个开源的 AI 影视与短剧创作工作台：用自由画布组织创作，用结构化工作流管理剧本、角色、场景和分镜，并通过统一的任务系统完成图片、视频、音频与文本生成。
+画布TV 是面向影视与短剧创作的在线画布：用自由画布组织灵感，用结构化工作流管理剧本、角色、场景和分镜，并通过统一任务系统完成图片、视频、音频与文本生成。
 
-> 项目仍在快速开发，数据结构和外部接口可能调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
+> 项目仍在快速迭代。生产环境请按部署文档配置存储、渠道和访问控制后再对外开放。
 
-在线演示：[https://ddcat.pronhubcn.com](https://ddcat.pronhubcn.com)
-
-账号/密码：test/test123456
+官网：[https://canvas.j11.net](https://canvas.j11.net)
 
 ## 核心能力
 
@@ -44,8 +42,8 @@
 ### 宿主机启动
 
 ```bash
-git clone https://github.com/ddcat-ai/open-ai-canvas.git
-cd open-ai-canvas
+git clone https://github.com/hyc0122/huabutv-canvas.git
+cd huabutv-canvas
 
 # 使用 Git 忽略的目录保存本地开发数据和缓存
 mkdir -p .local/project-workbench-debug .local/cache/go-build .local/cache/go-mod
@@ -116,7 +114,7 @@ docker compose -f docker-compose.local.yml up -d --build
 适用于 Linux 云服务器。脚本会安装 Docker、拉取源码、生成受保护的 `.env`，并启动 PostgreSQL、Redis、后端和网页：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/hyc0122/huabutv-canvas/main/scripts/install-server.sh | sudo bash
 ```
 
 默认访问 `http://服务器IP:3000`。更新或排查：
@@ -134,7 +132,7 @@ sudo docker compose --env-file .env \
 不需要源码时，可使用镜像部署脚本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/hyc0122/huabutv-canvas/main/scripts/install-server-image.sh | sudo bash
 ```
 
 生产环境请在 `/opt/open-ai-canvas/.env` 中将 `CANVAS_IMAGE_TAG` 固定为具体 Release，不要使用 `latest`。更新流程、数据库迁移、备份和回退说明见[系统更新文档](docs/content/docs/backend/system-update.mdx)。
@@ -184,18 +182,18 @@ cd docs && bun run types:check
 Issue 反馈、技术讨论和产品升级建议可以在微信交流群中沟通；群内也会不定期组织 AI 学习与培训交流会。
 
 <p align="center">
-  <img src="assets/wx.jpg" alt="影策 微信交流群" width="100%">
+  <img src="assets/wx.jpg" alt="画布TV 微信交流群" width="100%">
 </p>
 
 ## 许可证和上游
 
-本项目采用 [MIT](LICENSE) 协议。影策基于 [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas) 的早期版本进行二次开发，上游作者和贡献者保留其对应代码的权利与署名。
+本项目采用 [MIT](LICENSE) 协议。画布TV 在开源画布项目基础上二次开发，上游作者和贡献者保留其对应代码的权利与署名，详见 [NOTICE](NOTICE)。
 
 ---
 
 ## 赞助商
 
-感谢以下赞助商对影策项目的支持：
+感谢以下赞助商对画布TV 项目的支持：
 
 | LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
 | --- | --- | --- | --- | --- |
