@@ -42,6 +42,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
         [appearance.landing, appearance.landingVideoUrl, heroVideoUrl, heroPosterUrl],
     );
     const gateRef = useRef<HTMLDivElement>(null);
+    const heroVideoRef = useRef<HTMLVideoElement>(null);
     const [activeCap, setActiveCap] = useState(0);
     const [solidNav, setSolidNav] = useState(false);
     const [activeSection, setActiveSection] = useState("top");
@@ -76,6 +77,33 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
             document.body.classList.remove("mc-public-home");
         };
     }, []);
+
+    useEffect(() => {
+        const video = heroVideoRef.current;
+        if (!video || !landing.heroVideoUrl) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            video.pause();
+            return;
+        }
+        let cancelled = false;
+        const tryPlay = () => {
+            if (cancelled || !video.paused) return;
+            void video.play().catch(() => undefined);
+        };
+        tryPlay();
+        video.addEventListener("canplay", tryPlay);
+        video.addEventListener("loadeddata", tryPlay);
+        const onVisible = () => {
+            if (document.visibilityState === "visible") tryPlay();
+        };
+        document.addEventListener("visibilitychange", onVisible);
+        return () => {
+            cancelled = true;
+            video.removeEventListener("canplay", tryPlay);
+            video.removeEventListener("loadeddata", tryPlay);
+            document.removeEventListener("visibilitychange", onVisible);
+        };
+    }, [landing.heroVideoUrl]);
 
     useEffect(() => {
         document.title = `${brand} · 绘无限 造未来`;
@@ -184,7 +212,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
         <div className="mc-gate" ref={gateRef}>
             <section className="mc-hero" id="top">
                 <div className="mc-hero-media" aria-hidden="true">
-                    <video key={landing.heroVideoUrl} className="mc-hero-video" autoPlay muted loop playsInline preload="metadata" poster={landing.heroPosterUrl || undefined}>
+                    <video ref={heroVideoRef} key={landing.heroVideoUrl} className="mc-hero-video" autoPlay muted loop playsInline preload="auto" poster={landing.heroPosterUrl || undefined}>
                         <source src={landing.heroVideoUrl} type="video/mp4" />
                     </video>
                     <span className="mc-hero-media-scrim" />
