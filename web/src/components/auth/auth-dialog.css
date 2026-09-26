@@ -1,3 +1,8 @@
+html.mc-auth-open .ant-message,
+html.mc-auth-open .ant-notification {
+    z-index: 11050 !important;
+}
+
 .portal-auth-overlay {
     position: fixed;
     inset: 0;

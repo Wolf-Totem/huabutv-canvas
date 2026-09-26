@@ -58,6 +58,21 @@ test("homepage login and register dialogs render inside the public router", asyn
     expect(workspaceRouter).toContain("<Outlet />");
 });
 
+test("register form submits by click with visible errors above the auth overlay", async () => {
+    const [register, css] = await Promise.all([
+        Bun.file(new URL("../src/pages/auth/register.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/components/auth/auth-dialog.css", import.meta.url)).text(),
+    ]);
+    expect(register).toContain("noValidate");
+    expect(register).toContain('htmlType="button"');
+    expect(register).toContain("onClick={() => void submit()}");
+    expect(register).toContain("setFormError");
+    expect(register).toContain("请填写 6 位邮箱验证码");
+    expect(register).toContain("请填写 6 位短信验证码");
+    expect(css).toContain("html.mc-auth-open .ant-message");
+    expect(css).toContain("z-index: 11050");
+});
+
 test("public shell wraps homepage account menu Query hooks with the shared QueryClient", async () => {
     const { existsSync } = await import("node:fs");
     const { dirname, resolve } = await import("node:path");

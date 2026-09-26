@@ -6,7 +6,7 @@ import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 
 import { canvasWorkspaceURL, isAgentHost, isStreamerMarketingHost } from "@/lib/public-hosts";
-import { getAuthSession, getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode, sendRegistrationSmsCode } from "@/services/api/auth";
+import { getAuthSettings, linuxDOLoginURL, register, sendRegistrationEmailCode, sendRegistrationSmsCode } from "@/services/api/auth";
 import { LinuxDOIcon } from "./auth-scene";
 import { ApiError } from "@/services/api/request";
 import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
@@ -17,6 +17,7 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
     const { i18n } = useTranslation();
     const [params] = useSearchParams();
     const { message } = App.useApp();
+    const dialogNext = useAuthDialogStore((state) => state.next);
     const [settings, setSettings] = useState<AuthSettings | null>(null);
     const [username, setUsername] = useState("");
     const [channel, setChannel] = useState<"email" | "sms">("email");
@@ -32,9 +33,10 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
     const [sendingCode, setSendingCode] = useState(false);
     const [countdown, setCountdown] = useState(0);
     const [registerCountdown, setRegisterCountdown] = useState(0);
+    const [formError, setFormError] = useState("");
     const sending = useRef(false),
         registering = useRef(false);
-    const next = safeNext(params.get("next"));
+    const next = safeNext(params.get("next") || (embedded ? dialogNext : "") || null);
 
     useEffect(() => {
         let cancelled = false;
@@ -87,35 +89,69 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
         }
     };
 
-    const submit = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (registering.current || registerCountdown > 0) return;
-        if (password !== confirmPassword) {
-            message.error("两次输入的密码不一致");
+    const fail = (text: string) => {
+        setFormError(text);
+        message.error(text);
+    };
+
+    const submit = async (event?: FormEvent<HTMLFormElement>) => {
+        event?.preventDefault();
+        if (registering.current || registerCountdown > 0 || disabled) return;
+        const name = username.trim();
+        if (name.length < 3 || name.length > 32) {
+            fail("用户名需要 3-32 位");
             return;
+        }
+        if (password.length < 8) {
+            fail("密码至少 8 位");
+            return;
+        }
+        if (password !== confirmPassword) {
+            fail("两次输入的密码不一致");
+            return;
+        }
+        if (!settings?.firstUser) {
+            if (activeChannel === "sms") {
+                if (!/^1\d{10}$/.test(phone.trim())) {
+                    fail("请输入中国大陆 11 位手机号");
+                    return;
+                }
+                if (requireCode && smsCode.trim().length !== 6) {
+                    fail("请填写 6 位短信验证码");
+                    return;
+                }
+            } else {
+                if (!email.trim() || !email.includes("@")) {
+                    fail("请填写有效邮箱");
+                    return;
+                }
+                if (requireCode && emailCode.trim().length !== 6) {
+                    fail("请填写 6 位邮箱验证码");
+                    return;
+                }
+            }
         }
         registering.current = true;
         setSubmitting(true);
+        setFormError("");
         try {
             await register(
                 activeChannel === "sms"
-                    ? { username, phone, smsCode, channel: "sms", displayName, password, inviteCode: inviteCode.trim() || undefined }
-                    : { username, email, emailCode, channel: "email", displayName, password, inviteCode: inviteCode.trim() || undefined },
+                    ? { username: name, phone: phone.trim(), smsCode: smsCode.trim(), channel: "sms", displayName, password, inviteCode: inviteCode.trim() || undefined }
+                    : { username: name, email: email.trim(), emailCode: emailCode.trim(), channel: "email", displayName, password, inviteCode: inviteCode.trim() || undefined },
             );
-            const { applyUserSession } = await import("@/lib/user-session");
-            await applyUserSession(await getAuthSession());
             if (!settings?.firstUser) window.sessionStorage.setItem("infinite-canvas:model-setup-guide", "1");
             message.success(settings?.firstUser ? "管理员账号已创建" : "注册成功");
+            useAuthDialogStore.getState().closeAuth();
             if (isAgentHost()) window.location.replace("/agent");
             else if (isStreamerMarketingHost()) window.location.replace(canvasWorkspaceURL());
-            else if (embedded) {
-                useAuthDialogStore.getState().closeAuth();
+            else {
                 const target = next.startsWith("/") ? next : "/";
-                if (target !== `${window.location.pathname}${window.location.search}`) window.location.assign(target);
-            } else window.location.replace(next.startsWith("/") ? next : "/");
+                window.location.assign(target === "/" && embedded ? "/create" : target);
+            }
         } catch (error) {
             if (error instanceof ApiError && error.status === 429) setRegisterCountdown(Math.max(1, Math.ceil((error.retryAfterMs ?? 60000) / 1000)));
-            message.error(error instanceof Error ? error.message : "注册失败");
+            fail(error instanceof Error ? error.message : "注册失败");
         } finally {
             registering.current = false;
             setSubmitting(false);
@@ -141,7 +177,7 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
     const requireCode = Boolean(settings && !settings.firstUser && (activeChannel === "sms" ? settings.smsCodeRequired !== false : settings.emailCodeRequired));
 
     return (
-        <form onSubmit={submit} className="space-y-4">
+        <form noValidate onSubmit={(event) => void submit(event)} className="space-y-4">
             {settings?.firstUser ? (
                 <Notice icon={<Info className="size-3.5" />} tone="blue">
                     首个账号自动成为管理员，验证码暂不要求。
@@ -173,14 +209,15 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
 
             {showChannelTabs ? (
                 <div className="grid grid-cols-2 gap-2">
-                    <Button type={activeChannel === "email" ? "primary" : "default"} onClick={() => setChannel("email")}>
+                    <Button htmlType="button" type={activeChannel === "email" ? "primary" : "default"} onClick={() => setChannel("email")}>
                         邮箱注册
                     </Button>
-                    <Button type={activeChannel === "sms" ? "primary" : "default"} onClick={() => setChannel("sms")}>
+                    <Button htmlType="button" type={activeChannel === "sms" ? "primary" : "default"} onClick={() => setChannel("sms")}>
                         短信注册
                     </Button>
                 </div>
             ) : null}
+            {formError ? <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">{formError}</Notice> : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <AuthField label="用户名">
@@ -220,7 +257,7 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
                                     required
                                     disabled={disabled}
                                 />
-                                <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
+                                <Button htmlType="button" size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
                                     {countdown > 0 ? `${countdown}s` : "获取验证码"}
                                 </Button>
                             </div>
@@ -255,7 +292,7 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
                                     required
                                     disabled={disabled}
                                 />
-                                <Button size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
+                                <Button htmlType="button" size="large" loading={sendingCode} disabled={disabled || countdown > 0} onClick={() => void sendCode()}>
                                     {countdown > 0 ? `${countdown}s` : "获取验证码"}
                                 </Button>
                             </div>
@@ -296,7 +333,7 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
                 </AuthField>
             </div>
 
-            <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={disabled || registerCountdown > 0} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+            <Button type="primary" htmlType="button" size="large" block loading={submitting} disabled={disabled || registerCountdown > 0} icon={<ArrowRight className="size-4" />} iconPlacement="end" onClick={() => void submit()}>
                 {registerCountdown > 0 ? `${registerCountdown} 秒后可重试` : "创建账号"}
             </Button>
             {settings?.linuxdoEnabled ? (
