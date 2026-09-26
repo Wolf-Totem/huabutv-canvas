@@ -1,6 +1,6 @@
 import { StrictMode, Suspense, lazy, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { Navigate, RouterProvider, createBrowserRouter } from "react-router";
+import { Navigate, Outlet, RouterProvider, createBrowserRouter } from "react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { App, ConfigProvider } from "antd";
 import { I18nextProvider } from "react-i18next";
@@ -23,14 +23,28 @@ document.documentElement.dataset.publicShell = "1";
 document.documentElement.classList.add("dark");
 document.documentElement.style.colorScheme = "dark";
 
+function PublicFrame() {
+    return (
+        <>
+            <AuthDialogHost />
+            <Outlet />
+        </>
+    );
+}
+
 const router = createBrowserRouter([
-    { path: "/", element: <GuestHomePage /> },
-    { path: "/login", element: <Navigate to="/?auth=login" replace /> },
-    { path: "/register", element: <Navigate to="/?auth=register" replace /> },
     {
-        element: <AuthScene />,
+        element: <PublicFrame />,
         children: [
-            { path: "/forgot-password", element: <Suspense fallback={null}><ForgotPasswordPage /></Suspense> },
+            { path: "/", element: <GuestHomePage /> },
+            { path: "/login", element: <Navigate to="/?auth=login" replace /> },
+            { path: "/register", element: <Navigate to="/?auth=register" replace /> },
+            {
+                element: <AuthScene />,
+                children: [
+                    { path: "/forgot-password", element: <Suspense fallback={null}><ForgotPasswordPage /></Suspense> },
+                ],
+            },
         ],
     },
 ]);
@@ -67,7 +81,6 @@ function PublicRoot() {
             <QueryClientProvider client={appQueryClient}>
                 <ConfigProvider theme={getAntThemeConfig(true, appearance.activeSkin)}>
                     <App message={{ duration: 3, maxCount: 3 }}>
-                        <AuthDialogHost />
                         <RouterProvider router={router} />
                     </App>
                 </ConfigProvider>

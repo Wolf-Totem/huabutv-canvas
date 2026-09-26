@@ -39,6 +39,25 @@ test("public application does not boot canvas plugins or workspace layout", asyn
     expect(source).not.toContain("AppProviders");
 });
 
+test("homepage login and register dialogs render inside the public router", async () => {
+    const [shell, login, register, workspaceRouter] = await Promise.all([
+        Bun.file(new URL("../src/public-application.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/auth/login.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/auth/register.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/router.tsx", import.meta.url)).text(),
+    ]);
+    expect(login).toContain("useSearchParams");
+    expect(register).toContain("useSearchParams");
+    expect(shell).toContain("function PublicFrame");
+    expect(shell).toContain("<AuthDialogHost />");
+    expect(shell).toContain("<Outlet />");
+    expect(shell.indexOf("function PublicFrame")).toBeLessThan(shell.indexOf("createBrowserRouter(["));
+    expect(shell).toContain("element: <PublicFrame />");
+    expect(workspaceRouter).toContain("function AppFrame");
+    expect(workspaceRouter).toContain("<AuthDialogHost />");
+    expect(workspaceRouter).toContain("<Outlet />");
+});
+
 test("public shell wraps homepage account menu Query hooks with the shared QueryClient", async () => {
     const { existsSync } = await import("node:fs");
     const { dirname, resolve } = await import("node:path");
