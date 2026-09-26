@@ -1,6 +1,7 @@
 import { StrictMode, Suspense, lazy, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { App, ConfigProvider } from "antd";
 import { I18nextProvider } from "react-i18next";
 import "antd/dist/reset.css";
@@ -10,6 +11,7 @@ import { AuthScene } from "@/pages/auth/auth-scene";
 import GuestHomePage from "@/pages/public-home/guest-home";
 import i18n from "@/i18n/config";
 import { getAntThemeConfig } from "@/lib/app-theme";
+import { appQueryClient } from "@/lib/query-client";
 import { getAuthSession } from "@/services/api/auth";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -62,12 +64,14 @@ function PublicRoot() {
 
     return (
         <I18nextProvider i18n={i18n}>
-            <ConfigProvider theme={getAntThemeConfig(true, appearance.activeSkin)}>
-                <App message={{ duration: 3, maxCount: 3 }}>
-                    <AuthDialogHost />
-                    <RouterProvider router={router} />
-                </App>
-            </ConfigProvider>
+            <QueryClientProvider client={appQueryClient}>
+                <ConfigProvider theme={getAntThemeConfig(true, appearance.activeSkin)}>
+                    <App message={{ duration: 3, maxCount: 3 }}>
+                        <AuthDialogHost />
+                        <RouterProvider router={router} />
+                    </App>
+                </ConfigProvider>
+            </QueryClientProvider>
         </I18nextProvider>
     );
 }
