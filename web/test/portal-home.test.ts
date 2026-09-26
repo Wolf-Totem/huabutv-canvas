@@ -22,7 +22,10 @@ test("portal home is the site root for every visitor and create lives at /create
     expect(home).toContain('className="mc-hero-video"');
     expect(home).toContain('preload="auto"');
     expect(home).toContain("heroVideoRef");
+    expect(home).toContain("heroVideoSrc");
     expect(home).toContain("void video.play().catch(() => undefined)");
+    expect(home).toContain("webkit-playsinline");
+    expect(home).toContain("不能跟系统「减少动画」绑在一起");
     expect(home).not.toContain('preload="metadata" poster={landing.heroPosterUrl');
     expect(home).toContain("openAuth({ tab: \"login\" })");
     expect(home).toContain("mc-hero-preview");

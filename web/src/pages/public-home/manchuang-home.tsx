@@ -18,6 +18,20 @@ import "./manchuang-home.css";
 
 const SECTION_IDS = ["product", "solutions", "enterprise", "resources", "pricing"] as const;
 
+function versionedHeroMediaUrl(url: string) {
+    const source = url.trim();
+    if (!source || source.startsWith("blob:") || source.startsWith("data:")) return source;
+    const version = String(import.meta.env.VITE_APP_VERSION || "").trim().replace(/^v/, "");
+    if (!version) return source;
+    try {
+        const parsed = new URL(source, "https://canvas.j11.net");
+        if (parsed.searchParams.has("v")) return source;
+    } catch {
+        return source;
+    }
+    return `${source}${source.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
+}
+
 export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { heroVideoUrl?: string; heroPosterUrl?: string } = {}) {
     const navigate = useNavigate();
     const appearance = useAppearanceStore((state) => state.appearance);
@@ -43,6 +57,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
     );
     const gateRef = useRef<HTMLDivElement>(null);
     const heroVideoRef = useRef<HTMLVideoElement>(null);
+    const heroVideoSrc = versionedHeroMediaUrl(landing.heroVideoUrl);
     const [activeCap, setActiveCap] = useState(0);
     const [solidNav, setSolidNav] = useState(false);
     const [activeSection, setActiveSection] = useState("top");
@@ -80,30 +95,37 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
 
     useEffect(() => {
         const video = heroVideoRef.current;
-        if (!video || !landing.heroVideoUrl) return;
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-            video.pause();
-            return;
-        }
+        if (!video || !heroVideoSrc) return;
+        // 首页成片就是落叶，不能跟系统「减少动画」绑在一起：Chrome 会读这条系统设置并 pause，
+        // 很多系统浏览器不认，于是出现「只有 Chrome 叶子不动」。
+        video.muted = true;
+        video.defaultMuted = true;
+        video.playsInline = true;
+        video.setAttribute("playsinline", "");
+        video.setAttribute("webkit-playsinline", "");
         let cancelled = false;
         const tryPlay = () => {
-            if (cancelled || !video.paused) return;
+            if (cancelled) return;
             void video.play().catch(() => undefined);
         };
         tryPlay();
         video.addEventListener("canplay", tryPlay);
+        video.addEventListener("canplaythrough", tryPlay);
         video.addEventListener("loadeddata", tryPlay);
         const onVisible = () => {
             if (document.visibilityState === "visible") tryPlay();
         };
+        document.addEventListener("pointerdown", tryPlay, { capture: true });
         document.addEventListener("visibilitychange", onVisible);
         return () => {
             cancelled = true;
             video.removeEventListener("canplay", tryPlay);
+            video.removeEventListener("canplaythrough", tryPlay);
             video.removeEventListener("loadeddata", tryPlay);
+            document.removeEventListener("pointerdown", tryPlay, { capture: true });
             document.removeEventListener("visibilitychange", onVisible);
         };
-    }, [landing.heroVideoUrl]);
+    }, [heroVideoSrc]);
 
     useEffect(() => {
         document.title = `${brand} · 绘无限 造未来`;
@@ -212,9 +234,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
         <div className="mc-gate" ref={gateRef}>
             <section className="mc-hero" id="top">
                 <div className="mc-hero-media" aria-hidden="true">
-                    <video ref={heroVideoRef} key={landing.heroVideoUrl} className="mc-hero-video" autoPlay muted loop playsInline preload="auto" poster={landing.heroPosterUrl || undefined}>
-                        <source src={landing.heroVideoUrl} type="video/mp4" />
-                    </video>
+                    <video ref={heroVideoRef} key={heroVideoSrc} className="mc-hero-video" src={heroVideoSrc} autoPlay muted loop playsInline preload="auto" poster={landing.heroPosterUrl || undefined} />
                     <span className="mc-hero-media-scrim" />
                 </div>
                 <header className={solidNav ? "mc-nav is-solid" : "mc-nav"}>
