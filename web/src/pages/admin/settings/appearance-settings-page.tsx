@@ -597,6 +597,34 @@ export default function AppearanceSettingsPage() {
                     >
                         <div className="admin-appearance-section-form space-y-6">
                             <HomepagePicker value={publicHomepage} disabled={saving || refreshing || restoring} onChange={setPublicHomepage} />
+                            <div className="space-y-3">
+                                <div className="admin-appearance-logo-frame-option">
+                                    <div className="admin-appearance-logo-frame-copy">
+                                        <strong>显示底部弧形作品轨</strong>
+                                        <p id="appearance-home-rail-help">漫创首页底部那条弧形作品预览。关闭后首页不再展示，保存后生效。</p>
+                                    </div>
+                                    <div className="admin-appearance-logo-frame-control">
+                                        <span>{landing.railEnabled !== false ? "已显示" : "已隐藏"}</span>
+                                        <Switch
+                                            checked={landing.railEnabled !== false}
+                                            disabled={saving || refreshing || restoring}
+                                            aria-label="显示首页底部弧形作品轨"
+                                            aria-describedby="appearance-home-rail-help"
+                                            onChange={(checked) => setLanding((current) => ({ ...current, railEnabled: checked }))}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-foreground/55">封面用静态图，预览视频只在鼠标悬停时播放。最多 36 条；关闭开关后仍可在这里改内容。</p>
+                                {landing.rail.map((item, index) => (
+                                    <div key={`${item.id}-${index}`} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                                        <Input value={item.label || ""} maxLength={40} placeholder="标题" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, label: event.target.value } : row) }))} />
+                                        <Input value={item.imageUrl} maxLength={500} placeholder="封面图 URL" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, imageUrl: event.target.value } : row) }))} />
+                                        <Input value={item.previewUrl || ""} maxLength={500} placeholder="悬停预览视频 URL" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, previewUrl: event.target.value } : row) }))} />
+                                        <Button type="text" danger disabled={saving || refreshing || restoring || landing.rail.length <= 1} onClick={() => setLanding((current) => ({ ...current, rail: current.rail.filter((_, rowIndex) => rowIndex !== index) }))}>删除</Button>
+                                    </div>
+                                ))}
+                                <Button size="small" disabled={saving || refreshing || restoring || landing.rail.length >= 36} onClick={() => setLanding((current) => ({ ...current, rail: [...current.rail, { id: `featured-${Date.now()}`, imageUrl: "", previewUrl: "", label: "" }] }))}>添加精选画布</Button>
+                            </div>
                             <WelcomeSetting />
                             <IpLocalePromptSetting />
                             <HomeNavSetting
@@ -736,19 +764,6 @@ export default function AppearanceSettingsPage() {
                                 <Form.Item label="创作流说明">
                                     <Input.TextArea value={landing.workflowLead} maxLength={200} rows={2} disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, workflowLead: event.target.value }))} />
                                 </Form.Item>
-                                <div className="space-y-3">
-                                    <strong className="text-sm">精选画布预览</strong>
-                                    <p className="text-xs text-foreground/55">首页底部弧形轨道展示这些画布。封面是静态图，预览视频仅在鼠标悬停时播放（请用压缩后的短视频）。最多 36 条。</p>
-                                    {landing.rail.map((item, index) => (
-                                        <div key={`${item.id}-${index}`} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-                                            <Input value={item.label || ""} maxLength={40} placeholder="标题" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, label: event.target.value } : row) }))} />
-                                            <Input value={item.imageUrl} maxLength={500} placeholder="封面图 URL" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, imageUrl: event.target.value } : row) }))} />
-                                            <Input value={item.previewUrl || ""} maxLength={500} placeholder="悬停预览视频 URL" disabled={saving || refreshing || restoring} onChange={(event) => setLanding((current) => ({ ...current, rail: current.rail.map((row, rowIndex) => rowIndex === index ? { ...row, previewUrl: event.target.value } : row) }))} />
-                                            <Button type="text" danger disabled={saving || refreshing || restoring || landing.rail.length <= 1} onClick={() => setLanding((current) => ({ ...current, rail: current.rail.filter((_, rowIndex) => rowIndex !== index) }))}>删除</Button>
-                                        </div>
-                                    ))}
-                                    <Button size="small" disabled={saving || refreshing || restoring || landing.rail.length >= 36} onClick={() => setLanding((current) => ({ ...current, rail: [...current.rail, { id: `featured-${Date.now()}`, imageUrl: "", previewUrl: "", label: "" }] }))}>添加精选画布</Button>
-                                </div>
                             </div>
                         </div>
                     </SettingsSectionCard>

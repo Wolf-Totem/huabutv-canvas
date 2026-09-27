@@ -41,11 +41,40 @@ test("portal home is the site root for every visitor and create lives at /create
 });
 
 test("home posters copy the reference site landscape billboard not a square", async () => {
-    const css = await Bun.file(new URL("../src/pages/public-home/manchuang-home.css", import.meta.url)).text();
-    expect(css).toContain("aspect-ratio: 5 / 2.8");
-    expect(css).toContain("clamp(340px, 34.72vw, 500px)");
+    const [css, home] = await Promise.all([
+        Bun.file(new URL("../src/pages/public-home/manchuang-home.css", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/public-home/manchuang-home.tsx", import.meta.url)).text(),
+    ]);
+    expect(css).toContain("width: clamp(520px, 46vw, 880px)");
+    expect(css).toContain("aspect-ratio: 21 / 9");
+    expect(css).toContain("grid-template-columns: 1.15fr 1fr");
+    expect(css).toContain("height: 200px");
+    expect(css).toContain("width: 100px");
+    expect(css).toContain("height: 72px");
+    expect(css).not.toContain("aspect-ratio: 16 / 4.4");
+    expect(css).not.toContain("aspect-ratio: 2.1 / 1");
+    expect(css).not.toContain("clamp(240px, 15.6vw, 280px)");
     expect(css).not.toContain("aspect-ratio: 1 / 1");
     expect(css).not.toContain("aspect-ratio: 1;");
+    expect(home).toContain("mc-hero-slide");
+    expect(home).toContain("mc-hero-side-shade");
+    expect(home).toContain("去创作");
+});
+
+test("homepage rail can be hidden from appearance landing settings", async () => {
+    const [home, landing, admin] = await Promise.all([
+        Bun.file(new URL("../src/pages/public-home/manchuang-home.tsx", import.meta.url)).text(),
+        Bun.file(new URL("../src/lib/manchuang-landing.ts", import.meta.url)).text(),
+        Bun.file(new URL("../src/pages/admin/settings/appearance-settings-page.tsx", import.meta.url)).text(),
+    ]);
+    expect(landing).toContain("railEnabled: boolean");
+    expect(landing).toContain("railEnabled: value.railEnabled !== false");
+    expect(home).toContain("landing.railEnabled !== false");
+    expect(home).toContain('data-rail={landing.railEnabled !== false ? "on" : "off"}');
+    expect(admin).toContain("显示底部弧形作品轨");
+    expect(admin).toContain("railEnabled: checked");
+    expect(admin.indexOf("显示底部弧形作品轨")).toBeGreaterThan(admin.indexOf('key: "home"'));
+    expect(admin.indexOf("显示底部弧形作品轨")).toBeLessThan(admin.indexOf("<WelcomeSetting"));
 });
 
 test("home posters are standalone banners not plaza works", async () => {

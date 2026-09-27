@@ -44,6 +44,7 @@ export type ManchuangLanding = {
     pricingLead: string;
     pricingTiers: LandingPricingTier[];
     rail: LandingRailCard[];
+    railEnabled: boolean;
     heroShowcase: LandingHeroShowcase;
 };
 
@@ -120,6 +121,7 @@ export const DEFAULT_MANCHUANG_LANDING: ManchuangLanding = {
         { id: "svip", name: "SVIP", tagline: "为重度创作与商用项目而生", price: "¥68", unit: "/ 月卡", note: "6,888 积分 / 整期", cta: "微信购买 SVIP", featured: true, badge: "最受欢迎", features: ["80 GB 云端存储空间", "解锁全部模型与生成能力", "生成、上传、导出全功能开放", "额度用完可继续叠加积分"] },
     ],
     rail: featuredRail(),
+    railEnabled: true,
     heroShowcase: defaultHeroShowcase(),
 };
 
@@ -135,6 +137,7 @@ export function mergeManchuangLanding(value?: Partial<ManchuangLanding> | null):
         resourceCards: value.resourceCards?.length ? value.resourceCards : base.resourceCards,
         pricingTiers: value.pricingTiers?.length ? value.pricingTiers : base.pricingTiers,
         rail: value.rail?.length ? value.rail : base.rail,
+        railEnabled: value.railEnabled !== false,
         heroShowcase: {
             banners: value.heroShowcase?.banners?.length ? value.heroShowcase.banners.map((banner) => ({
                 ...banner,

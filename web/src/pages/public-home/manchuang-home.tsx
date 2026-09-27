@@ -64,6 +64,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
     const [rail, setRail] = useState<LandingRailCard[]>(landing.rail);
 
     useEffect(() => {
+        if (landing.railEnabled === false) return;
         let active = true;
         listPlazaWorks({ page: 1, pageSize: 40, sort: "hot" })
             .then((list) => {
@@ -82,7 +83,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
         return () => {
             active = false;
         };
-    }, []);
+    }, [landing.railEnabled]);
 
     useLayoutEffect(() => {
         document.documentElement.classList.add("mc-public-home");
@@ -269,7 +270,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                         )}
                     </div>
                 </header>
-                <div className="mc-hero-inner">
+                <div className="mc-hero-inner" data-rail={landing.railEnabled !== false ? "on" : "off"}>
                     <div className="mc-hero-top">
                         <div className="mc-hero-copy">
                             <p className="mc-kicker"><span />{landing.heroKicker}</p>
@@ -293,7 +294,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                         />
                     </div>
                 </div>
-                <HeroRail items={rail} onOpen={(id) => openWorkspace(`/plaza/${encodeURIComponent(id)}`)} />
+                {landing.railEnabled !== false ? <HeroRail items={rail} onOpen={(id) => openWorkspace(`/plaza/${encodeURIComponent(id)}`)} /> : null}
             </section>
 
             <section className="mc-section mc-canvas" id="product">
@@ -449,7 +450,8 @@ function BannerCard({ item, className, onOpen }: { item: { title: string; imageU
         >
             <img src={heroImageSrc(item.imageUrl, className.includes("is-main") ? 1400 : 800)} alt={item.title} />
             {item.previewUrl ? <video ref={videoRef} className="mc-hero-preview" src={item.previewUrl} muted loop playsInline preload="none" /> : null}
-            {className.includes("is-main") && item.title ? <span>{item.title}</span> : null}
+            <span className="mc-hero-side-shade" aria-hidden="true" />
+            {className.includes("is-main") && item.title ? <span className="mc-hero-banner-title">{item.title}</span> : null}
         </button>
     );
 }
@@ -473,11 +475,23 @@ function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onO
     const next = at(1);
     return (
         <div className="mc-hero-showcase">
-            <div className="mc-hero-banner-cluster">
+            <section className="mc-hero-banner-cluster" aria-label="活动轮播">
                 <div className="mc-hero-banners">
-                    {prev && count > 1 ? <BannerCard item={prev} className="is-side is-left" onOpen={onOpen} /> : null}
-                    {current ? <BannerCard item={current} className="is-main" onOpen={onOpen} /> : null}
-                    {next && count > 1 ? <BannerCard item={next} className="is-side is-right" onOpen={onOpen} /> : null}
+                    {prev && count > 1 ? (
+                        <div className="mc-hero-slide is-side is-left">
+                            <BannerCard item={prev} className="is-side is-left" onOpen={onOpen} />
+                        </div>
+                    ) : null}
+                    {current ? (
+                        <div className="mc-hero-slide is-main">
+                            <BannerCard item={current} className="is-main" onOpen={onOpen} />
+                        </div>
+                    ) : null}
+                    {next && count > 1 ? (
+                        <div className="mc-hero-slide is-side is-right">
+                            <BannerCard item={next} className="is-side is-right" onOpen={onOpen} />
+                        </div>
+                    ) : null}
                     {count > 1 ? (
                         <>
                             <button type="button" className="mc-hero-banner-nav is-prev" aria-label="上一张" onClick={() => go(index - 1)}>‹</button>
@@ -492,13 +506,14 @@ function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onO
                         ))}
                     </div>
                 ) : null}
-            </div>
+            </section>
             <div className="mc-hero-actions">
                 <HoverMediaButton
                     className="mc-hero-create"
                     href={showcase.create.href || "/create"}
                     previewUrl={showcase.create.previewUrl}
                     onOpen={onOpen}
+                    followPointer
                 >
                     <span className="mc-hero-create-plus">+</span>
                     <span>
@@ -515,14 +530,23 @@ function HeroShowcase({ showcase, onOpen }: { showcase: LandingHeroShowcase; onO
                             previewUrl={tile.previewUrl}
                             onOpen={onOpen}
                         >
-                            <span>
+                            <span className="mc-hero-tile-glow" aria-hidden="true" />
+                            <span className="mc-hero-tile-shine" aria-hidden="true" />
+                            <span className="mc-hero-tile-visual" aria-hidden="true">
+                                <span className="mc-hero-tile-visual-inner">
+                                    <HeroTileIcon id={tile.id} />
+                                </span>
+                            </span>
+                            <span className="mc-hero-tile-copy">
                                 <span className="mc-hero-tile-title">
                                     <strong>{tile.title}</strong>
                                     {tile.badge ? <b>{tile.badge}</b> : null}
                                 </span>
-                                <em>{tile.subtitle}</em>
+                                <span className="mc-hero-tile-caption">
+                                    <em>{tile.subtitle}</em>
+                                    <i>去创作</i>
+                                </span>
                             </span>
-                            <HeroTileIcon id={tile.id} />
                         </HoverMediaButton>
                     ))}
                 </div>
@@ -536,12 +560,14 @@ function HoverMediaButton({
     href,
     previewUrl,
     onOpen,
+    followPointer,
     children,
 }: {
     className: string;
     href: string;
     previewUrl?: string;
     onOpen: (href: string) => void;
+    followPointer?: boolean;
     children: ReactNode;
 }) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -550,6 +576,13 @@ function HoverMediaButton({
             type="button"
             className={className}
             onClick={() => onOpen(href)}
+            onPointerMove={(event) => {
+                if (!followPointer) return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                if (!rect.width || !rect.height) return;
+                event.currentTarget.style.setProperty("--mx", `${((event.clientX - rect.left) / rect.width) * 100}%`);
+                event.currentTarget.style.setProperty("--my", `${((event.clientY - rect.top) / rect.height) * 100}%`);
+            }}
             onMouseEnter={(event) => {
                 if (!previewUrl) return;
                 event.currentTarget.classList.add("is-playing");
