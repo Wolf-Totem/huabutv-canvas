@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 43
+const CurrentSchemaVersion int64 = 45
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -102,6 +102,8 @@ var schemaMigrations = []migration{
 	{version: 41, name: "plaza_community", checksum: "sha256:plaza-community-v41-20260924", apply: migrateSchemaV41},
 	{version: 42, name: "plaza_external_cover", checksum: "sha256:plaza-external-cover-v42-20260925", apply: migrateSchemaV42},
 	{version: 43, name: "channel_model_cost_pricing", checksum: "sha256:channel-model-cost-pricing-v43-20260925", apply: migrateSchemaV43},
+	{version: 44, name: "builtin_skill_tombstones", checksum: "sha256:builtin-skill-tombstones-v40-20260927", apply: migrateSchemaV44},
+	{version: 45, name: "resource_thumbnail", checksum: "sha256:resource-thumbnail-v41-20260927", apply: migrateSchemaV45},
 }
 
 func acknowledgeExistingSchema(_ *gorm.DB) error {
@@ -110,6 +112,14 @@ func acknowledgeExistingSchema(_ *gorm.DB) error {
 
 func migrateSchemaV42(tx *gorm.DB) error {
 	return tx.AutoMigrate(&model.PlazaWork{})
+}
+
+func migrateSchemaV44(tx *gorm.DB) error {
+	return tx.AutoMigrate(&model.BuiltinSkillTombstone{}, &model.CloudAgentEventRecord{})
+}
+
+func migrateSchemaV45(tx *gorm.DB) error {
+	return tx.AutoMigrate(&model.Resource{})
 }
 
 func migrateSchemaV43(tx *gorm.DB) error {

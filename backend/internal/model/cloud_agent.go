@@ -19,6 +19,15 @@ type CloudAgentExecution struct {
 	UpdatedAt      time.Time
 }
 
+// Journal rows are append-only. Usage aggregation reads these receipts.
+type CloudAgentEventRecord struct {
+	RunID     string `gorm:"primaryKey;size:80"`
+	Sequence  int    `gorm:"primaryKey;autoIncrement:false"`
+	UserID    string `gorm:"index;size:36"`
+	EventJSON string `gorm:"type:text;not null"`
+	CreatedAt time.Time
+}
+
 // CloudAgentCanvasMutation records one atomic canvas change made by an Agent.
 // BeforeJSON is intentionally bounded by the application layer; mutations that
 // cannot retain a safe snapshot are marked not_undoable instead of truncating it.
