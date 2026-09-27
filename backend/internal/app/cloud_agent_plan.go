@@ -237,6 +237,7 @@ func skipRemainingCloudAgentCalls(runID string, state *cloudAgentRuntime) {
 	for index := state.CallIndex + 1; index < len(state.Calls); index++ {
 		cloudAgentToolResult(runID, state, state.Calls[index], map[string]any{"skipped": true}, BadAuthRequest("本轮已结束（等待用户决定），该调用未执行"))
 	}
+	cloudAgentFlushPendingImages(state)
 }
 
 func cloudAgentCanonicalWithPlan(state *cloudAgentRuntime) canonicalAgentRequest {

@@ -28,7 +28,8 @@ import { logicalModelIDForConfig, modelOptionName, resolveModelRequestConfig, se
 import { applyAgentCanvasPatches, refreshCanvasAfterAgent, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { createAgentCanvasSync } from "@/services/agent-canvas-sync";
 import { buildSkillMentionReferences, resolveSkillMentions } from "@/services/skill-runtime";
-import { AgentChatComposer, AgentChatMessage, AgentPlanBar, AgentQuestionBar, AgentWorkingMessage, type CloudAgentChatMessage, type CloudAgentPlanItem } from "./canvas-cloud-agent-chat-ui";
+import { AgentChatComposer, AgentChatMessage, AgentOperationFeed, AgentPlanBar, AgentQuestionBar, AgentWorkingMessage, type CloudAgentChatMessage, type CloudAgentPlanItem } from "./canvas-cloud-agent-chat-ui";
+import { buildAgentFeedSegments } from "@/lib/canvas/agent-operation-feed";
 import { CanvasAgentSkillLibraryModal } from "./canvas-agent-skill-library-modal";
 import { CanvasCloudAgentSettings, agentPermissionLabel, agentPermissionMenuItems, agentPermissionVisual, type AgentContextKey } from "./canvas-cloud-agent-settings";
 import { AgentWelcome } from "./canvas-agent-welcome";
@@ -954,6 +955,8 @@ function AgentConversation({
     const contentRef = useRef<HTMLDivElement>(null);
     const followRef = useRef(true);
     const lastUserId = messages.findLast((item) => item.role === "user")?.id;
+    const segments = useMemo(() => buildAgentFeedSegments(messages), [messages]);
+    const lastMessage = messages.at(-1);
 
     // 自己发送时恢复跟随；阅读旧消息时不让流式输出抢走滚动位置。
     useLayoutEffect(() => {
@@ -982,9 +985,19 @@ function AgentConversation({
         }}>
             {!messages.length ? <AgentWelcome brandName={brandName} nodeCount={nodeCount} categories={skillCategories} onChooseSkill={onChooseSkill} onDraftPrompt={onDraftPrompt} /> : null}
             <div ref={contentRef} className="space-y-2.5">
-                {messages.map((item) => (
-                    <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} isStreaming={busy && !approval && item.streaming === true && item === messages.at(-1)} />
-                ))}
+                {segments.map((segment, index) =>
+                    segment.kind === "operations" ? (
+                        <AgentOperationFeed key={segment.key} items={segment.items} theme={theme} references={references} onFocusNode={onFocusNode} live={busy && index === segments.length - 1} />
+                    ) : segment.kind === "reasoning" ? (
+                        <div key={segment.key}>
+                            {segment.items.map((item) => (
+                                <AgentChatMessage key={item.id} item={item} theme={theme} isStreaming={busy && item.streaming === true && item === lastMessage} />
+                            ))}
+                        </div>
+                    ) : (
+                        <AgentChatMessage key={segment.key} item={segment.item} theme={theme} references={references} onFocusNode={onFocusNode} isStreaming={busy && !approval && segment.item.streaming === true && segment.item === lastMessage} />
+                    ),
+                )}
                 {approval ? <ApprovalCard key={approval.approvalId} approval={approval} theme={theme} submitting={approvalSubmitting} onFocusNode={onFocusNode} onReasonChange={onApprovalReasonChange} onApprove={onApprove} onReject={onReject} /> : null}
                 {busy && !approval ? (
                     <AgentWorkingMessage theme={theme} label="正在处理当前画布" />
@@ -1190,6 +1203,14 @@ function applyAgentEvent(event: AgentEvent, setMessages: Dispatch<SetStateAction
     }
     if (event.type === "progress_summary") {
         setMessages((current) => appendUniqueMessage(current, { id: event.eventId, role: "system", text: text || "Agent 正在整理执行计划" }));
+        return;
+    }
+    if (event.type === "context_compaction_requested") {
+        setMessages((current) => appendUniqueMessage(current, { id: event.eventId, role: "system", text: text || "对话上下文过长，正在压缩历史后再继续" }));
+        return;
+    }
+    if (event.type === "context_compacted") {
+        setMessages((current) => appendUniqueMessage(current, { id: event.eventId, role: "system", text: text || "已压缩历史上下文，本轮继续" }));
         return;
     }
     if (event.type === "assistant_delta") {

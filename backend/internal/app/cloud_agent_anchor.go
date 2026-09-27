@@ -31,6 +31,7 @@ type cloudAgentReferenceAnchor struct {
 	ReferenceReady           bool     `json:"referenceReady"`
 	VisualIdentity           string   `json:"visualIdentity"`
 	RequiresVisualInspection bool     `json:"requiresVisualInspection"`
+	VisualNote               string   `json:"visualNote,omitempty"`
 	Width                    any      `json:"width,omitempty"`
 	Height                   any      `json:"height,omitempty"`
 }

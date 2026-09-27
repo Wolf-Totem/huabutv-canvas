@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 )
 
 var errCloudAgentJSONSingleObject = errors.New("参数必须是单个 JSON 对象")
@@ -14,6 +15,34 @@ var errCloudAgentJSONSingleObject = errors.New("参数必须是单个 JSON 对�
 type cloudAgentArgumentError struct{ error }
 
 func (e *cloudAgentArgumentError) Unwrap() error { return e.error }
+
+type cloudAgentFieldArgumentError struct {
+	error
+	Field string
+	Issue string
+}
+
+func (e *cloudAgentFieldArgumentError) Unwrap() error { return e.error }
+
+func cloudAgentFieldError(field, issue, message string) error {
+	return &cloudAgentFieldArgumentError{
+		error: &cloudAgentArgumentError{BadAuthRequest(message)}, Field: field, Issue: issue,
+	}
+}
+
+func cloudAgentJSONArgumentError(err error) error {
+	message := "工具参数 JSON 格式无效，请按参数规范修正后重试"
+	var typeErr *json.UnmarshalTypeError
+	switch {
+	case errors.Is(err, errCloudAgentJSONSingleObject):
+		message = "工具参数必须是单个 JSON 对象，不能是字符串、数组、null 或多个对象；无参数时传 {}"
+	case errors.As(err, &typeErr):
+		message = "工具参数字段类型不匹配，请按参数规范使用整数、字符串或数组，不要把数字或数组写成字符串"
+	case strings.HasPrefix(err.Error(), "json: unknown field "):
+		message = "工具参数含有不支持的字段，请移除参数规范以外的字段后重试"
+	}
+	return &cloudAgentArgumentError{BadAuthRequest(message)}
+}
 
 func canvasArgumentError() error {
 	return &cloudAgentArgumentError{BadAuthRequest("画布工具参数无效：仅允许一个 JSON 对象；顶层只含 snapshotHash 和 ops，snapshotHash 不得放入 ops。请按工具 schema 修正后重试")}

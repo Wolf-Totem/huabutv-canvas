@@ -8,6 +8,11 @@ describe("Agent tool presentation", () => {
         expect(agentToolCategory("generate_media", { eventType: "generation_task_created" })).toBe("create");
         expect(agentToolCategory("canvas_apply_ops", { eventType: "canvas_updated", actions: [{ action: "updated" }] })).toBe("operate");
         expect(agentToolCategory("canvas_apply_ops", { eventType: "canvas_updated", actions: [{ action: "created" }] })).toBe("create");
+        expect(agentToolCategory("canvas_inspect_image")).toBe("vision");
+        expect(agentToolCategoryLabel("canvas_inspect_image", "vision")).toBe("查看画面");
+        expect(agentToolCategory("canvas_arrange_nodes")).toBe("operate");
+        expect(friendlyAgentToolSummary("canvas_inspect_image", "工具执行成功", { eventType: "tool_completed", result: { nodeId: "n1", title: "剧照" } })).toBe("已附上《剧照》的画面");
+        expect(friendlyAgentToolSummary("canvas_arrange_nodes", "工具执行成功", { eventType: "tool_completed" })).toBe("已整理节点位置");
     });
 
     it("distinguishes media submission from a completed canvas result", () => {

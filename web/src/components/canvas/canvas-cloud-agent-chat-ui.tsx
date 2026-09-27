@@ -1,10 +1,10 @@
 import { agentCanvasActions, agentCanvasActionLabel } from "@/lib/canvas/agent-canvas-actions";
 import { Button } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
-import { motion, useReducedMotion } from "motion/react";
-import { ArrowUp, AtSign, CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, ImagePlus, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Square, X, XCircle } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { ArrowUp, AtSign, CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, ImagePlus, List, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Square, Wrench, X, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -13,7 +13,8 @@ import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textare
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { Skill } from "@/services/api/skills";
 import { buildSkillMentionReferences } from "@/services/skill-runtime";
-import { agentToolCategory, agentToolCategoryLabel, agentToolStatus, friendlyAgentToolSummary } from "@/lib/canvas/agent-tool-presentation";
+import { agentToolCategory, agentToolCategoryLabel, agentToolStatus, friendlyAgentToolSummary, type AgentToolCategory } from "@/lib/canvas/agent-tool-presentation";
+import { agentOperationCategory, agentOperationFailed, agentOperationSegmentLabel } from "@/lib/canvas/agent-operation-feed";
 
 export type CloudAgentChatAttachment = { id: string; name: string; url: string };
 type CloudAgentOperationImpact = {
@@ -71,6 +72,14 @@ export function extractCloudAgentQuickActions(text: string): CloudAgentQuickActi
 const WORKING_TEXT = "正在处理";
 const MIN_AGENT_PROMPT_HEIGHT = 60;
 const MAX_AGENT_PROMPT_HEIGHT = 240;
+
+function agentToolCategoryIcon(category: AgentToolCategory) {
+    if (category === "vision") return <Eye className="size-3.5" />;
+    if (category === "read") return <List className="size-3.5" />;
+    if (category === "create") return <Plus className="size-3.5" />;
+    if (category === "operate") return <Pencil className="size-3.5" />;
+    return <Wrench className="size-3.5" />;
+}
 
 function clampAgentPromptHeight(height: number) {
     return Math.min(MAX_AGENT_PROMPT_HEIGHT, Math.max(MIN_AGENT_PROMPT_HEIGHT, Math.ceil(height)));
@@ -348,6 +357,73 @@ export function AgentToolCard({ title, text, detail, theme, references = [], onF
                 {state.isError && objectField(objectField(detail, "result"), "taskId") ? <span className="mt-1 block break-all" style={{ color: theme.node.muted }}>任务 ID：{String(objectField(objectField(detail, "result"), "taskId"))}</span> : null}
             </div>
             {state.label === "已完成" ? <span className="sr-only">已完成</span> : null}
+        </div>
+    );
+}
+
+export function AgentOperationFeed({
+    items,
+    theme,
+    references = [],
+    onFocusNode,
+    live = false,
+}: {
+    items: CloudAgentChatMessage[];
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    references?: CanvasResourceReference[];
+    onFocusNode?: (nodeId: string) => void;
+    live?: boolean;
+}) {
+    const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
+    const reducedMotion = useReducedMotion();
+    const listId = useId();
+    const latest = items[items.length - 1];
+    if (!latest) return null;
+    const category = agentOperationCategory(latest);
+    const categoryLabel = agentToolCategoryLabel(latest.title || "工具执行", category);
+    const categoryIcon = agentToolCategoryIcon(category);
+    const label = agentOperationSegmentLabel(items);
+    const failed = agentOperationFailed(latest);
+    const expanded = userExpanded ?? failed;
+    const shimmering = live && !failed;
+    return (
+        <div className={`agent-operation-feed${expanded ? " is-open" : ""}${failed ? " is-failed" : ""}${shimmering ? " is-live" : ""}`} data-agent-operation-feed data-agent-category={category}>
+            <button
+                type="button"
+                className="agent-operation-toggle"
+                aria-expanded={expanded}
+                aria-controls={listId}
+                aria-label={`${expanded ? "收起" : "展开"} ${items.length} 步${categoryLabel}记录，最新一步：${label}`}
+                onClick={() => setUserExpanded(!expanded)}
+            >
+                <span className="agent-operation-icon" aria-hidden="true">
+                    {categoryIcon}
+                </span>
+                <span className="agent-operation-kind">
+                    <span>{categoryLabel}</span>
+                </span>
+                <AnimatePresence mode="wait" initial={false}>
+                    <motion.span
+                        key={label}
+                        className="agent-operation-latest"
+                        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 12, filter: "blur(6px)" }}
+                        animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
+                        exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -8, filter: "blur(8px)" }}
+                        transition={reducedMotion ? { duration: 0 } : { duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                        {label}
+                    </motion.span>
+                </AnimatePresence>
+                {items.length > 1 ? <span className="agent-operation-count">{items.length} 步</span> : null}
+                <ChevronDown className="agent-operation-chevron" aria-hidden="true" />
+            </button>
+            {expanded ? (
+                <div id={listId} className="agent-operation-list">
+                    {items.map((item) => (
+                        <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} />
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
 }

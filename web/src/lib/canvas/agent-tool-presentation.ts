@@ -3,11 +3,21 @@ export const AGENT_TOOL_METADATA: Record<string, { summary: string | ((context: 
     canvas_get_state: { summary: "已读取当前画布", failureMessage: "获取画布内容失败" },
     task_get: { summary: "已查询任务状态", failureMessage: "查询任务状态失败" },
     canvas_apply_ops: { summary: ({ pending }) => pending ? "准备更新画布内容" : "画布内容已保存至服务端", failureMessage: "更新画布内容失败" },
+    canvas_arrange_nodes: { summary: ({ pending }) => (pending ? "准备整理节点位置" : "已整理节点位置"), failureMessage: "整理节点位置失败" },
     model_list: { summary: "已获取可用模型", failureMessage: "获取可用模型失败" },
     generate_media: { summary: ({ pending, detail }) => pending ? "准备创建媒体节点并生成" : field(detail, "eventType") === "tool_completed" ? "生成结果已回写画布节点" : "媒体节点已创建，生成任务已提交", failureMessage: "媒体生成未完成" },
+    canvas_inspect_image: {
+        summary: ({ pending, detail }) => {
+            const result = record(field(detail, "result"));
+            const title = typeof result.title === "string" && result.title ? `《${result.title}》` : "该图片";
+            if (result.repeat === true) return "本轮重复查看，只回执文字、未附图";
+            return pending ? `准备查看画面${title}` : `已附上${title}的画面`;
+        },
+        failureMessage: "查看画面失败",
+    },
 };
 
-export type AgentToolCategory = "read" | "create" | "operate";
+export type AgentToolCategory = "read" | "vision" | "create" | "operate";
 
 function record(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -26,8 +36,9 @@ function toolArguments(detail?: unknown) {
  * change or get localized.
  */
 export function agentToolCategory(toolName: string, detail?: unknown): AgentToolCategory {
-    if (["canvas_get_state", "canvas_list_node_types", "model_list", "task_get", "skills_load", "skill_read_file"].includes(toolName)) return "read";
-    if (toolName === "generate_media") return "create";
+    if (toolName === "canvas_inspect_image") return "vision";
+    if (["canvas_get_state", "canvas_list_node_types", "canvas_read_storyboard", "canvas_read_batch_table", "model_list", "task_get", "skills_load", "skill_read_file", "skill_search", "agent_profile_read"].includes(toolName)) return "read";
+    if (toolName === "generate_media" || toolName === "canvas_create_storyboard") return "create";
     if (toolName === "canvas_apply_ops") {
         const actions = record(detail).actions;
         if (Array.isArray(actions) && actions.some((item) => record(item).action === "created" || record(item).action === "generating")) return "create";
@@ -38,9 +49,14 @@ export function agentToolCategory(toolName: string, detail?: unknown): AgentTool
 }
 
 export function agentToolCategoryLabel(toolName: string, category: AgentToolCategory): string {
+    if (category === "vision") return "查看画面";
     if (category === "read") return toolName === "canvas_get_state" ? "读取节点" : "读取信息";
     if (category === "create") return "创建节点";
     return "操作画布";
+}
+
+export function agentToolName(title: string, detail?: unknown): string {
+    return String(field(detail, "toolName") || field(detail, "name") || field(detail, "tool") || title);
 }
 
 type ToolStatus = "completed" | "failed" | "noop" | "rejected" | "pending";

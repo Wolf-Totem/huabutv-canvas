@@ -26,10 +26,56 @@ func cloudAgentObjectChanges(before, after any) []map[string]any {
 	for _, item := range creationMaps(after) {
 		old := previous[stringValue(item["id"])]
 		if !reflect.DeepEqual(old, item) {
-			changes = append(changes, map[string]any{"before": old, "after": item})
+			oldFields, newFields := cloudAgentShrinkChange(old, item)
+			changes = append(changes, map[string]any{"before": oldFields, "after": newFields})
 		}
 	}
 	return changes
+}
+
+var cloudAgentGeometryFields = []string{"position", "width", "height", "zIndex"}
+
+// cloudAgentShrinkChange 把"只动了几何"的节点变更缩成几何增量。
+// 一次整理几十个节点时，完整 before/after 会让单条 canvas_updated 超过 128KiB 上限。
+func cloudAgentShrinkChange(before, after map[string]any) (map[string]any, map[string]any) {
+	if before == nil || after == nil {
+		return before, after
+	}
+	for key, value := range after {
+		if cloudAgentContainsString(cloudAgentGeometryFields, key) {
+			continue
+		}
+		if !reflect.DeepEqual(before[key], value) {
+			return before, after
+		}
+	}
+	for key, value := range before {
+		if cloudAgentContainsString(cloudAgentGeometryFields, key) {
+			continue
+		}
+		if _, exists := after[key]; !exists && value != nil {
+			return before, after
+		}
+	}
+	shrunkBefore := map[string]any{"id": after["id"]}
+	shrunkAfter := map[string]any{"id": after["id"]}
+	for _, key := range cloudAgentGeometryFields {
+		final, hasFinal := after[key]
+		initial, hasInitial := before[key]
+		if !hasFinal && !hasInitial {
+			continue
+		}
+		if reflect.DeepEqual(initial, final) {
+			continue
+		}
+		if hasInitial {
+			shrunkBefore[key] = initial
+		}
+		if hasFinal {
+			shrunkAfter[key] = final
+		}
+	}
+	return shrunkBefore, shrunkAfter
 }
 
 func emitCloudAgentCanvasChange(repo *repository.Repository, runID string, state *cloudAgentRuntime, input cloudAgentMutationInput) error {

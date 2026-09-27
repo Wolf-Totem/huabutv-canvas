@@ -17,7 +17,10 @@ import (
 	"infinite-canvas/backend/internal/model"
 )
 
-const cloudAgentOperation = "cloud_agent"
+const (
+	cloudAgentOperation        = "cloud_agent"
+	cloudAgentContextSourceKey = "agentContextSource"
+)
 
 // A run is one immutable, durable model turn backed by a normal task. Subsequent
 // turns reference the previous run, not a mutable in-memory conversation. This

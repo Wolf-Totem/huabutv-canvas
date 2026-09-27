@@ -1582,3 +1582,153 @@
         touch-action: auto;
     }
 }
+
+.agent-operation-feed {
+    --agent-tool-accent: color-mix(in srgb, var(--foreground) 62%, transparent);
+    min-width: 0;
+}
+
+.agent-operation-feed[data-agent-category="vision"] {
+    --agent-tool-accent: var(--agent-accent, var(--foreground));
+}
+
+.agent-operation-feed[data-agent-category="read"] {
+    --agent-tool-accent: #2563eb;
+}
+
+.agent-operation-feed[data-agent-category="create"] {
+    --agent-tool-accent: #d97706;
+}
+
+.agent-operation-feed[data-agent-category="operate"] {
+    --agent-tool-accent: #0f766e;
+}
+
+.agent-operation-toggle {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    padding: 3px 0;
+    color: color-mix(in srgb, var(--agent-ink, currentColor) 72%, transparent);
+    font-size: var(--fs-caption, 12px);
+    line-height: 17px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.agent-operation-icon {
+    display: inline-flex;
+    width: 16px;
+    height: 18px;
+    flex: 0 0 16px;
+    align-items: center;
+    justify-content: center;
+    color: var(--agent-tool-accent);
+}
+
+.agent-operation-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.agent-operation-feed.is-failed .agent-operation-icon,
+.agent-operation-feed.is-failed .agent-operation-latest {
+    color: #dc2626;
+}
+
+.agent-operation-kind {
+    flex: 0 0 auto;
+    font-size: var(--fs-caption, 12px);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.agent-operation-latest {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+    .agent-operation-latest {
+        background-image: linear-gradient(
+            100deg,
+            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 0%,
+            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 42%,
+            var(--agent-operation-ink, var(--agent-ink, currentColor)) 50%,
+            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 58%,
+            color-mix(in srgb, var(--agent-operation-ink, var(--agent-ink, currentColor)) 74%, transparent) 100%
+        );
+        background-position: 100% 0;
+        background-size: 240% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+    .agent-operation-feed.is-live .agent-operation-latest {
+        animation: agent-operation-sheen 3.6s linear infinite;
+    }
+}
+
+.agent-operation-feed.is-failed .agent-operation-latest {
+    --agent-operation-ink: #dc2626;
+}
+
+.agent-operation-count {
+    flex: 0 0 auto;
+    padding: 0 2px;
+    color: color-mix(in srgb, var(--agent-ink, currentColor) 62%, transparent);
+    font-size: 10px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.agent-operation-chevron {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    opacity: 0.55;
+    transition: transform 180ms ease;
+}
+
+.agent-operation-feed.is-open .agent-operation-chevron {
+    transform: rotate(180deg);
+}
+
+.agent-operation-list {
+    margin-top: 2px;
+}
+
+.agent-operation-list > * + * {
+    margin-top: 3px;
+}
+
+.agent-operation-feed.is-failed .agent-operation-toggle {
+    border-radius: 8px;
+    background: color-mix(in srgb, #dc2626 5%, transparent);
+    padding-inline: 6px;
+}
+
+@keyframes agent-operation-sheen {
+    from { background-position: 130% 0; }
+    to { background-position: -30% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-operation-feed.is-live .agent-operation-latest {
+        animation: none;
+        background-position: 0% 0;
+    }
+    .agent-operation-chevron {
+        transition: none;
+    }
+}

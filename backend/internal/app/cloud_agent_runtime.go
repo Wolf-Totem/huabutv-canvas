@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
+	"infinite-canvas/backend/internal/agentcontext"
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/prompts"
@@ -46,37 +47,71 @@ type cloudAgentApproval struct {
 	Reason    string                    `json:"reason,omitempty"`
 }
 type cloudAgentRuntime struct {
-	Request              CloudAgentRequest         `json:"request"`
-	Policy               cloudAgentPolicySnapshot  `json:"policy"`
-	ParentID             string                    `json:"parentId,omitempty"`
-	Fingerprint          string                    `json:"fingerprint,omitempty"`
-	CreativeAnchor       cloudAgentCreativeAnchor  `json:"creativeAnchor,omitempty"`
-	TextHistory          []providerTextMessage     `json:"textHistory,omitempty"`
-	Skills               []cloudAgentSkill         `json:"skills"`
-	SkillReads           map[string]bool           `json:"skillReads,omitempty"`
-	Profile              cloudAgentProfileSnapshot `json:"profile"`
-	ProfileReads         map[string]bool           `json:"profileReads,omitempty"`
-	Canonical            canonicalAgentRequest     `json:"canonical"`
-	ActiveTaskID         string                    `json:"activeTaskId"`
-	ActiveTextDraft      string                    `json:"activeTextDraft,omitempty"`
-	MediaTaskID          string                    `json:"mediaTaskId,omitempty"`
-	TaskIDs              []string                  `json:"taskIds"`
-	Step                 int                       `json:"step"`
-	Generations          int                       `json:"generations"`
-	VideoSeconds         int                       `json:"videoSeconds"`
-	Calls                []cloudAgentCall          `json:"calls"`
-	CallIndex            int                       `json:"callIndex"`
-	Approval             *cloudAgentApproval       `json:"approval,omitempty"`
-	Decisions            map[string]string         `json:"decisions"`
-	DecisionSettings     map[string]string         `json:"decisionSettings,omitempty"`
-	ActionNudged         bool                      `json:"actionNudged,omitempty"`
-	EmptyOutputNudged    int                       `json:"emptyOutputNudged,omitempty"`
-	StepSnapshotHash     string                    `json:"stepSnapshotHash,omitempty"`
-	StoryboardTaskID     string                    `json:"storyboardTaskId,omitempty"`
-	Plan                 []cloudAgentPlanItem      `json:"plan,omitempty"`
-	PendingInterjections []cloudAgentInterjection  `json:"pendingInterjections,omitempty"`
-	InterjectionIDs      []string                  `json:"interjectionIds,omitempty"`
-	Events               []CloudAgentEvent         `json:"events"`
+	Request                 CloudAgentRequest            `json:"request"`
+	Policy                  cloudAgentPolicySnapshot     `json:"policy"`
+	ParentID                string                       `json:"parentId,omitempty"`
+	Fingerprint             string                       `json:"fingerprint,omitempty"`
+	CreativeAnchor          cloudAgentCreativeAnchor     `json:"creativeAnchor,omitempty"`
+	TextHistory             []providerTextMessage        `json:"textHistory,omitempty"`
+	Skills                  []cloudAgentSkill            `json:"skills"`
+	SkillReads              map[string]bool              `json:"skillReads,omitempty"`
+	Profile                 cloudAgentProfileSnapshot    `json:"profile"`
+	ProfileReads            map[string]bool              `json:"profileReads,omitempty"`
+	Canonical               canonicalAgentRequest        `json:"canonical"`
+	ActiveTaskID            string                       `json:"activeTaskId"`
+	ActiveTextDraft         string                       `json:"activeTextDraft,omitempty"`
+	MediaTaskID             string                       `json:"mediaTaskId,omitempty"`
+	TaskIDs                 []string                     `json:"taskIds"`
+	Step                    int                          `json:"step"`
+	Generations             int                          `json:"generations"`
+	VideoSeconds            int                          `json:"videoSeconds"`
+	Calls                   []cloudAgentCall             `json:"calls"`
+	CallIndex               int                          `json:"callIndex"`
+	Approval                *cloudAgentApproval          `json:"approval,omitempty"`
+	Decisions               map[string]string            `json:"decisions"`
+	DecisionSettings        map[string]string            `json:"decisionSettings,omitempty"`
+	ActionNudged            bool                         `json:"actionNudged,omitempty"`
+	EmptyOutputNudged       int                          `json:"emptyOutputNudged,omitempty"`
+	StepSnapshotHash        string                       `json:"stepSnapshotHash,omitempty"`
+	StoryboardTaskID        string                       `json:"storyboardTaskId,omitempty"`
+	Plan                    []cloudAgentPlanItem         `json:"plan,omitempty"`
+	PendingInterjections    []cloudAgentInterjection     `json:"pendingInterjections,omitempty"`
+	InterjectionIDs         []string                     `json:"interjectionIds,omitempty"`
+	Events                  []CloudAgentEvent            `json:"events"`
+	ContextCompactionCount  int                          `json:"contextCompactionCount,omitempty"`
+	ContextCheckpoint       *agentcontext.Checkpoint     `json:"contextCheckpoint,omitempty"`
+	ContextCompaction       *cloudAgentContextCompaction `json:"contextCompaction,omitempty"`
+	ImageInspectCalls       int                          `json:"imageInspectCalls,omitempty"`
+	ImageInspectCounts      map[string]int               `json:"imageInspectCounts,omitempty"`
+	ImageInspectionReads    map[string]int               `json:"imageInspectionReads,omitempty"`
+	PendingImageInspections []cloudAgentImageInspection  `json:"pendingImageInspections,omitempty"`
+}
+
+type cloudAgentReadLoopError struct {
+	ToolName   string
+	Count      int
+	Budget     bool
+	ReasonCode string
+}
+
+func (e *cloudAgentReadLoopError) reasonCode() string {
+	if e == nil || e.ReasonCode == "" {
+		if e != nil && e.Budget {
+			return "read_budget_exceeded"
+		}
+		return "repeated_read_guard"
+	}
+	return e.ReasonCode
+}
+
+func (e *cloudAgentReadLoopError) Error() string {
+	if e == nil {
+		return "Agent 重复读取护栏已触发"
+	}
+	if e.Budget {
+		return "本轮识图调用已达到安全上限"
+	}
+	return "同一张图本轮已查看过，请使用已有观察，不要重复看图"
 }
 
 func (s *Service) ensureCloudAgentExecution(task *model.Task, initial cloudAgentState) error {
@@ -165,8 +200,18 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 			return errors.New("Agent runtime profile read history is invalid")
 		}
 	}
-	if state.Step < 0 || state.Generations < 0 || state.VideoSeconds < 0 {
+	if state.Step < 0 || state.Generations < 0 || state.VideoSeconds < 0 || state.ImageInspectCalls < 0 || state.ContextCompactionCount < 0 {
 		return errors.New("Agent runtime budget or step is invalid")
+	}
+	for nodeID, count := range state.ImageInspectCounts {
+		if strings.TrimSpace(nodeID) == "" || count < 0 {
+			return errors.New("Agent runtime image inspection counts are invalid")
+		}
+	}
+	for key, count := range state.ImageInspectionReads {
+		if strings.TrimSpace(key) == "" || count < 0 {
+			return errors.New("Agent runtime image inspection read history is invalid")
+		}
 	}
 	if (state.Request.Budget.MaxGenerationTasks > 0 && state.Generations > state.Request.Budget.MaxGenerationTasks) || (state.Request.Budget.MaxVideoSeconds > 0 && state.VideoSeconds > state.Request.Budget.MaxVideoSeconds) {
 		return errors.New("Agent runtime generation budget is invalid")
@@ -505,6 +550,9 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		if err != nil {
 			return err // Transient database failures must not terminate a live task.
 		}
+		if state.ContextCompaction != nil {
+			return s.advanceCloudAgentContextCompaction(run, &state, task)
+		}
 		if task.Status == model.TaskStatusQueued || task.Status == model.TaskStatusRunning {
 			// 将已持久化的模型增量转成 Agent 事件；不拆分完整答案伪装成流式。
 			if task.TextDraft != state.ActiveTextDraft {
@@ -612,6 +660,10 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 	if state.CallIndex < len(state.Calls) {
 		return s.advanceCloudAgentTool(run, &state)
 	}
+	cloudAgentFlushPendingImages(&state)
+	if state.ContextCompaction != nil && state.ContextCompaction.Status == "requested" {
+		return s.enqueueCloudAgentContextCompaction(run, &state)
+	}
 	if compactCloudAgentContext(&state.Canonical) {
 		// Evicted read bodies must be obtainable again after compaction.
 		state.SkillReads = nil
@@ -621,10 +673,26 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		return s.failCloudAgent(run, &state, fmt.Sprintf("达到 %d 次模型调用上限，本轮已停止", stepLimit))
 	}
 	cloudAgentDrainInterjections(run.ID, &state)
+	if changed, pruned := cloudAgentPruneInspectedImages(&state.Canonical, nil); changed {
+		state.event(run.ID, "context_images_pruned", map[string]any{
+			"prunedImages": pruned, "retentionRounds": cloudAgentImageRetentionRounds,
+			"text": "图片裁剪：移出超出保留轮次的看图结果",
+		})
+	}
 	canonical := cloudAgentCanonicalWithPlan(&state)
 	s.attachCloudAgentLessons(&canonical, run.UserID, cloudAgentLessonTaskText(&state))
+	references, refErr := s.cloudAgentImageReferences(run.UserID, state.Request, &canonical)
+	if refErr != nil {
+		return s.failCloudAgent(run, &state, cloudAgentSafeToolError(refErr))
+	}
 	input := map[string]any{"mode": "text", "prompt": state.Request.Prompt, "agentRequests": map[string]any{"canonical": canonical}, "config": map[string]any{"channelId": state.Request.ChannelID, "channelModelKey": state.Request.ChannelModelKey, "model": firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model)}, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(state.Policy.ReasoningMode)}}
+	if len(references) > 0 {
+		input["referenceImages"] = references
+	}
 	raw, _ := json.Marshal(canonical)
+	if requested, err := s.cloudAgentRequestCompaction(run, &state, len(raw) > 192<<10); err != nil || requested {
+		return err
+	}
 	if len(raw) > 192<<10 {
 		return s.failCloudAgent(run, &state, "模型上下文超过 192KB 上限")
 	}
@@ -824,6 +892,14 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 		}
 		message := cloudAgentSafeToolError(err)
 		detail["error"] = message
+		var argumentErr *cloudAgentArgumentError
+		if errors.As(err, &argumentErr) {
+			detail["reason"] = "invalid_tool_arguments"
+			var fieldErr *cloudAgentFieldArgumentError
+			if errors.As(err, &fieldErr) {
+				detail["field"], detail["issue"] = fieldErr.Field, fieldErr.Issue
+			}
+		}
 		result = detail
 		kind = "tool_failed"
 		payload["text"] = message
@@ -843,6 +919,22 @@ func cloudAgentToolResult(runID string, state *cloudAgentRuntime, call cloudAgen
 			}
 			payload["result"] = receipt
 		}
+	}
+	if inspection, ok := result.(cloudAgentImageInspection); ok && err == nil {
+		receipt, _ := json.Marshal(inspection.Receipt)
+		payload["result"] = inspection.Receipt
+		state.event(runID, kind, payload)
+		state.Canonical.Messages = append(state.Canonical.Messages,
+			map[string]any{"role": "tool", "tool_call_id": call.ID, "content": string(receipt)})
+		if strings.TrimSpace(inspection.ImageURL) != "" {
+			cloudAgentStageImageInspection(state, inspection)
+		}
+		if state.CallIndex+1 >= len(state.Calls) {
+			cloudAgentFlushPendingImages(state)
+		}
+		state.CallIndex++
+		state.Approval = nil
+		return
 	}
 	state.event(runID, kind, payload)
 	state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "tool", "tool_call_id": call.ID, "content": string(raw)})
@@ -931,6 +1023,12 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					if err == nil {
 						preview = batchPlan.Preview
 					}
+				case "canvas_arrange_nodes":
+					arrangePlan, err := prepareCloudAgentArrangeNodes(repo, run.UserID, state.Request.CanvasID, call)
+					mutationErr = err
+					if err == nil && arrangePlan != nil {
+						preview = arrangePlan.Preview
+					}
 				default:
 					canvasPlan, err := prepareCloudAgentCanvasMutation(repo, run.UserID, state.Request.CanvasID, call)
 					mutationErr = err
@@ -991,6 +1089,14 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	if allowed && call.Function.Name == "skill_read_file" {
 		skillResult, skillErr = cloudAgentReadTool(s.repo, run.UserID, state, call, s)
 	}
+	var inspectResult any
+	var inspectErr error
+	if allowed && call.Function.Name == "canvas_inspect_image" {
+		inspectResult, inspectErr = s.prepareCloudAgentImageInspection(run.UserID, state.Request.CanvasID, state, call)
+		if errors.Is(inspectErr, errCloudAgentImageInspectionBudget) {
+			return s.failCloudAgent(run, state, cloudAgentImageInspectionBudgetMessage)
+		}
+	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
 	return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
@@ -1001,6 +1107,23 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			toolErr = BadAuthRequest("工具未获本轮权限授权")
 		case call.Function.Name == "canvas_apply_ops":
 			result, toolErr = applyCloudAgentCanvas(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+		case call.Function.Name == "canvas_arrange_nodes":
+			result, toolErr = applyCloudAgentArrangeNodes(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+		case call.Function.Name == "canvas_inspect_image":
+			result, toolErr = inspectResult, inspectErr
+			if toolErr == nil {
+				if inspection, ok := result.(cloudAgentImageInspection); ok {
+					nodeID := stringValue(inspection.Receipt["nodeId"])
+					attached := inspection.ImageURL != ""
+					state.markCanvasImageInspection(nodeID, attached)
+					if inspection.CacheKey != "" {
+						if state.ImageInspectionReads == nil {
+							state.ImageInspectionReads = map[string]int{}
+						}
+						state.ImageInspectionReads[inspection.CacheKey]++
+					}
+				}
+			}
 		case call.Function.Name == "canvas_create_storyboard", call.Function.Name == "canvas_edit_storyboard":
 			result, toolErr = applyCloudAgentStoryboardMutation(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		case call.Function.Name == "canvas_edit_batch_table":
@@ -1014,6 +1137,18 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 		}
 		if call.Function.Name == "plan_update" && toolErr == nil {
 			state.event(run.ID, "plan_updated", map[string]any{"items": state.Plan, "pendingTitles": cloudAgentPendingPlanItems(state.Plan)})
+		}
+		var readLoopErr *cloudAgentReadLoopError
+		if errors.As(toolErr, &readLoopErr) {
+			cloudAgentToolResult(run.ID, state, call, result, toolErr)
+			current.Status = "failed"
+			current.FailureMessage = truncateRunes(readLoopErr.Error(), 1000)
+			cloudAgentDropInterjections(run.ID, "本轮已结束："+truncateRunes(current.FailureMessage, 120), state)
+			state.event(run.ID, "run_failed", map[string]any{
+				"text": current.FailureMessage, "reason": readLoopErr.reasonCode(),
+				"toolName": call.Function.Name, "readCount": readLoopErr.Count,
+			})
+			return cloudAgentSave(current, state)
 		}
 		if call.Function.Name == "ask_user" && toolErr == nil {
 			payload, _ := result.(map[string]any)
@@ -1107,7 +1242,11 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 			state.event(run.ID, "generation_task_created", map[string]any{"toolName": "generate_media", "taskId": task.ID, "nodeId": media.Args.NodeID, "title": media.Args.Title, "mode": media.Args.Mode, "canvasId": state.Request.CanvasID, "referenceNodeIds": media.Args.ReferenceNodeIDs, "text": "媒体节点与引用连线已创建，生成任务已提交"})
 		} else {
 			state.ActiveTaskID = task.ID
-			state.Step++
+			if state.ContextCompaction != nil && req.Operation == cloudAgentContextCompactionOperation {
+				state.ContextCompaction.Status = "running"
+			} else {
+				state.Step++
+			}
 		}
 		return cloudAgentSave(current, state)
 	})
