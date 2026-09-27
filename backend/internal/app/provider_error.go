@@ -48,27 +48,42 @@ func providerResponseBusinessFailure(responseBody []byte) (string, string, bool)
 }
 
 func providerPayloadBusinessFailure(payload map[string]any) (string, string, bool) {
+	if code, message, failed := providerBusinessFailure(payload); failed {
+		return code, message, true
+	}
+	if output, ok := payload["output"].(map[string]any); ok {
+		return providerBusinessFailure(output)
+	}
+	return "", "", false
+}
+
+func providerBusinessFailure(payload map[string]any) (string, string, bool) {
 	if errorValue, ok := payload["error"].(map[string]any); ok {
 		code, message := providerFailureDetails(map[string]any{"error": errorValue})
 		if code != "" || message != "" {
 			return code, message, true
 		}
 	}
-	if !providerBusinessCodeFailed(payload["code"]) {
-		return "", "", false
-	}
-	code, message := providerFailureDetails(payload)
-	return code, message, true
-}
 
-func providerBusinessCodeFailed(value any) bool {
-	code := strings.ToLower(strings.TrimSpace(fmt.Sprint(value)))
-	switch code {
-	case "", "0", "success", "succeeded", "ok", "<nil>":
-		return false
-	default:
-		return true
+	code := strings.ToLower(strings.TrimSpace(fmt.Sprint(payload["code"])))
+	if code != "" && code != "0" &&
+		code != "success" && code != "succeeded" &&
+		code != "ok" && code != "<nil>" {
+		failureCode, message := providerFailureDetails(payload)
+		return failureCode, message, true
 	}
+
+	status := strings.ToLower(strings.TrimSpace(fmt.Sprint(payload["task_status"])))
+	switch status {
+	case "failed", "failure", "error", "expired":
+		failureCode, message := providerFailureDetails(payload)
+		if failureCode == "" {
+			failureCode = "task_failed"
+		}
+		return failureCode, message, true
+	}
+
+	return "", "", false
 }
 
 func normalizedProviderErrorCode(value any) string {

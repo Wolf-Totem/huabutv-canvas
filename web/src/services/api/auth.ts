@@ -375,7 +375,7 @@ export type RuntimePolicySetting = {
 };
 
 export function getAuthSettings() {
-    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; smsEnabled?: boolean; smsCodeRequired?: boolean; inviteRequired?: boolean; inviteLocked?: boolean; inviteDisplayName?: string }>("/auth/settings");
+    return http.get<{ firstUser: boolean; registrationEnabled: boolean; linuxdoEnabled: boolean; emailEnabled: boolean; emailCodeRequired: boolean; smsEnabled?: boolean; smsCodeRequired?: boolean; inviteRequired?: boolean; inviteLocked?: boolean; inviteDisplayName?: string; agreementTitle?: string; agreementContent?: string }>("/auth/settings");
 }
 
 export function linuxDOLoginURL(next: string) {
@@ -437,7 +437,7 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input);
 }
 
-export function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; channel?: "email" | "sms"; displayName?: string; password: string; inviteCode?: string }) {
+export function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; channel?: "email" | "sms"; displayName?: string; password: string; inviteCode?: string; acceptedTerms?: boolean }) {
     return http.post<{ user: LocalUser }>("/auth/register", input);
 }
 

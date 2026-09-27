@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
-import { App, Button, Divider, Input } from "antd";
+import { App, Button, Divider, Input, Modal } from "antd";
 import { ArrowRight, Info, LockKeyhole, Mail, ShieldCheck, Smartphone, TriangleAlert, UserRound } from "lucide-react";
 import { useSearchParams } from "react-router";
 
@@ -34,6 +34,9 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
     const [countdown, setCountdown] = useState(0);
     const [registerCountdown, setRegisterCountdown] = useState(0);
     const [formError, setFormError] = useState("");
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
+    const [agreementOpen, setAgreementOpen] = useState(false);
+    const [settingsError, setSettingsError] = useState("");
     const sending = useRef(false),
         registering = useRef(false);
     const next = safeNext(params.get("next") || (embedded ? dialogNext : "") || null);
@@ -44,9 +47,15 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
             .then((value) => {
                 if (cancelled) return;
                 setSettings(value);
+                setSettingsError("");
                 if (!value.firstUser && value.smsEnabled && !value.emailEnabled) setChannel("sms");
             })
-            .catch((error) => !cancelled && message.error(error instanceof Error ? error.message : "读取注册设置失败"));
+            .catch((error) => {
+                if (cancelled) return;
+                const text = error instanceof Error ? error.message : "读取注册设置失败";
+                setSettingsError(text);
+                message.error(text);
+            });
         return () => {
             cancelled = true;
         };
@@ -111,6 +120,14 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
             return;
         }
         if (!settings?.firstUser) {
+            if (!settings?.agreementTitle) {
+                fail("无法读取服务协议，请重新读取后再注册");
+                return;
+            }
+            if (!acceptedTerms) {
+                fail(`请先同意《${settings.agreementTitle}》`);
+                return;
+            }
             if (activeChannel === "sms") {
                 if (!/^1\d{10}$/.test(phone.trim())) {
                     fail("请输入中国大陆 11 位手机号");
@@ -137,8 +154,8 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
         try {
             await register(
                 activeChannel === "sms"
-                    ? { username: name, phone: phone.trim(), smsCode: smsCode.trim(), channel: "sms", displayName, password, inviteCode: inviteCode.trim() || undefined }
-                    : { username: name, email: email.trim(), emailCode: emailCode.trim(), channel: "email", displayName, password, inviteCode: inviteCode.trim() || undefined },
+                    ? { username: name, phone: phone.trim(), smsCode: smsCode.trim(), channel: "sms", displayName, password, inviteCode: inviteCode.trim() || undefined, acceptedTerms: settings?.firstUser ? undefined : true }
+                    : { username: name, email: email.trim(), emailCode: emailCode.trim(), channel: "email", displayName, password, inviteCode: inviteCode.trim() || undefined, acceptedTerms: settings?.firstUser ? undefined : true },
             );
             if (!settings?.firstUser) window.sessionStorage.setItem("infinite-canvas:model-setup-guide", "1");
             message.success(settings?.firstUser ? "管理员账号已创建" : "注册成功");
@@ -305,6 +322,45 @@ export default function RegisterPage({ embedded = false }: { embedded?: boolean 
                 <Input size="large" value={inviteCode} onChange={(event) => setInviteCode(event.target.value)} placeholder="填写邀请码可接受一对一指导和优先服务" disabled={disabled} />
                 <span className="block pt-1 text-[11px] leading-5 text-white/45">填写邀请码可接受一对一指导和优先服务</span>
             </AuthField>
+
+            {!settings?.firstUser ? (
+                settingsError || (settings && !settings.agreementTitle) ? (
+                    <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
+                        <span className="flex flex-wrap items-center gap-2">
+                            无法读取服务协议。
+                            <button
+                                type="button"
+                                className="underline"
+                                onClick={() => {
+                                    void getAuthSettings()
+                                        .then((value) => {
+                                            setSettings(value);
+                                            setSettingsError("");
+                                        })
+                                        .catch((error) => setSettingsError(error instanceof Error ? error.message : "读取注册设置失败"));
+                                }}
+                            >
+                                重新读取
+                            </button>
+                        </span>
+                    </Notice>
+                ) : settings?.agreementTitle ? (
+                    <label className="flex items-start gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs leading-5 text-white/75">
+                        <input type="checkbox" className="mt-0.5" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} disabled={disabled} />
+                        <span>
+                            我已阅读并同意
+                            <button type="button" className="mx-1 underline" onClick={() => setAgreementOpen(true)}>
+                                《{settings.agreementTitle}》
+                            </button>
+                        </span>
+                    </label>
+                ) : null
+            ) : null}
+            <Modal title={settings?.agreementTitle ? `《${settings.agreementTitle}》` : "服务协议"} open={agreementOpen} onCancel={() => setAgreementOpen(false)} footer={null} width={640}>
+                <div className="max-h-[60vh] overflow-auto whitespace-pre-wrap text-sm leading-6">
+                    {settings?.agreementContent?.trim() || "条款正文尚未配置。继续注册即表示接受站点服务规则。"}
+                </div>
+            </Modal>
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <AuthField label="密码">

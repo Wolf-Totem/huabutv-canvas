@@ -133,6 +133,10 @@ func normalizeModelRequestOption(name string, value any) any {
 	case "4k", "2160", "2160p":
 		return "2160p"
 	default:
+		pixels := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(resolution)), "p")
+		if numeric, err := strconv.Atoi(pixels); err == nil && numeric > 0 {
+			return strconv.Itoa(numeric) + "p"
+		}
 		return value
 	}
 }

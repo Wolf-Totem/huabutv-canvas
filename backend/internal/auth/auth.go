@@ -28,16 +28,17 @@ var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
 type AuthError = kernel.AppError
 
 type RegisterRequest struct {
-	Username    string `json:"username"`
-	Email       string `json:"email"`
-	EmailCode   string `json:"emailCode"`
-	Phone       string `json:"phone"`
-	SmsCode     string `json:"smsCode"`
-	Channel     string `json:"channel"`
-	DisplayName string `json:"displayName"`
-	Password    string `json:"password"`
-	InviteCode  string `json:"inviteCode"`
-	Host        string `json:"-"`
+	Username      string `json:"username"`
+	Email         string `json:"email"`
+	EmailCode     string `json:"emailCode"`
+	Phone         string `json:"phone"`
+	SmsCode       string `json:"smsCode"`
+	Channel       string `json:"channel"`
+	DisplayName   string `json:"displayName"`
+	Password      string `json:"password"`
+	InviteCode    string `json:"inviteCode"`
+	AcceptedTerms *bool  `json:"acceptedTerms"`
+	Host          string `json:"-"`
 }
 
 type LoginRequest struct {
@@ -56,6 +57,8 @@ type PublicAuthSettings struct {
 	InviteDisplayName   string `json:"inviteDisplayName,omitempty"`
 	SmsEnabled          bool   `json:"smsEnabled"`
 	SmsCodeRequired     bool   `json:"smsCodeRequired"`
+	AgreementTitle      string `json:"agreementTitle,omitempty"`
+	AgreementContent    string `json:"agreementContent,omitempty"`
 }
 
 type AuthSessionResult struct {
@@ -78,7 +81,8 @@ func (s *Service) PublicAuthSettings(host string) (*PublicAuthSettings, error) {
 		return nil, err
 	}
 	if count == 0 {
-		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false}, nil
+		title, content := s.RegistrationAgreement()
+		return &PublicAuthSettings{FirstUser: true, RegistrationEnabled: true, LinuxDOEnabled: false, AgreementTitle: title, AgreementContent: content}, nil
 	}
 	allowed, streamer, err := s.registrationAllowed(host, "")
 	if err != nil {
@@ -92,7 +96,8 @@ func (s *Service) PublicAuthSettings(host string) (*PublicAuthSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := &PublicAuthSettings{FirstUser: false, RegistrationEnabled: allowed, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true, SmsEnabled: smsEnabled, SmsCodeRequired: true}
+	title, content := s.RegistrationAgreement()
+	out := &PublicAuthSettings{FirstUser: false, RegistrationEnabled: allowed, LinuxDOEnabled: s.LinuxDOEnabled(), EmailEnabled: emailEnabled, EmailCodeRequired: true, SmsEnabled: smsEnabled, SmsCodeRequired: true, AgreementTitle: title, AgreementContent: content}
 	if streamer != nil && streamer.Status == model.StreamerStatusActive {
 		hostStreamer, err := s.host.StreamerByHost(host)
 		if err != nil {
@@ -147,6 +152,9 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	var verifiedSMS *model.SmsVerificationCode
 	var inviteStreamer *model.Streamer
 	if count > 0 {
+		if req.AcceptedTerms == nil || !*req.AcceptedTerms {
+			return nil, kernel.BadAuthRequest("请先同意《" + s.AgreementTitleForMessage() + "》")
+		}
 		allowed, streamer, err := s.registrationAllowed(req.Host, req.InviteCode)
 		if err != nil {
 			return nil, err

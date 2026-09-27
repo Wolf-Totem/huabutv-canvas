@@ -132,6 +132,8 @@ export type LinuxDOSetting = {
 export type RegistrationSetting = {
     enabled: boolean;
     inviteSubdomainEnabled?: boolean;
+    agreementTitle?: string;
+    agreementContent?: string;
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -265,7 +267,7 @@ export function getAdminRegistrationSetting() {
     return http.get<{ setting: RegistrationSetting }>("/admin/settings/registration");
 }
 
-export function updateAdminRegistrationSetting(input: { enabled: boolean; inviteSubdomainEnabled?: boolean }) {
+export function updateAdminRegistrationSetting(input: { enabled: boolean; inviteSubdomainEnabled?: boolean; agreementTitle?: string; agreementContent?: string }) {
     return http.patch<{ setting: RegistrationSetting }>("/admin/settings/registration", input);
 }
 

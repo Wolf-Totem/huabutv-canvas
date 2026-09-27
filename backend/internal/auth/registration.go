@@ -16,20 +16,26 @@ const registrationSettingKey = "registration"
 const inviteSubdomainRegistrationSettingKey = "registration_invite_subdomain"
 
 type RegistrationSettingRequest struct {
-	Enabled                bool  `json:"enabled"`
-	InviteSubdomainEnabled *bool `json:"inviteSubdomainEnabled"`
+	Enabled                bool    `json:"enabled"`
+	InviteSubdomainEnabled *bool   `json:"inviteSubdomainEnabled"`
+	AgreementTitle         *string `json:"agreementTitle"`
+	AgreementContent       *string `json:"agreementContent"`
 }
 
 type PublicRegistrationSetting struct {
 	Enabled                bool      `json:"enabled"`
 	InviteSubdomainEnabled bool      `json:"inviteSubdomainEnabled"`
+	AgreementTitle         string    `json:"agreementTitle"`
+	AgreementContent       string    `json:"agreementContent"`
 	UpdatedBy              string    `json:"updatedBy"`
 	CreatedAt              time.Time `json:"createdAt"`
 	UpdatedAt              time.Time `json:"updatedAt"`
 }
 
 type registrationSettingValue struct {
-	Enabled bool `json:"enabled"`
+	Enabled          bool   `json:"enabled"`
+	AgreementTitle   string `json:"agreementTitle"`
+	AgreementContent string `json:"agreementContent"`
 }
 
 func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrationSetting, error) {
@@ -52,11 +58,22 @@ func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationS
 	if err := s.host.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	encoded, err := json.Marshal(registrationSettingValue{Enabled: req.Enabled})
+	current, currentValue, err := s.readRegistrationSetting()
 	if err != nil {
 		return nil, err
 	}
-	current, _, err := s.readRegistrationSetting()
+	nextValue := registrationSettingValue{
+		Enabled:          req.Enabled,
+		AgreementTitle:   currentValue.AgreementTitle,
+		AgreementContent: currentValue.AgreementContent,
+	}
+	if req.AgreementTitle != nil {
+		nextValue.AgreementTitle = strings.TrimSpace(*req.AgreementTitle)
+	}
+	if req.AgreementContent != nil {
+		nextValue.AgreementContent = strings.TrimSpace(*req.AgreementContent)
+	}
+	encoded, err := json.Marshal(nextValue)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +96,7 @@ func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationS
 			return nil, err
 		}
 	}
-	out := publicRegistrationSetting(&setting, registrationSettingValue{Enabled: req.Enabled})
+	out := publicRegistrationSetting(&setting, nextValue)
 	out.InviteSubdomainEnabled = inviteEnabled
 	return out, nil
 }
@@ -87,6 +104,34 @@ func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationS
 func (s *Service) RegistrationEnabled() (bool, error) {
 	_, value, err := s.readRegistrationSetting()
 	return value.Enabled, err
+}
+
+func (s *Service) AgreementTitleForMessage() string {
+	title, _ := s.RegistrationAgreement()
+	if strings.TrimSpace(title) == "" {
+		return "服务协议"
+	}
+	return title
+}
+
+func (s *Service) RegistrationAgreement() (string, string) {
+	_, value, err := s.readRegistrationSetting()
+	if err != nil {
+		return "", ""
+	}
+	title := strings.Trim(strings.TrimSpace(value.AgreementTitle), "《》")
+	if title == "" {
+		title = s.defaultAgreementTitle()
+	}
+	return title, value.AgreementContent
+}
+
+func (s *Service) defaultAgreementTitle() string {
+	brand := strings.TrimSpace(s.host.BrandName())
+	if brand == "" {
+		brand = DefaultBrandName
+	}
+	return brand + "服务协议"
 }
 
 func (s *Service) InviteSubdomainRegistrationEnabled() (bool, error) {
@@ -182,7 +227,11 @@ func (s *Service) readRegistrationSetting() (*model.SystemSetting, registrationS
 }
 
 func publicRegistrationSetting(setting *model.SystemSetting, value registrationSettingValue) *PublicRegistrationSetting {
-	result := &PublicRegistrationSetting{Enabled: value.Enabled}
+	result := &PublicRegistrationSetting{
+		Enabled:          value.Enabled,
+		AgreementTitle:   value.AgreementTitle,
+		AgreementContent: value.AgreementContent,
+	}
 	if setting != nil {
 		result.UpdatedBy = setting.UpdatedBy
 		result.CreatedAt = setting.CreatedAt

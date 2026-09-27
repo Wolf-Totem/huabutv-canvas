@@ -39,7 +39,7 @@ func TestSMSRegistrationAndPhoneLogin(t *testing.T) {
 	if delivered == "" {
 		t.Fatal("code not sent")
 	}
-	result, err := svc.Register(RegisterRequest{Username: "phoneuser", Password: "strong-password", Phone: "13800138000", SmsCode: delivered, Channel: "sms"})
+	result, err := svc.Register(RegisterRequest{Username: "phoneuser", Password: "strong-password", Phone: "13800138000", SmsCode: delivered, Channel: "sms", AcceptedTerms: boolPtr(true)})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,6 +19,9 @@ export default function AccessSettingsPanel() {
     const [savingLinuxDO, setSavingLinuxDO] = useState(false);
     const [savingRegistration, setSavingRegistration] = useState(false);
     const [savingInviteSubdomain, setSavingInviteSubdomain] = useState(false);
+    const [savingAgreement, setSavingAgreement] = useState(false);
+    const [agreementTitle, setAgreementTitle] = useState("");
+    const [agreementContent, setAgreementContent] = useState("");
     const [dirty, setDirty] = useState(false);
     const [draftLinuxDOEnabled, setDraftLinuxDOEnabled] = useState(false);
     const [loadError, setLoadError] = useState("");
@@ -39,6 +42,8 @@ export default function AccessSettingsPanel() {
                 if (requestVersion !== requestVersionRef.current) return;
                 setLinuxdo(linuxdoData.setting);
                 setRegistration(registrationData.setting);
+                setAgreementTitle(registrationData.setting.agreementTitle || "");
+                setAgreementContent(registrationData.setting.agreementContent || "");
                 setDirty(false);
                 setSaveError("");
                 if (announce) message.success("已重新读取当前登录与注册配置");
@@ -311,6 +316,60 @@ export default function AccessSettingsPanel() {
                             }}
                             aria-label="主域关闭时仍允许主播子域邀请注册"
                         />
+                    </div>
+                    <div className="admin-access-registration-policy" style={{ marginTop: 16, alignItems: "stretch" }}>
+                        <span className="admin-access-policy-icon">
+                            <ShieldCheck className="size-5" aria-hidden="true" />
+                        </span>
+                        <div className="admin-access-policy-copy" style={{ flex: 1, minWidth: 0 }}>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <strong>服务协议名称与条款</strong>
+                                <AdminStatusBadge label="保存后注册页同步" tone="info" />
+                            </div>
+                            <p>未填写名称时跟随当前品牌名。单独切换注册开关不会清空已保存的条款。</p>
+                            <Input
+                                value={agreementTitle}
+                                onChange={(event) => setAgreementTitle(event.target.value)}
+                                placeholder="例如 画布TV服务协议"
+                                maxLength={80}
+                                style={{ maxWidth: 480, marginBottom: 8 }}
+                                disabled={loading || refreshing || savingAgreement}
+                            />
+                            <Input.TextArea
+                                value={agreementContent}
+                                onChange={(event) => setAgreementContent(event.target.value)}
+                                placeholder="按空行分段。可用「一、」这类标题。"
+                                autoSize={{ minRows: 6, maxRows: 16 }}
+                                disabled={loading || refreshing || savingAgreement}
+                            />
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Button
+                                    type="primary"
+                                    icon={<Save className="size-4" />}
+                                    loading={savingAgreement}
+                                    disabled={loading || refreshing}
+                                    onClick={() => {
+                                        setSavingAgreement(true);
+                                        void updateAdminRegistrationSetting({
+                                            enabled: registration.enabled,
+                                            agreementTitle,
+                                            agreementContent,
+                                        })
+                                            .then((data) => {
+                                                setRegistration(data.setting);
+                                                setAgreementTitle(data.setting.agreementTitle || "");
+                                                setAgreementContent(data.setting.agreementContent || "");
+                                                message.success("服务协议已保存");
+                                            })
+                                            .catch((error) => message.error(error instanceof Error ? error.message : "保存服务协议失败"))
+                                            .finally(() => setSavingAgreement(false));
+                                    }}
+                                >
+                                    保存协议
+                                </Button>
+                                <span className="text-xs opacity-60">{agreementContent.trim() ? `${agreementContent.trim().length} 字` : "尚未填写条款正文"}</span>
+                            </div>
+                        </div>
                     </div>
                 </SettingsSectionCard>
             </div>

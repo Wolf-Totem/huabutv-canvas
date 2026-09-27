@@ -51,7 +51,7 @@ func TestRegisterHostLocksInviteAndSubdomainGate(t *testing.T) {
 	if err := svc.SendRegistrationEmailCode("fan@example.com", "", "zhangsan.huabutv.example"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(RegisterRequest{Username: "fan1", Email: "fan@example.com", Password: "strong-password", EmailCode: delivered, InviteCode: li.InviteCode, Host: "zhangsan.huabutv.example"}); err != nil {
+	if _, err := svc.Register(RegisterRequest{Username: "fan1", Email: "fan@example.com", Password: "strong-password", EmailCode: delivered, InviteCode: li.InviteCode, Host: "zhangsan.huabutv.example", AcceptedTerms: boolPtr(true)}); err != nil {
 		t.Fatal(err)
 	}
 	var user model.User
