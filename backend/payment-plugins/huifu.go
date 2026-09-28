@@ -59,7 +59,7 @@ func (p *HuifuH5Provider) Descriptor() Descriptor {
 }
 
 func (p *HuifuH5Provider) ValidateConfig(config Config) error {
-	for _, key := range []string{"sysId", "productId", "huifuId", "projectId", "projectTitle", "merchantPrivateKey", "huifuPublicKey", "gateway"} {
+	for _, key := range []string{"sysId", "productId", "huifuId", "projectTitle", "merchantPrivateKey", "huifuPublicKey", "gateway"} {
 		if strings.TrimSpace(config[key]) == "" {
 			return fmt.Errorf("斗拱 H5 配置缺少 %s", key)
 		}
@@ -92,8 +92,10 @@ func (p *HuifuH5Provider) CreateOrder(ctx context.Context, config Config, reques
 	now := p.now().In(huifuLocation())
 	hostingFields := map[string]string{
 		"project_title": huifuTruncate(config["projectTitle"], huifuProjectTitleLimit),
-		"project_id":    strings.TrimSpace(config["projectId"]),
 		"request_type":  huifuRequestTypeH5,
+	}
+	if projectID := strings.TrimSpace(config["projectId"]); projectID != "" {
+		hostingFields["project_id"] = projectID
 	}
 	if strings.TrimSpace(request.ReturnURL) != "" {
 		hostingFields["callback_url"] = strings.TrimSpace(request.ReturnURL)

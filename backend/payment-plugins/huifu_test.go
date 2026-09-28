@@ -203,6 +203,46 @@ func TestHuifuH5DownloadTradeBillIsNotOnH5API(t *testing.T) {
 	}
 }
 
+func TestHuifuH5OmitsEmptyProjectIDFromHostingData(t *testing.T) {
+	privateKey, publicKey := testRSAKeyPair(t)
+	config := testHuifuConfig(privateKey, publicKey)
+	config["projectId"] = ""
+	var hosting map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var captured map[string]any
+		if err := json.Unmarshal(body, &captured); err != nil {
+			t.Fatal(err)
+		}
+		data := captured["data"].(map[string]any)
+		if err := json.Unmarshal([]byte(data["hosting_data"].(string)), &hosting); err != nil {
+			t.Fatal(err)
+		}
+		writeHuifuJSON(t, writer, config, map[string]any{
+			"resp_code": "00000000", "resp_desc": "交易成功",
+			"jump_url": "https://api.huifu.com/hostingh5/?jump_id=H1&huifu_id=6666000109133323",
+		})
+	}))
+	defer server.Close()
+	provider := NewHuifuH5Provider(server.Client())
+	provider.baseURL = server.URL
+	if _, err := provider.CreateOrder(context.Background(), config, CreateRequest{
+		MerchantOrderNo: "order-1", Description: "100 积分", AmountFen: 100, Currency: "CNY",
+		NotifyURL: "https://merchant.example/api/payments/notify/huifu-h5-cashier/cfg",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := hosting["project_id"]; ok {
+		t.Fatalf("empty project_id must be omitted, hosting = %#v", hosting)
+	}
+	if hosting["project_title"] != "收银台标题" || hosting["request_type"] != "M" {
+		t.Fatalf("hosting = %#v", hosting)
+	}
+}
+
 func TestHuifuH5RejectsNotifyURLWithQuery(t *testing.T) {
 	privateKey, publicKey := testRSAKeyPair(t)
 	config := testHuifuConfig(privateKey, publicKey)

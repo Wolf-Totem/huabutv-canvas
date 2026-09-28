@@ -54,8 +54,8 @@
         "name": "projectId",
         "type": "string",
         "label": "托管项目号 (project_id)",
-        "required": true,
-        "description": "合作伙伴控台创建的统一收银台项目号。"
+        "required": false,
+        "description": "合作伙伴控台创建的统一收银台项目号。客服确认可不填时留空，下单不会带 project_id。"
       },
       {
         "name": "projectTitle",
