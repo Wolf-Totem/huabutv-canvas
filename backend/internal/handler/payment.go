@@ -151,7 +151,7 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			writePaymentNotificationFailure(c, svc, c.Param("providerId"), http.StatusBadRequest)
 			return
 		}
-		err = svc.AcceptPaymentNotification(c.Request.Context(), c.Param("providerId"), c.Param("configId"), c.Request.Header.Clone(), rawBody)
+		merchantOrderNo, err := svc.AcceptPaymentNotification(c.Request.Context(), c.Param("providerId"), c.Param("configId"), c.Request.Header.Clone(), rawBody)
 		if err != nil {
 			status := http.StatusInternalServerError
 			var appErr *service.AppError
@@ -162,6 +162,9 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		status, contentType, body := svc.PaymentNotificationResponse(c.Param("providerId"), true)
+		if body == "RECV_ORD_ID_" && merchantOrderNo != "" {
+			body += merchantOrderNo
+		}
 		if body != "" {
 			c.Data(status, contentType, []byte(body))
 			return

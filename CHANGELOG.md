@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.5.62
+
+- 斗拱 H5 按官方 Go SDK 加签：对 data 的 JSON 做 SHA256WithRSA；托管项目号按预下单接口表必填；异步应答为 `RECV_ORD_ID_` 加商户订单号。
+
 ## v1.5.61
 
 - 佳速等只收公网 URL 的协议：本地素材会先入库对象存储，再把签名地址发给上游，不再把 data URL 或二进制塞进 url 字段。

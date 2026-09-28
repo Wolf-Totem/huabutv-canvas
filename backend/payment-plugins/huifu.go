@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -46,7 +45,7 @@ func NewHuifuH5Provider(client *http.Client) *HuifuH5Provider {
 
 func (p *HuifuH5Provider) Descriptor() Descriptor {
 	return Descriptor{
-		ID: ProviderHuifuH5, PluginID: PluginHuifuH5, PluginVersion: "1.0.0",
+		ID: ProviderHuifuH5, PluginID: PluginHuifuH5, PluginVersion: "1.1.0",
 		Name: "斗拱 H5 支付", Icon: "assets/icon.svg", CheckoutMode: "redirect",
 		IdentityFields: []string{"sysId", "huifuId"},
 		NotificationSuccess: NotificationResponse{
@@ -59,7 +58,7 @@ func (p *HuifuH5Provider) Descriptor() Descriptor {
 }
 
 func (p *HuifuH5Provider) ValidateConfig(config Config) error {
-	for _, key := range []string{"sysId", "productId", "huifuId", "projectTitle", "merchantPrivateKey", "huifuPublicKey", "gateway"} {
+	for _, key := range []string{"sysId", "productId", "huifuId", "projectId", "projectTitle", "merchantPrivateKey", "huifuPublicKey", "gateway"} {
 		if strings.TrimSpace(config[key]) == "" {
 			return fmt.Errorf("斗拱 H5 配置缺少 %s", key)
 		}
@@ -72,6 +71,9 @@ func (p *HuifuH5Provider) ValidateConfig(config Config) error {
 	}
 	if _, err := huifuGatewayOrigin(config); err != nil {
 		return err
+	}
+	if runes := []rune(strings.TrimSpace(config["projectId"])); len(runes) > 32 {
+		return errors.New("斗拱 H5 配置 projectId 超过 32 字")
 	}
 	if huifuTruncate(config["projectTitle"], huifuProjectTitleLimit) == "" {
 		return errors.New("斗拱 H5 配置 projectTitle 无效")
@@ -92,10 +94,8 @@ func (p *HuifuH5Provider) CreateOrder(ctx context.Context, config Config, reques
 	now := p.now().In(huifuLocation())
 	hostingFields := map[string]string{
 		"project_title": huifuTruncate(config["projectTitle"], huifuProjectTitleLimit),
+		"project_id":    strings.TrimSpace(config["projectId"]),
 		"request_type":  huifuRequestTypeH5,
-	}
-	if projectID := strings.TrimSpace(config["projectId"]); projectID != "" {
-		hostingFields["project_id"] = projectID
 	}
 	if strings.TrimSpace(request.ReturnURL) != "" {
 		hostingFields["callback_url"] = strings.TrimSpace(request.ReturnURL)
@@ -299,7 +299,7 @@ func (p *HuifuH5Provider) call(ctx context.Context, config Config, path string, 
 	if err != nil {
 		return err
 	}
-	request.Header.Set("Content-Type", "application/json; charset=utf-8")
+	request.Header.Set("Content-Type", "application/json")
 	response, err := p.client.Do(request)
 	if err != nil {
 		return &ProviderError{Code: "huifu_transport_error", Message: "斗拱网络请求失败", Temporary: true, Cause: err}
@@ -315,17 +315,12 @@ func (p *HuifuH5Provider) call(ctx context.Context, config Config, path string, 
 	if response.StatusCode == 922 || response.StatusCode == 40002 {
 		return errors.New("斗拱验签失败")
 	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
+	if response.StatusCode != http.StatusOK {
 		return &ProviderError{Code: "huifu_http_error", Message: "斗拱接口返回失败", Temporary: response.StatusCode >= 500}
 	}
-	var envelope huifuEnvelope
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return fmt.Errorf("解析斗拱响应：%w", err)
-	}
-	if strings.TrimSpace(envelope.Sign) != "" {
-		if err := huifuVerifyResponse(config, envelope); err != nil {
-			return err
-		}
+	envelope, err := huifuParseAndVerifyResponse(config, body)
+	if err != nil {
+		return err
 	}
 	if output != nil {
 		*output = envelope
@@ -377,7 +372,11 @@ func huifuSignedPayload(config Config, data map[string]string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	content := huifuCanonical(stringMapToAny(data))
+	dataObject := stringMapToAny(data)
+	content, err := huifuJSONSignText(dataObject)
+	if err != nil {
+		return nil, err
+	}
 	signature, err := rsaSHA256Sign(privateKey, []byte(content))
 	if err != nil {
 		return nil, err
@@ -386,51 +385,67 @@ func huifuSignedPayload(config Config, data map[string]string) ([]byte, error) {
 		"sys_id":     strings.TrimSpace(config["sysId"]),
 		"product_id": strings.TrimSpace(config["productId"]),
 		"sign":       signature,
-		"data":       data,
+		"data":       dataObject,
 	}
-	return huifuJSON(envelope)
+	text, err := huifuJSONSignText(envelope)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(text), nil
 }
 
 func huifuJSON(value any) ([]byte, error) {
-	var buffer bytes.Buffer
-	encoder := json.NewEncoder(&buffer)
-	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(value); err != nil {
+	text, err := huifuJSONSignText(value)
+	if err != nil {
 		return nil, err
 	}
-	return bytes.TrimSpace(buffer.Bytes()), nil
+	return []byte(text), nil
 }
 
-func huifuVerifyResponse(config Config, envelope huifuEnvelope) error {
-	publicKey, err := parseRSAPublicKey(config["huifuPublicKey"])
+// huifuJSONSignText 与官方 Go SDK FormatSignSrcText 一致：对对象做 json.Marshal，
+// 再把 < > & 的 \u003c 转义还原，作为 SHA256WithRSA 原文。
+func huifuJSONSignText(value any) (string, error) {
+	raw, err := json.Marshal(value)
 	if err != nil {
-		return err
+		return "", err
 	}
-	raw, err := json.Marshal(envelope.Data)
-	if err != nil {
-		return err
-	}
-	var object map[string]any
-	if err := json.Unmarshal(raw, &object); err != nil {
-		return err
-	}
-	return rsaSHA256Verify(publicKey, []byte(huifuCanonical(object)), envelope.Sign)
+	content := string(raw)
+	content = strings.ReplaceAll(content, "\\u003c", "<")
+	content = strings.ReplaceAll(content, "\\u003e", ">")
+	content = strings.ReplaceAll(content, "\\u0026", "&")
+	return content, nil
 }
 
-func huifuCanonical(data map[string]any) string {
-	keys := make([]string, 0, len(data))
-	for key, value := range data {
-		if key == "" || key == "sign" || huifuScalar(value) == "" {
-			continue
+func huifuParseAndVerifyResponse(config Config, body []byte) (huifuEnvelope, error) {
+	var wire struct {
+		SysID     string          `json:"sys_id"`
+		ProductID string          `json:"product_id"`
+		Sign      string          `json:"sign"`
+		Data      json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		return huifuEnvelope{}, fmt.Errorf("解析斗拱响应：%w", err)
+	}
+	if strings.TrimSpace(wire.Sign) != "" {
+		publicKey, err := parseRSAPublicKey(config["huifuPublicKey"])
+		if err != nil {
+			return huifuEnvelope{}, err
 		}
-		keys = append(keys, key)
+		content := string(wire.Data)
+		content = strings.ReplaceAll(content, "\\u003c", "<")
+		content = strings.ReplaceAll(content, "\\u003e", ">")
+		content = strings.ReplaceAll(content, "\\u0026", "&")
+		if err := rsaSHA256Verify(publicKey, []byte(content), wire.Sign); err != nil {
+			return huifuEnvelope{}, err
+		}
 	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		parts = append(parts, key+"="+huifuScalar(data[key]))
+	var data huifuData
+	if len(bytes.TrimSpace(wire.Data)) > 0 {
+		if err := json.Unmarshal(wire.Data, &data); err != nil {
+			return huifuEnvelope{}, fmt.Errorf("解析斗拱响应 data：%w", err)
+		}
 	}
-	return strings.Join(parts, "&")
+	return huifuEnvelope{SysID: wire.SysID, ProductID: wire.ProductID, Sign: wire.Sign, Data: data}, nil
 }
 
 func huifuScalar(value any) string {

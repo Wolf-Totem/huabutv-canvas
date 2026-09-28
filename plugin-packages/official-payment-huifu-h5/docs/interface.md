@@ -7,11 +7,11 @@
 - 预下单 `POST https://api.huifu.com/v2/trade/hosting/payment/preorder`（[H5、PC预下单](https://paas.huifu.com/partners/api/doc/cpjs/api_cpjs_hosting.md)）
 - 查询 `POST https://api.huifu.com/v2/trade/hosting/payment/queryorderinfo`（[统一收银台交易查询](https://paas.huifu.com/partners/api/doc/cpjs/api_cpjs_hostingcx.md)）
 - 关单 `POST https://api.huifu.com/v2/trade/hosting/payment/close`（[统一收银台交易关单](https://paas.huifu.com/partners/api/doc/cpjs/api_cpjs_hostinggd.md)）
-- 异步通知按 [异步消息规范](https://paas.huifu.com/partners/start/ybxx/jiekouguifan_ybxx.md)：POST 表单、`resp_data` + `sign`、汇付公钥验签、HTTP 200，正文前缀 `RECV_ORD_ID_`
+- 异步通知按 [异步消息规范](https://paas.huifu.com/partners/start/ybxx/jiekouguifan_ybxx.md)：POST 表单、`resp_data` + `sign`、汇付公钥对 `resp_data` 原文验签、HTTP 200，正文为 `RECV_ORD_ID_` 加上 `req_seq_id`
 
-`create_order` 固定 `pre_order_type=1`、`hosting_data.request_type=M`。收银 `mode=redirect`，`value` 为官方返回的 `jump_url`。金额按官方「单位元、两位小数」与宿主分互转。`req_seq_id` 使用宿主商户订单号。查询需要官方 `org_req_date`，宿主只给订单号，故按请求日与前一日各查一次。已支付订单不再关单。H5 预下单页未定义账单下载，`download_trade_bill` 返回 not found。
+`create_order` 固定 `pre_order_type=1`、`hosting_data.request_type=M`，并按官方接口表上送必填 `project_id`、`project_title`。收银 `mode=redirect`，`value` 为官方返回的 `jump_url`。金额按官方「单位元、两位小数」与宿主分互转。`req_seq_id` 使用宿主商户订单号。查询需要官方 `org_req_date`，宿主只给订单号，故按请求日与前一日各查一次。已支付订单不再关单。H5 预下单页未定义账单下载，`download_trade_bill` 返回 not found。
 
-配置字段：`publicBaseUrl`、`sysId`、`productId`、`huifuId`、`projectId`、`projectTitle`、`merchantPrivateKey`、`huifuPublicKey`、`gateway`。`gateway` 必须为 https，生产示例为 `https://api.huifu.com`。加签算法见官方接入指引 https://paas.huifu.com/open/doc/guide/#/api_v2jqyq ；本插件对 `data` 第一层字段按 ASCII 排序后以 `key=value&...` 做 SHA256WithRSA。
+配置字段：`publicBaseUrl`、`sysId`、`productId`、`huifuId`、`projectId`、`projectTitle`、`merchantPrivateKey`、`huifuPublicKey`、`gateway`。`gateway` 必须为 https，生产示例为 `https://api.huifu.com`。加签与官方 Go SDK `FormatSignSrcText` 一致：对 `data` 对象 JSON 做 SHA256WithRSA，响应验签使用返回报文里 `data` 字段的原始 JSON。
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -23,7 +23,7 @@
   "apiVersion": "yingce.plugin/v1",
   "id": "official-payment-huifu-h5",
   "name": "斗拱 H5 支付",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "汇付斗拱",
   "description": "斗拱统一收银台 H5 预下单适配器。跳转官方 jump_url 完成支付。",
   "enabled": true,
@@ -75,8 +75,8 @@
         "name": "projectId",
         "type": "string",
         "label": "托管项目号 (project_id)",
-        "required": false,
-        "description": "合作伙伴控台创建的统一收银台项目号。客服确认可不填时留空，下单不会带 project_id。"
+        "required": true,
+        "description": "商户在斗拱控台创建的统一收银台项目号，官方预下单接口必填，最长 32 字。"
       },
       {
         "name": "projectTitle",

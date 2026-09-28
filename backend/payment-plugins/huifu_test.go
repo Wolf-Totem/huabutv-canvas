@@ -203,43 +203,19 @@ func TestHuifuH5DownloadTradeBillIsNotOnH5API(t *testing.T) {
 	}
 }
 
-func TestHuifuH5OmitsEmptyProjectIDFromHostingData(t *testing.T) {
+func TestHuifuH5RequiresProjectID(t *testing.T) {
 	privateKey, publicKey := testRSAKeyPair(t)
 	config := testHuifuConfig(privateKey, publicKey)
 	config["projectId"] = ""
-	var hosting map[string]string
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		body, err := io.ReadAll(request.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var captured map[string]any
-		if err := json.Unmarshal(body, &captured); err != nil {
-			t.Fatal(err)
-		}
-		data := captured["data"].(map[string]any)
-		if err := json.Unmarshal([]byte(data["hosting_data"].(string)), &hosting); err != nil {
-			t.Fatal(err)
-		}
-		writeHuifuJSON(t, writer, config, map[string]any{
-			"resp_code": "00000000", "resp_desc": "交易成功",
-			"jump_url": "https://api.huifu.com/hostingh5/?jump_id=H1&huifu_id=6666000109133323",
-		})
-	}))
-	defer server.Close()
-	provider := NewHuifuH5Provider(server.Client())
-	provider.baseURL = server.URL
+	provider := NewHuifuH5Provider(http.DefaultClient)
+	if err := provider.ValidateConfig(config); err == nil || !strings.Contains(err.Error(), "projectId") {
+		t.Fatalf("ValidateConfig() error = %v, want projectId required", err)
+	}
 	if _, err := provider.CreateOrder(context.Background(), config, CreateRequest{
 		MerchantOrderNo: "order-1", Description: "100 积分", AmountFen: 100, Currency: "CNY",
 		NotifyURL: "https://merchant.example/api/payments/notify/huifu-h5-cashier/cfg",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := hosting["project_id"]; ok {
-		t.Fatalf("empty project_id must be omitted, hosting = %#v", hosting)
-	}
-	if hosting["project_title"] != "收银台标题" || hosting["request_type"] != "M" {
-		t.Fatalf("hosting = %#v", hosting)
+	}); err == nil || !strings.Contains(err.Error(), "projectId") {
+		t.Fatalf("CreateOrder() error = %v, want projectId required", err)
 	}
 }
 
@@ -276,7 +252,11 @@ func writeHuifuJSON(t *testing.T, writer http.ResponseWriter, config Config, dat
 	if err != nil {
 		t.Fatal(err)
 	}
-	signature, err := rsaSHA256Sign(privateKey, []byte(huifuCanonical(data)))
+	content, err := huifuJSONSignText(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := rsaSHA256Sign(privateKey, []byte(content))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +271,11 @@ func huifuTestSign(t *testing.T, config Config, data map[string]any) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	signature, err := rsaSHA256Sign(privateKey, []byte(huifuCanonical(data)))
+	content, err := huifuJSONSignText(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := rsaSHA256Sign(privateKey, []byte(content))
 	if err != nil {
 		t.Fatal(err)
 	}

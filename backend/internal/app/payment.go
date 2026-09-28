@@ -720,34 +720,34 @@ func (s *Service) ClosePaymentOrder(ctx context.Context, actor *model.User, id s
 	return &view, nil
 }
 
-func (s *Service) AcceptPaymentNotification(ctx context.Context, providerID, configID string, headers http.Header, rawBody []byte) error {
+func (s *Service) AcceptPaymentNotification(ctx context.Context, providerID, configID string, headers http.Header, rawBody []byte) (string, error) {
 	provider, ok := s.paymentRegistry.Get(providerID)
 	if !ok {
-		return BadAuthRequest("未知支付通知渠道")
+		return "", BadAuthRequest("未知支付通知渠道")
 	}
 	config, err := s.repo.PaymentProviderConfig(configID)
 	if err != nil || config.ProviderID != providerID {
-		return BadAuthRequest("支付通知配置版本不存在")
+		return "", BadAuthRequest("支付通知配置版本不存在")
 	}
 	values, err := s.decryptPaymentConfig(config)
 	if err != nil {
-		return err
+		return "", err
 	}
 	notification, err := provider.VerifyNotification(ctx, values, headers, rawBody)
 	if err != nil {
-		return BadAuthRequest("支付通知验签失败")
+		return "", BadAuthRequest("支付通知验签失败")
 	}
 	order, err := s.repo.PaymentOrderByMerchant(providerID, notification.MerchantOrderNo)
 	if err != nil || order.ProviderConfigID != config.ID {
-		return BadAuthRequest("支付通知订单不存在或配置版本不匹配")
+		return "", BadAuthRequest("支付通知订单不存在或配置版本不匹配")
 	}
 	normalized, err := json.Marshal(notification.Result)
 	if err != nil {
-		return err
+		return "", err
 	}
 	payloadCipher, err := s.encryptSettingSecret(string(rawBody))
 	if err != nil {
-		return err
+		return "", err
 	}
 	digest := sha256.Sum256(rawBody)
 	inbox := &model.PaymentNotification{
@@ -757,15 +757,17 @@ func (s *Service) AcceptPaymentNotification(ctx context.Context, providerID, con
 		Status: model.PaymentNotificationPending, NextAttemptAt: time.Now(),
 	}
 	created, err := s.repo.SaveVerifiedPaymentNotification(inbox)
-	if err != nil || !created {
-		return err
+	if err != nil {
+		return "", err
 	}
-	// Keep the callback path fast but try once immediately. A durable inbox row
-	// remains for the worker if the credit transaction cannot complete now.
-	if err := s.processPaymentNotification(inbox); err != nil {
-		_ = s.repo.RetryPaymentNotification(inbox.ID, safePaymentError(err), time.Now().Add(5*time.Second))
+	if created {
+		// Keep the callback path fast but try once immediately. A durable inbox row
+		// remains for the worker if the credit transaction cannot complete now.
+		if processErr := s.processPaymentNotification(inbox); processErr != nil {
+			_ = s.repo.RetryPaymentNotification(inbox.ID, safePaymentError(processErr), time.Now().Add(5*time.Second))
+		}
 	}
-	return nil
+	return order.MerchantOrderNo, nil
 }
 
 func (s *Service) processPaymentNotification(notification *model.PaymentNotification) error {
