@@ -100,10 +100,10 @@ export const CANVAS_SHORTCUTS: CanvasShortcutItem[] = [
     {
         id: "box-select",
         category: "selection",
-        title: "框选多个节点",
-        description: "空白处左键拖动默认框选；Shift 追加、Command/Ctrl 切换、Alt 移除",
-        keys: [["空白处左键拖动"], ["Shift", "拖动"], [CANVAS_MODIFIER_KEY, "拖动"], ["Alt", "拖动"]],
-        keywords: ["多选", "范围", "selection"],
+        title: "框选节点和连线",
+        description: "空白处左键拖动同时框选节点和连线；左→右需完全包住，右→左碰到即选；Shift 追加、Command/Ctrl 切换、Alt 移除",
+        keys: [["空白处左键拖动"], ["左→右包住"], ["右→左碰到"]],
+        keywords: ["多选", "范围", "连线", "连接线", "selection"],
     },
     {
         id: "box-select-tool",
@@ -112,6 +112,14 @@ export const CANVAS_SHORTCUTS: CanvasShortcutItem[] = [
         description: "底部工具栏的胶囊开关切到区域选择后，空白处拖动可连续框选",
         keys: [["区域选择", "拖动"]],
         keywords: ["工具栏", "多选", "selection"],
+    },
+    {
+        id: "delete-connection-dblclick",
+        category: "selection",
+        title: "双击删除连线",
+        description: "双击一条连线立即删除；若该线关联了分镜素材，会同时取消关联",
+        keys: [["双击连线"]],
+        keywords: ["删除", "连线", "连接线", "double click", "delete"],
     },
     {
         id: "add-selection",
@@ -165,9 +173,9 @@ export const CANVAS_SHORTCUTS: CanvasShortcutItem[] = [
         id: "delete",
         category: "editing",
         title: "删除选中内容",
-        description: "删除选中的节点或连线",
+        description: "删除选中的节点和连线；只选连线时只删线，两端节点保留",
         keys: [["Delete"], ["Backspace"]],
-        keywords: ["移除", "delete"],
+        keywords: ["移除", "连线", "连接线", "delete"],
     },
     {
         id: "undo",

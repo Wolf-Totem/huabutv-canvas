@@ -9,7 +9,13 @@ describe("canvas shortcuts", () => {
     });
 
     test("documents default region selection and trackpad-friendly panning", () => {
-        expect(CANVAS_SHORTCUTS.find((shortcut) => shortcut.id === "box-select")?.keys[0]).toEqual(["空白处左键拖动"]);
+        expect(CANVAS_SHORTCUTS.find((shortcut) => shortcut.id === "box-select")?.keys).toEqual([
+            ["空白处左键拖动"],
+            ["左→右包住"],
+            ["右→左碰到"],
+        ]);
+        expect(CANVAS_SHORTCUTS.find((shortcut) => shortcut.id === "box-select")?.title).toBe("框选节点和连线");
+        expect(CANVAS_SHORTCUTS.find((shortcut) => shortcut.id === "delete-connection-dblclick")?.keys).toEqual([["双击连线"]]);
         expect(CANVAS_SHORTCUTS.find((shortcut) => shortcut.id === "pan")?.keys).toEqual([
             ["触控板双指"],
             ["Space", "左键拖动"],
@@ -21,6 +27,9 @@ describe("canvas shortcuts", () => {
         expect(filterCanvasShortcuts("粘贴").map((shortcut) => shortcut.id)).toContain("paste");
         expect(filterCanvasShortcuts("缩放").map((shortcut) => shortcut.id)).toEqual(expect.arrayContaining(["zoom-wheel", "zoom-controls", "zoom-presets"]));
         expect(filterCanvasShortcuts("Alt L").map((shortcut) => shortcut.id)).toContain("batch-connect");
+        expect(filterCanvasShortcuts("连线").map((shortcut) => shortcut.id)).toEqual(
+            expect.arrayContaining(["box-select", "delete-connection-dblclick", "delete"]),
+        );
     });
 
     test("filters by category without losing the full catalog", () => {
