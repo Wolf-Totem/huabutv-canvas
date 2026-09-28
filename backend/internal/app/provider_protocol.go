@@ -75,11 +75,11 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		}
 		body, err := executeProtocolRequest(withProviderRequestKind(ctx, "create"), input.Config, spec)
 		if err != nil {
-			return nil, err
+			return nil, annotateJiasuImageModelEndpointError(input.Config, err)
 		}
 		created, err = adapter.ParseCreate(ctx, body)
 		if err != nil {
-			return nil, err
+			return nil, annotateJiasuImageModelEndpointError(input.Config, err)
 		}
 		taskID = created.TaskID
 		if taskID == "" {
@@ -228,6 +228,9 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 	}
 	if count, err := strconv.Atoi(strings.TrimSpace(input.Config.Count)); err == nil && count > 0 {
 		request.ImageCount = count
+	}
+	if input.Mode == "image" && strings.TrimSpace(input.Config.InterfaceType) == "jiasu-image" {
+		applyJiasuImageProtocolFields(&request, input.Config)
 	}
 	request.Output = protocol.OutputOptions{
 		Count: request.ImageCount, Duration: request.Duration, AspectRatio: request.AspectRatio,

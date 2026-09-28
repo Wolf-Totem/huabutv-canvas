@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { App, Button, Segmented, Tag } from "antd";
+import { App, Button, Input, Segmented, Tag } from "antd";
 import { ChevronRight, FlaskConical, Settings2 } from "lucide-react";
 
 import { ModelEditorModal } from "@/components/model-editor-modal";
@@ -168,6 +168,17 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                         capabilityConfig: activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
                                     })}
                                 />
+                            </section>
+                            <section className="space-y-2">
+                                <div className="text-xs font-medium">上游模型 ID</div>
+                                <Input
+                                    value={activeModelCost?.providerModelKey || ""}
+                                    placeholder={activeModel}
+                                    allowClear
+                                    onChange={(event) => updateCost(activeModel, { providerModelKey: event.target.value })}
+                                    onBlur={(event) => updateCost(activeModel, { providerModelKey: event.target.value.trim().replace(/^models\//, "") })}
+                                />
+                                <p className="text-[var(--fs-tiny)] text-foreground/45">发给供应商的 model 字段。留空则使用产品名。佳速异步出图请填已绑定 POST /v1/images/create 的 id（文档示例 gpt-image-2.5-1k）；1K 写在能力参数 / resolution，不要写进产品名。</p>
                             </section>
                         </div>,
                     },

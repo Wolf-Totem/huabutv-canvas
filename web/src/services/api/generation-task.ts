@@ -424,6 +424,7 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
         systemPrompt: config.systemPrompt,
     };
     if (logicalModelIDForConfig(config)) return generationOptions;
+    const upstreamModel = requestConfig.channelId ? requestConfig.model : (requestConfig.providerModelKey || requestConfig.model);
     return {
         channelId: requestConfig.channelId,
         apiFormat: requestConfig.apiFormat,
@@ -431,7 +432,8 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
         baseUrl: requestConfig.baseUrl,
         apiKey: requestConfig.apiKey,
         secretKey: requestConfig.secretKey,
-        model: requestConfig.model,
+        model: upstreamModel,
+        ...(requestConfig.providerModelKey && requestConfig.providerModelKey !== requestConfig.model ? { providerModelKey: requestConfig.providerModelKey } : {}),
         ...generationOptions,
         capabilityConfig: modelCapabilityConfigFor(config, requestConfig.model),
         systemPrompt: config.systemPrompt,

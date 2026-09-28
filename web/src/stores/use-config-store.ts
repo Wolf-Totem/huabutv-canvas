@@ -377,6 +377,8 @@ export type ModelChannel = {
         outputTokenPriceMicrocredits?: number;
         cachedTokenPriceMicrocredits?: number;
         capabilityConfig?: ModelCapabilityConfig;
+        /** 发给供应商的 model；留空则使用产品模型标识。 */
+        providerModelKey?: string;
         logicalModelId?: string;
         logicalCapabilitySpec?: CapabilitySpec;
         logicalCapabilityProfiles?: CapabilitySpec[];
@@ -855,11 +857,18 @@ export function channelConnectionSignature(channel: ModelChannel) {
     return [channel.baseUrl.trim(), channel.apiKey.trim(), channel.secretKey?.trim() || "", channel.apiFormat, channel.interfaceType || "auto", JSON.stringify(channel.headers || [])].join("\n");
 }
 
+export function upstreamModelKey(channel: ModelChannel | undefined, catalogModel: string) {
+    const cost = channel?.modelCosts?.find((item) => item.model === catalogModel);
+    const upstream = String(cost?.providerModelKey || "").trim().replace(/^models\//, "");
+    return upstream || catalogModel;
+}
+
 export function resolveModelRequestConfig(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const model = modelOptionName(value || config.model);
     const modelProtocol = channel.modelCosts?.find((item) => item.model === model)?.protocol;
     const interfaceType = modelProtocol || channel.interfaceType;
+    const providerModelKey = channel.scope === "system" ? "" : upstreamModelKey(channel, model);
     return {
         ...config,
         model,
@@ -870,6 +879,7 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
         apiFormat: interfaceType ? (interfaceType === "gemini-veo" || interfaceType === "gemini-image" ? ("gemini" as const) : interfaceType === "claude-api" ? ("claude" as const) : ("openai" as const)) : channel.apiFormat,
         interfaceType,
         channelId: channel.scope === "system" ? channel.id : "",
+        providerModelKey,
     };
 }
 
