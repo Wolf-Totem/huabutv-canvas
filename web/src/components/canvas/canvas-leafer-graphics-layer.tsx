@@ -17,6 +17,7 @@ type CanvasLeaferGraphicsLayerProps = {
     theme: CanvasTheme;
     displayConnections: CanvasDisplayConnection[];
     selectedConnectionId: string | null;
+    selectedConnectionIds: ReadonlySet<string>;
     relatedConnectionIds: Set<string>;
     scriptScrollTopById: Record<string, number>;
     connectingParams: ConnectionHandle | null;
@@ -155,7 +156,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         const underlay = underlayRef.current;
         if (!underlay) return;
         rebuildConnections(underlay, props);
-    }, [props.displayConnections, props.relatedConnectionIds, props.scriptScrollTopById, props.selectedConnectionId, props.theme]);
+    }, [props.displayConnections, props.relatedConnectionIds, props.scriptScrollTopById, props.selectedConnectionId, props.selectedConnectionIds, props.theme]);
 
     useLayoutEffect(() => {
         const overlay = overlayRef.current;
@@ -237,7 +238,7 @@ function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLay
     scene.connectionIdsByNodeId.clear();
     const previewIds = scene.dragPreview ? scene.dragPreview.nodeIds : null;
     for (const { connection, from, to } of props.displayConnections) {
-        const emphasized = props.selectedConnectionId === connection.id || props.relatedConnectionIds.has(connection.id);
+        const emphasized = props.selectedConnectionIds.has(connection.id) || props.selectedConnectionId === connection.id || props.relatedConnectionIds.has(connection.id);
         const signature = connectionSceneSignature(connection, from, to, props, emphasized);
         let entry = scene.connectionEntries.get(connection.id);
         if (!entry) {
@@ -291,7 +292,7 @@ function connectionSceneSignature(connection: CanvasDisplayConnection["connectio
 function syncConnectionPath(entry: ConnectionSceneEntry, props: CanvasLeaferGraphicsLayerProps, preview: CanvasNodeDragPreview | null, previewIds: ReadonlySet<string> | null = preview?.nodeIds || null) {
     const from = translatePreviewNode(entry.from, previewIds, preview);
     const to = translatePreviewNode(entry.to, previewIds, preview);
-    const emphasized = props.selectedConnectionId === entry.connection.id || props.relatedConnectionIds.has(entry.connection.id);
+    const emphasized = props.selectedConnectionIds.has(entry.connection.id) || props.selectedConnectionId === entry.connection.id || props.relatedConnectionIds.has(entry.connection.id);
     entry.path.set({
         path: canvasConnectionPath(entry.connection, from, to, props.scriptScrollTopById[entry.from.id] || 0, props.scriptScrollTopById[entry.to.id] || 0).pathD,
         stroke: emphasized ? props.theme.accent.primary : props.theme.node.muted,

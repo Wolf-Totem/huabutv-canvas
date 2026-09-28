@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, FRAME_HEADER_HEIGHT, getFrameChildIds, getFrameChildren, isFrameNode } from "@/lib/canvas/canvas-frame";
 import { alignCanvasNodes, layoutCanvasAuto, layoutCanvasFlow, layoutCanvasNodes, nextCanvasVersionLabel, spreadCanvasNodes, type CanvasAlignmentMode } from "@/lib/canvas/canvas-layout";
+import { unbindStoryboardAssetsForDeletedConnections } from "@/lib/canvas/canvas-connection-selection";
 import { applyCanvasConnectionPromptSync } from "@/lib/canvas/canvas-resource-references";
 import { createCanvasNode, isHiddenBatchChild, removeCanvasNodes } from "@/lib/canvas/canvas-project-domain";
 import { isolateCopiedNodeMetadata, nextCopiedNodeTitle } from "@/lib/canvas/canvas-node-copy";
@@ -349,16 +350,24 @@ export function useCanvasNodeOperations({
         onNodesDeleted(result.removedIds, nextNodes, removedNodes);
     }, [commitConnections, commitNodes, connectionsRef, nodesRef, onNodesDeleted, selectNodes]);
 
-    const deleteConnection = useCallback((connectionId: string) => {
+    const deleteConnections = useCallback((connectionIds: Set<string>) => {
+        if (!connectionIds.size) return;
         const previousNodes = nodesRef.current;
         const previousConnections = connectionsRef.current;
-        const nextConnections = previousConnections.filter((item) => item.id !== connectionId);
-        const nextNodes = applyCanvasConnectionPromptSync(previousNodes, previousConnections, previousNodes, nextConnections);
+        const deleted = previousConnections.filter((item) => connectionIds.has(item.id));
+        if (!deleted.length) return;
+        const nextConnections = previousConnections.filter((item) => !connectionIds.has(item.id));
+        const unbound = unbindStoryboardAssetsForDeletedConnections(previousNodes, deleted);
+        const nextNodes = applyCanvasConnectionPromptSync(unbound, previousConnections, unbound, nextConnections);
         if (nextNodes !== previousNodes) commitNodes(nextNodes);
         commitConnections(nextConnections);
-        setSelectedConnectionId((current) => current === connectionId ? null : current);
-        setContextMenu((current) => current?.type === "connection" && current.connectionId === connectionId ? null : current);
+        setSelectedConnectionId(null);
+        setContextMenu((current) => current?.type === "connection" && connectionIds.has(current.connectionId) ? null : current);
     }, [commitConnections, commitNodes, connectionsRef, nodesRef, setContextMenu, setSelectedConnectionId]);
+
+    const deleteConnection = useCallback((connectionId: string) => {
+        deleteConnections(new Set([connectionId]));
+    }, [deleteConnections]);
 
     const duplicateNode = useCallback((nodeId: string, duplicateMode: "variant" | "copy" = "variant") => {
         const source = nodesRef.current.find((node) => node.id === nodeId);
@@ -561,6 +570,7 @@ export function useCanvasNodeOperations({
         createReferenceGroup,
         createStoryboardGroup,
         deleteConnection,
+        deleteConnections,
         deleteNodes,
         duplicateNode,
         hasCopiedNodes,

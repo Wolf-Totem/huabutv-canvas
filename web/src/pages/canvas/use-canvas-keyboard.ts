@@ -6,6 +6,7 @@ type UseCanvasKeyboardOptions = {
     nodesRef: { current: CanvasNodeData[] };
     selectedNodeIdsRef: { current: Set<string> };
     selectedConnectionId: string | null;
+    selectedConnectionIdsRef: { current: Set<string> };
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
     setContextMenu: Dispatch<SetStateAction<ContextMenuState | null>>;
@@ -28,6 +29,7 @@ type UseCanvasKeyboardOptions = {
     pasteSystemClipboard: (position?: undefined, clipboardEvent?: ClipboardEvent | null) => Promise<boolean> | boolean;
     deleteNodes: (ids: Set<string>) => void;
     deleteConnection: (connectionId: string) => void;
+    deleteConnections: (ids: Set<string>) => void;
     deselectCanvas: () => void;
     zoomCanvasIn: () => void;
     zoomCanvasOut: () => void;
@@ -52,6 +54,7 @@ export function useCanvasKeyboard({
     nodesRef,
     selectedNodeIdsRef,
     selectedConnectionId,
+    selectedConnectionIdsRef,
     setSelectedNodeIds,
     setSelectedConnectionId,
     setContextMenu,
@@ -74,6 +77,7 @@ export function useCanvasKeyboard({
     pasteSystemClipboard,
     deleteNodes,
     deleteConnection,
+    deleteConnections,
     deselectCanvas,
     zoomCanvasIn,
     zoomCanvasOut,
@@ -180,8 +184,11 @@ export function useCanvasKeyboard({
                 return;
             }
             if (event.key === "Delete" || event.key === "Backspace") {
+                const connectionIds = new Set(selectedConnectionIdsRef.current);
+                if (selectedConnectionId) connectionIds.add(selectedConnectionId);
+                if (selectedNodeIdsRef.current.size || connectionIds.size) event.preventDefault();
                 if (selectedNodeIdsRef.current.size) deleteNodes(new Set(selectedNodeIdsRef.current));
-                else if (selectedConnectionId) deleteConnection(selectedConnectionId);
+                if (connectionIds.size) deleteConnections(connectionIds);
             }
             if (event.key === "Escape") {
                 // 沉浸专注：无选中且无弹窗/下拉/右键菜单时，Esc 退出专注；否则保留原有取消选择行为。
@@ -219,5 +226,5 @@ export function useCanvasKeyboard({
             window.removeEventListener("keydown", handleKeyDown, true);
             window.removeEventListener("paste", handlePaste, true);
         };
-    }, [beginBatchConnection, cancelSelectionBox, copySelectedNodes, deleteConnection, deleteNodes, deselectCanvas, exitFocusMode, fitCanvasContent, fitCanvasSelection, focusMode, nodesRef, onOpenSearch, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, restoreCopiedNodesFromText, saveCanvasProject, selectedConnectionId, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, toggleFocusMode, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
+    }, [beginBatchConnection, cancelSelectionBox, copySelectedNodes, deleteConnection, deleteConnections, deleteNodes, deselectCanvas, exitFocusMode, fitCanvasContent, fitCanvasSelection, focusMode, nodesRef, onOpenSearch, pasteCopiedNodes, pasteSystemClipboard, redoCanvas, restoreCopiedNodesFromText, saveCanvasProject, selectedConnectionId, selectedConnectionIdsRef, selectedNodeIdsRef, setAnnotationNodeId, setContextMenu, setCropNodeId, setInfoNodeId, setMaskEditNodeId, setSelectedConnectionId, setSelectedNodeIds, setShortcutRequestNonce, shouldPreferCopiedNodes, toggleFocusMode, undoCanvas, zoomCanvasIn, zoomCanvasOut, zoomToActualSize]);
 }

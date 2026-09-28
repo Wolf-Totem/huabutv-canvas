@@ -3,20 +3,25 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type MouseEven
 import { applyCanvasNodeDragPreview, applyCanvasNodeSelectionPreview, applyCanvasSelectionPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateNodeAlignment, createNodeAlignmentContext, sameStringSet, type NodeAlignmentContext } from "@/lib/canvas/canvas-project-domain";
 import { applyFrameDrop, buildCanvasFrameDropIndex, findFrameDropTargetFromIndex, getFrameChildIds, isFrameNode } from "@/lib/canvas/canvas-frame";
+import { hitCanvasConnectionsInSelection } from "@/lib/canvas/canvas-connection-selection";
 import { applyCanvasSelectionStrategy, canvasSelectionHitsBounds, createCanvasSelectionBounds, createCanvasSelectionSpatialIndexCache, resolveCanvasSelectionHitMode, resolveCanvasSelectionPreviewDelta, resolveCanvasSelectionStrategy } from "@/lib/canvas/canvas-selection";
 import { canvasNodeBounds } from "@/lib/canvas/canvas-spatial-index";
-import type { CanvasNodeData, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
+import type { CanvasDisplayConnection, CanvasNodeData, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
 
 type UseCanvasSelectionControllerOptions = {
     containerRef: RefObject<HTMLDivElement | null>;
     nodesRef: { current: CanvasNodeData[] };
     viewportRef: { current: ViewportTransform };
     selectedNodeIdsRef: { current: Set<string> };
+    selectedConnectionIdsRef: { current: Set<string> };
+    visibleDisplayConnectionsRef: { current: CanvasDisplayConnection[] };
+    scriptScrollTopByIdRef: { current: Record<string, number> };
     historyPausedRef: { current: boolean };
     screenToCanvas: (clientX: number, clientY: number) => Position;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
+    setSelectedConnectionIds: Dispatch<SetStateAction<Set<string>>>;
     cancelPendingConnectionCreate: () => void;
     onCanvasSelectionStart: () => void;
     onNodeInteractionStart: (selectionModifier: boolean) => void;
@@ -42,7 +47,7 @@ type DragState = {
 
 type SelectionGestureState =
     | { phase: "idle" }
-    | { phase: "pending" | "selecting"; initialSelection: Set<string>; selection: SelectionBox };
+    | { phase: "pending" | "selecting"; initialSelection: Set<string>; initialConnectionSelection: Set<string>; selection: SelectionBox };
 
 const EMPTY_DRAG_STATE: DragState = {
     isDraggingNode: false,
@@ -61,11 +66,15 @@ export function useCanvasSelectionController({
     nodesRef,
     viewportRef,
     selectedNodeIdsRef,
+    selectedConnectionIdsRef,
+    visibleDisplayConnectionsRef,
+    scriptScrollTopByIdRef,
     historyPausedRef,
     screenToCanvas,
     setNodes,
     setSelectedNodeIds,
     setSelectedConnectionId,
+    setSelectedConnectionIds,
     cancelPendingConnectionCreate,
     onCanvasSelectionStart,
     onNodeInteractionStart,
@@ -108,13 +117,20 @@ export function useCanvasSelectionController({
     const cancelSelectionBox = useCallback(() => {
         const gesture = selectionGestureRef.current;
         const initialSelection = gesture.phase === "selecting" ? gesture.initialSelection : null;
+        const initialConnectionSelection = gesture.phase === "selecting" ? gesture.initialConnectionSelection : null;
         resetSelectionBox();
-        if (!initialSelection) return;
-        const restoredSelection = new Set(initialSelection);
-        if (sameStringSet(restoredSelection, selectedNodeIdsRef.current)) return;
-        selectedNodeIdsRef.current = restoredSelection;
-        setSelectedNodeIds(restoredSelection);
-    }, [resetSelectionBox, selectedNodeIdsRef, setSelectedNodeIds]);
+        if (initialSelection) {
+            const restoredSelection = new Set(initialSelection);
+            if (!sameStringSet(restoredSelection, selectedNodeIdsRef.current)) {
+                selectedNodeIdsRef.current = restoredSelection;
+                setSelectedNodeIds(restoredSelection);
+            }
+        }
+        if (initialConnectionSelection && !sameStringSet(initialConnectionSelection, selectedConnectionIdsRef.current)) {
+            selectedConnectionIdsRef.current = new Set(initialConnectionSelection);
+            setSelectedConnectionIds(new Set(initialConnectionSelection));
+        }
+    }, [resetSelectionBox, selectedConnectionIdsRef, selectedNodeIdsRef, setSelectedConnectionIds, setSelectedNodeIds]);
 
     const deselectCanvas = useCallback(() => {
         cancelPendingConnectionCreate();
@@ -122,9 +138,11 @@ export function useCanvasSelectionController({
         const emptySelection = new Set<string>();
         selectedNodeIdsRef.current = emptySelection;
         setSelectedNodeIds(emptySelection);
+        selectedConnectionIdsRef.current = emptySelection;
+        setSelectedConnectionIds(emptySelection);
         setSelectedConnectionId(null);
         onDeselect();
-    }, [cancelPendingConnectionCreate, cancelSelectionBox, onDeselect, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
+    }, [cancelPendingConnectionCreate, cancelSelectionBox, onDeselect, selectedConnectionIdsRef, selectedNodeIdsRef, setSelectedConnectionId, setSelectedConnectionIds, setSelectedNodeIds]);
 
     const handleCanvasMouseDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         cancelPendingConnectionCreate();
@@ -133,6 +151,7 @@ export function useCanvasSelectionController({
         const world = screenToCanvas(event.clientX, event.clientY);
         const strategy = resolveCanvasSelectionStrategy(event);
         const initialSelection = new Set(selectedNodeIdsRef.current);
+        const initialConnectionSelection = new Set(selectedConnectionIdsRef.current);
         const nextSelectionBox: SelectionBox = {
             startWorldX: world.x,
             startWorldY: world.y,
@@ -142,10 +161,9 @@ export function useCanvasSelectionController({
             hitMode: "contain",
             initialSelectedNodeIds: Array.from(initialSelection),
         };
-        selectionGestureRef.current = { phase: "pending", initialSelection, selection: nextSelectionBox };
+        selectionGestureRef.current = { phase: "pending", initialSelection, initialConnectionSelection, selection: nextSelectionBox };
         selectionSpatialIndexCacheRef.current.get(nodesRef.current);
-        setSelectedConnectionId(null);
-    }, [cancelPendingConnectionCreate, nodesRef, onCanvasSelectionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId]);
+    }, [cancelPendingConnectionCreate, nodesRef, onCanvasSelectionStart, screenToCanvas, selectedConnectionIdsRef, selectedNodeIdsRef]);
 
     const handleNodeMouseDown = useCallback((event: ReactMouseEvent | ReactPointerEvent, nodeId: string) => {
         event.stopPropagation();
@@ -154,6 +172,8 @@ export function useCanvasSelectionController({
         // Paint order is session-local UI state. Update it once at the start
         // of a real node interaction so dragging also survives deselection.
         onNodeBringToFront?.(nodeId);
+        selectedConnectionIdsRef.current = new Set();
+        setSelectedConnectionIds(new Set());
         setSelectedConnectionId(null);
         const currentNodes = nodesRef.current;
         const nextSelected = new Set(selectedNodeIdsRef.current);
@@ -211,7 +231,7 @@ export function useCanvasSelectionController({
         setAlignmentGuides({});
         setDragPreview({ x: 0, y: 0, nodeIds: draggedRenderNodeIdSet });
         applyCanvasNodeDragPreview(containerRef.current, { x: 0, y: 0, nodeIds: draggedRenderNodeIdSet });
-    }, [containerRef, historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeBringToFront, onNodeClick, onNodeInteractionStart, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds]);
+    }, [containerRef, historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeBringToFront, onNodeClick, onNodeInteractionStart, selectedConnectionIdsRef, selectedNodeIdsRef, setSelectedConnectionId, setSelectedConnectionIds, setSelectedNodeIds]);
 
     const finishNodeDrag = useCallback((clientX?: number, clientY?: number) => {
         if (dragFrameRef.current) {
@@ -293,7 +313,7 @@ export function useCanvasSelectionController({
             const threshold = 4 / viewportRef.current.k;
             if (Math.hypot(world.x - selection.startWorldX, world.y - selection.startWorldY) < threshold) return false;
             selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y, hitMode: resolveCanvasSelectionHitMode(selection.startWorldX, world.x) };
-            gesture = { phase: "selecting", initialSelection: gesture.initialSelection, selection };
+            gesture = { phase: "selecting", initialSelection: gesture.initialSelection, initialConnectionSelection: gesture.initialConnectionSelection, selection };
             selectionGestureRef.current = gesture;
             // React only learns that a gesture exists. All subsequent geometry
             // and node feedback stays outside React until pointer-up.
@@ -301,7 +321,7 @@ export function useCanvasSelectionController({
         }
         const bounds = createCanvasSelectionBounds(selection.startWorldX, selection.startWorldY, world.x, world.y);
         selection = { ...selection, currentWorldX: world.x, currentWorldY: world.y, hitMode: resolveCanvasSelectionHitMode(selection.startWorldX, world.x) };
-        selectionGestureRef.current = { phase: "selecting", initialSelection: gesture.initialSelection, selection };
+        selectionGestureRef.current = { phase: "selecting", initialSelection: gesture.initialSelection, initialConnectionSelection: gesture.initialConnectionSelection, selection };
         applyCanvasSelectionPreview(containerRef.current, selection);
         const queryBounds = { ...bounds, right: Math.max(bounds.right, bounds.left + 0.01), bottom: Math.max(bounds.bottom, bounds.top + 0.01) };
         const hitNodeIds = new Set(selectionSpatialIndexCacheRef.current
@@ -309,15 +329,21 @@ export function useCanvasSelectionController({
             .query(queryBounds)
             .filter((node) => canvasSelectionHitsBounds(queryBounds, canvasNodeBounds(node), selection.hitMode))
             .map((node) => node.id));
+        const hitConnectionIds = hitCanvasConnectionsInSelection(visibleDisplayConnectionsRef.current, queryBounds, selection.hitMode, scriptScrollTopByIdRef.current);
         applyCanvasNodeSelectionPreview(containerRef.current, resolveCanvasSelectionPreviewDelta(gesture.initialSelection, hitNodeIds, selection.strategy));
         if (!commit) return true;
         const nextSelected = applyCanvasSelectionStrategy(gesture.initialSelection, hitNodeIds, selection.strategy);
+        const nextConnections = applyCanvasSelectionStrategy(gesture.initialConnectionSelection, hitConnectionIds, selection.strategy);
         if (!sameStringSet(nextSelected, selectedNodeIdsRef.current)) {
             selectedNodeIdsRef.current = nextSelected;
             setSelectedNodeIds(nextSelected);
         }
+        if (!sameStringSet(nextConnections, selectedConnectionIdsRef.current)) {
+            selectedConnectionIdsRef.current = nextConnections;
+            setSelectedConnectionIds(nextConnections);
+        }
         return true;
-    }, [containerRef, nodesRef, selectedNodeIdsRef, setSelectedNodeIds, viewportRef]);
+    }, [containerRef, nodesRef, scriptScrollTopByIdRef, selectedConnectionIdsRef, selectedNodeIdsRef, setSelectedConnectionIds, setSelectedNodeIds, viewportRef, visibleDisplayConnectionsRef]);
 
     const handlePointerMove = useCallback((event: PointerEvent) => {
         if (dragRef.current.isDraggingNode) {

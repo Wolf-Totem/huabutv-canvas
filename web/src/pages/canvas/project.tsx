@@ -150,6 +150,7 @@ import {
     CanvasNodeType,
     type CanvasAssistantSession,
     type CanvasConnection,
+    type CanvasDisplayConnection,
     type CanvasFolderStyle,
     type CanvasFolderTheme,
     type CanvasNodeData,
@@ -294,7 +295,8 @@ function InfiniteCanvasPage() {
     const [viewport, setViewport] = useState<ViewportTransform>({ x: 0, y: 0, k: 1 });
     const [size, setSize] = useState({ width: 1200, height: 720 });
     const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
-    const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+    const [selectedConnectionIds, setSelectedConnectionIds] = useState<Set<string>>(new Set());
+    const selectedConnectionId = selectedConnectionIds.size === 1 ? Array.from(selectedConnectionIds)[0] : null;
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [hideNodeConnections, setHideNodeConnections] = useState(readCanvasHideNodeConnections);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -391,7 +393,20 @@ function InfiniteCanvasPage() {
     const chatSessionsRef = useRef(chatSessions);
     const activeChatIdRef = useRef(activeChatId);
     const selectedNodeIdsRef = useRef(selectedNodeIds);
+    const selectedConnectionIdsRef = useRef(selectedConnectionIds);
+    const visibleDisplayConnectionsRef = useRef<CanvasDisplayConnection[]>([]);
+    const scriptScrollTopByIdRef = useRef(scriptScrollTopById);
     const viewportRef = useRef(viewport);
+
+    const setSelectedConnectionId = useCallback((value: SetStateAction<string | null>) => {
+        setSelectedConnectionIds((current) => {
+            const previous = current.size === 1 ? Array.from(current)[0] : null;
+            const next = typeof value === "function" ? value(previous ?? null) : value;
+            if (next == null) return current.size ? new Set() : current;
+            if (current.size === 1 && current.has(next)) return current;
+            return new Set([next]);
+        });
+    }, []);
     const generateNodeRef = useRef<((nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, options?: CanvasNodeGenerationOptions) => Promise<void>) | null>(null);
 
     useEffect(() => {
@@ -645,8 +660,10 @@ function InfiniteCanvasPage() {
         chatSessionsRef.current = chatSessions;
         activeChatIdRef.current = activeChatId;
         selectedNodeIdsRef.current = selectedNodeIds;
+        selectedConnectionIdsRef.current = selectedConnectionIds;
+        scriptScrollTopByIdRef.current = scriptScrollTopById;
         viewportRef.current = viewport;
-    }, [activeChatId, chatSessions, nodes, connections, selectedNodeIds, viewport]);
+    }, [activeChatId, chatSessions, nodes, connections, scriptScrollTopById, selectedConnectionIds, selectedNodeIds, viewport]);
 
     useEffect(() => {
         if (!projectLoaded) return;
@@ -972,6 +989,7 @@ function InfiniteCanvasPage() {
         createReferenceGroup,
         createStoryboardGroup,
         deleteConnection,
+        deleteConnections,
         deleteNodes,
         duplicateNode,
         hasCopiedNodes,
@@ -1179,11 +1197,15 @@ function InfiniteCanvasPage() {
         nodesRef,
         viewportRef,
         selectedNodeIdsRef,
+        selectedConnectionIdsRef,
+        visibleDisplayConnectionsRef,
+        scriptScrollTopByIdRef,
         historyPausedRef,
         screenToCanvas,
         setNodes,
         setSelectedNodeIds,
         setSelectedConnectionId,
+        setSelectedConnectionIds,
         cancelPendingConnectionCreate,
         onCanvasSelectionStart: handleCanvasSelectionStart,
         onNodeInteractionStart: handleNodeInteractionStart,
@@ -1432,9 +1454,11 @@ function InfiniteCanvasPage() {
             selectedNodeIds,
             activeNodeId,
             selectedConnectionId,
+            selectedConnectionIds,
         }),
-        [activeNodeId, displayConnections, hideNodeConnections, hoveredNodeId, selectedConnectionId, selectedNodeIds],
+        [activeNodeId, displayConnections, hideNodeConnections, hoveredNodeId, selectedConnectionId, selectedConnectionIds, selectedNodeIds],
     );
+    visibleDisplayConnectionsRef.current = visibleDisplayConnections;
     useEffect(() => {
         setNodes((current) => {
             let changed = false;
@@ -1663,6 +1687,7 @@ function InfiniteCanvasPage() {
         nodesRef,
         selectedNodeIdsRef,
         selectedConnectionId,
+        selectedConnectionIdsRef,
         setSelectedNodeIds,
         setSelectedConnectionId,
         setContextMenu,
@@ -1685,6 +1710,7 @@ function InfiniteCanvasPage() {
         pasteSystemClipboard,
         deleteNodes,
         deleteConnection,
+        deleteConnections,
         deselectCanvas,
         zoomCanvasIn,
         zoomCanvasOut,
@@ -2494,6 +2520,7 @@ function InfiniteCanvasPage() {
                                             theme={theme}
                                             displayConnections={visibleDisplayConnections}
                                             selectedConnectionId={selectedConnectionId}
+                                            selectedConnectionIds={selectedConnectionIds}
                                             relatedConnectionIds={relatedHighlight.connectionIds}
                                             scriptScrollTopById={scriptScrollTopById}
                                             connectingParams={connectingParams}
@@ -2528,6 +2555,7 @@ function InfiniteCanvasPage() {
                                                 connectionLayerBounds={connectionLayerBounds}
                                                 displayConnections={visibleDisplayConnections}
                                                 selectedConnectionId={selectedConnectionId}
+                                                selectedConnectionIds={selectedConnectionIds}
                                                 relatedConnectionIds={relatedHighlight.connectionIds}
                                                 scriptScrollTopById={scriptScrollTopById}
                                                 connectingParams={connectingParams}
@@ -2560,12 +2588,17 @@ function InfiniteCanvasPage() {
                                                 selectionBoundsElementRef={selectionBoundsElementRef}
                                                 renderCanvasNodeContent={renderCanvasNodeContent}
                                                 onConnectionSelect={(connectionId) => {
-                                                    setSelectedConnectionId(connectionId);
+                                                    setSelectedConnectionIds(new Set([connectionId]));
+                                                    selectedNodeIdsRef.current = new Set();
                                                     setSelectedNodeIds(new Set());
                                                     setContextMenu(null);
                                                 }}
+                                                onConnectionDoubleClick={(connectionId) => {
+                                                    deleteConnections(new Set([connectionId]));
+                                                }}
                                                 onConnectionContextMenu={(event, connectionId) => {
-                                                    setSelectedConnectionId(connectionId);
+                                                    setSelectedConnectionIds(new Set([connectionId]));
+                                                    selectedNodeIdsRef.current = new Set();
                                                     setSelectedNodeIds(new Set());
                                                     closeConnectionCreateMenu();
                                                     setContextMenu({ type: "connection", x: event.clientX, y: event.clientY, connectionId });

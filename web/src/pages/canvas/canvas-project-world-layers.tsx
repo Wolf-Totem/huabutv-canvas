@@ -20,6 +20,7 @@ type CanvasProjectWorldLayersProps = {
     connectionLayerBounds: { left: number; top: number; width: number; height: number };
     displayConnections: CanvasDisplayConnection[];
     selectedConnectionId: string | null;
+    selectedConnectionIds: ReadonlySet<string>;
     relatedConnectionIds: Set<string>;
     scriptScrollTopById: Record<string, number>;
     connectingParams: ConnectionHandle | null;
@@ -53,6 +54,7 @@ type CanvasProjectWorldLayersProps = {
     selectionBoundsElementRef: RefObject<HTMLDivElement | null>;
     renderCanvasNodeContent: (node: CanvasNodeData) => ReactNode;
     onConnectionSelect: (connectionId: string) => void;
+    onConnectionDoubleClick: (connectionId: string) => void;
     onConnectionContextMenu: (event: ReactMouseEvent<SVGPathElement>, connectionId: string) => void;
     onNodeMouseDown: (event: ReactMouseEvent, nodeId: string) => void;
     onNodeHoverStart: (nodeId: string) => void;
@@ -121,11 +123,12 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         to={to}
                         fromScrollTop={props.scriptScrollTopById[from.id] || 0}
                         toScrollTop={props.scriptScrollTopById[to.id] || 0}
-                        active={props.selectedConnectionId === connection.id || props.relatedConnectionIds.has(connection.id)}
+                        active={props.selectedConnectionIds.has(connection.id) || props.selectedConnectionId === connection.id || props.relatedConnectionIds.has(connection.id)}
                         visualMode="hover-only"
                         // 拖动预览由 Leafer 图形层逐帧同步；隐藏这层静态 SVG 描边，避免两套位置叠出残影。
                         hideVisual={props.isNodeDragging}
                         onSelect={() => props.onConnectionSelect(connection.id)}
+                        onDoubleClick={() => props.onConnectionDoubleClick(connection.id)}
                         onContextMenu={(event) => props.onConnectionContextMenu(event, connection.id)}
                     />
                 ))}

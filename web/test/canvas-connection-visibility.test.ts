@@ -24,7 +24,7 @@ describe("filterCanvasDisplayConnections", () => {
     });
 
     test("keeps a selected connection even if its nodes are not focused", () => {
-        const visible = filterCanvasDisplayConnections(connections, { enabled: true, selectedConnectionId: "b" });
+        const visible = filterCanvasDisplayConnections(connections, { enabled: true, selectedConnectionIds: new Set(["b"]) });
         expect(visible.map((item) => item.connection.id)).toEqual(["b"]);
     });
 });

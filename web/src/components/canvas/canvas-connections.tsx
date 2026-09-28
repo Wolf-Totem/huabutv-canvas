@@ -16,6 +16,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     visualMode = "full",
     hideVisual = false,
     onSelect,
+    onDoubleClick,
     onContextMenu,
 }: {
     connection: CanvasConnection;
@@ -27,6 +28,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     visualMode?: "full" | "hover-only";
     hideVisual?: boolean;
     onSelect: () => void;
+    onDoubleClick?: () => void;
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
     const theme = useCanvasColorTheme();
@@ -79,6 +81,11 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 onClick={(event) => {
                     event.stopPropagation();
                     onSelect();
+                }}
+                onDoubleClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onDoubleClick?.();
                 }}
                 onContextMenu={(event) => {
                     event.preventDefault();

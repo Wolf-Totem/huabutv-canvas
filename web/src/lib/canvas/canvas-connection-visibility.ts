@@ -31,6 +31,7 @@ export function filterCanvasDisplayConnections(
         selectedNodeIds?: ReadonlySet<string>;
         activeNodeId?: string | null;
         selectedConnectionId?: string | null;
+        selectedConnectionIds?: ReadonlySet<string>;
     },
 ) {
     if (!options.enabled) return connections;
@@ -39,8 +40,9 @@ export function filterCanvasDisplayConnections(
     if (options.hoveredNodeId) focusedNodeIds.add(options.hoveredNodeId);
     if (options.activeNodeId) focusedNodeIds.add(options.activeNodeId);
     options.selectedNodeIds?.forEach((nodeId) => focusedNodeIds.add(nodeId));
+    const selectedConnections = options.selectedConnectionIds || (options.selectedConnectionId ? new Set([options.selectedConnectionId]) : undefined);
 
     return connections.filter(
-        ({ connection, from, to }) => connection.id === options.selectedConnectionId || focusedNodeIds.has(connection.fromNodeId) || focusedNodeIds.has(connection.toNodeId) || focusedNodeIds.has(from.id) || focusedNodeIds.has(to.id),
+        ({ connection, from, to }) => selectedConnections?.has(connection.id) || focusedNodeIds.has(connection.fromNodeId) || focusedNodeIds.has(connection.toNodeId) || focusedNodeIds.has(from.id) || focusedNodeIds.has(to.id),
     );
 }
