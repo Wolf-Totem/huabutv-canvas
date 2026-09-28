@@ -58,6 +58,15 @@ test("homepage login and register dialogs render inside the public router", asyn
     expect(workspaceRouter).toContain("<Outlet />");
 });
 
+test("auth dialog closes only from the close button", async () => {
+    const source = await Bun.file(new URL("../src/components/auth/auth-dialog.tsx", import.meta.url)).text();
+    expect(source).toContain("portal-auth-close");
+    expect(source).toContain("onClick={closeAuth}");
+    expect(source).not.toContain("onClick={closeAuth}>");
+    expect(source).not.toContain('event.key === "Escape"');
+    expect(source).toContain('className="portal-auth-overlay" role="presentation"');
+});
+
 test("register form submits by click with visible errors above the auth overlay", async () => {
     const [register, css] = await Promise.all([
         Bun.file(new URL("../src/pages/auth/register.tsx", import.meta.url)).text(),

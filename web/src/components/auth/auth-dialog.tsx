@@ -27,21 +27,15 @@ export function AuthDialogHost() {
 
     useEffect(() => {
         document.documentElement.classList.toggle("mc-auth-open", open);
-        if (!open) return;
-        const onKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") closeAuth();
-        };
-        window.addEventListener("keydown", onKey);
         return () => {
             document.documentElement.classList.remove("mc-auth-open");
-            window.removeEventListener("keydown", onKey);
         };
-    }, [closeAuth, open]);
+    }, [open]);
 
     if (!open || typeof document === "undefined") return null;
     return createPortal(
-        <div className="portal-auth-overlay" role="presentation" onClick={closeAuth}>
-            <div className="portal-auth-card" role="dialog" aria-modal="true" aria-labelledby="portal-auth-title" onClick={(event) => event.stopPropagation()}>
+        <div className="portal-auth-overlay" role="presentation">
+            <div className="portal-auth-card" role="dialog" aria-modal="true" aria-labelledby="portal-auth-title">
                 <div className="portal-auth-tabs">
                     <button type="button" className={tab === "login" ? "is-active" : undefined} onClick={() => setTab("login")}>登录</button>
                     <button type="button" className={tab === "register" ? "is-active" : undefined} onClick={() => setTab("register")}>注册</button>
