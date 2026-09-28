@@ -463,9 +463,14 @@ type providerMediaHydrationPolicy struct {
 }
 
 func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGenerationInput) providerMediaHydrationPolicy {
+	ctx = ensureOfficialProtocolAdapter(ctx, input.Config.InterfaceType)
 	policy := providerMediaHydrationPolicy{preferURL: providerPrefersMediaURLs(input.Config.InterfaceType, input)}
 	switch strings.TrimSpace(input.Config.InterfaceType) {
 	case string(model.ChannelInterfaceNewAPIVideo), string(model.ChannelInterfaceNewAPIChannel1), string(model.ChannelInterfaceNewAPIChannel2), string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceMiniMaxVideo):
+		policy.requireURL = true
+		policy.preferURL = true
+	}
+	if isJiasuPublicMediaURLProtocol(input.Config.InterfaceType) {
 		policy.requireURL = true
 		policy.preferURL = true
 	}
@@ -480,12 +485,24 @@ func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGeneration
 	return policy
 }
 
+func isJiasuPublicMediaURLProtocol(interfaceType string) bool {
+	switch strings.TrimSpace(interfaceType) {
+	case "jiasu-video", "jiasu-image":
+		return true
+	default:
+		return false
+	}
+}
+
 // providerPrefersMediaURLs 只列出明确接受远程 URL 的协议。
 // 需要 multipart/原始字节的协议继续走字节路径，不能为了减少下载而擅自改变请求合同。
 func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput) bool {
 	if input.Mask != nil {
 		// OpenAI 图片编辑等 multipart 请求需要真实文件字节，遮罩场景不能改发 URL。
 		return false
+	}
+	if isJiasuPublicMediaURLProtocol(interfaceType) {
+		return true
 	}
 	switch strings.TrimSpace(interfaceType) {
 	case string(model.ChannelInterfaceChatCompletion), string(model.ChannelInterfaceOpenAIResponse), string(model.ChannelInterfaceClaudeAPI),
@@ -745,34 +762,22 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 }
 
 func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, policy providerMediaHydrationPolicy) error {
+	if media == nil {
+		return nil
+	}
+	if policy.requireURL {
+		return s.hydrateProviderMediaAsPublicURL(userID, media)
+	}
 	if !strings.HasPrefix(media.StorageKey, "resource:") {
-		if policy.requireURL && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
-			return errors.New("当前 JSON 视频协议的参考素材不能使用内嵌数据，请先上传到对象存储或提供公网素材地址")
-		}
 		return nil
 	}
 	resourceID := strings.TrimPrefix(media.StorageKey, "resource:")
-	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	resource, err := s.readyUserResource(userID, resourceID)
 	if err != nil {
-		return fmt.Errorf("读取任务参考资源失败：%w", err)
+		return err
 	}
-	if resource.Status != "ready" {
-		return errors.New("任务参考资源尚未上传完成")
-	}
-	useObjectURL := policy.requireURL || (policy.preferURL && resourceUsesObjectStorage(resource))
-	if useObjectURL {
-		signedURL, err := s.directResourceURL(resource, time.Now().Add(providerResourceURLTTL))
-		if err != nil {
-			return fmt.Errorf("生成参考素材地址失败：%w", err)
-		}
-		media.URL = signedURL
-		media.DataURL = ""
-		media.MimeType = firstNonEmpty(media.MimeType, resource.MimeType)
-		media.Bytes = resource.Size
-		media.Width = resource.Width
-		media.Height = resource.Height
-		media.DurationMs = resource.DurationMs
-		return nil
+	if policy.preferURL && resourceUsesObjectStorage(resource) {
+		return s.assignProviderMediaFromResource(media, resource)
 	}
 	if strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 		return nil
@@ -801,6 +806,80 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	media.Width = resource.Width
 	media.Height = resource.Height
 	media.DurationMs = resource.DurationMs
+	return nil
+}
+
+func (s *Service) hydrateProviderMediaAsPublicURL(userID string, media *providerMedia) error {
+	if strings.HasPrefix(media.StorageKey, "resource:") {
+		resource, err := s.readyUserResource(userID, strings.TrimPrefix(media.StorageKey, "resource:"))
+		if err != nil {
+			return err
+		}
+		if !resourceUsesObjectStorage(resource) {
+			promoted, err := s.promoteLocalResourceToOSS(resource)
+			if err != nil && !errors.Is(err, errObjectStorageNotEnabled) {
+				return fmt.Errorf("参考素材上传到对象存储失败：%w", err)
+			}
+			if err == nil {
+				resource = promoted
+			}
+		}
+		return s.assignProviderMediaFromResource(media, resource)
+	}
+	if isPublicMediaURL(strings.TrimSpace(media.URL)) {
+		media.DataURL = ""
+		return nil
+	}
+	if strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
+		resource, err := s.storeInlineProviderMedia(userID, media)
+		if err != nil {
+			return fmt.Errorf("参考素材上传到对象存储失败：%w", err)
+		}
+		return s.assignProviderMediaFromResource(media, resource)
+	}
+	return errors.New("当前 JSON 视频协议的参考素材不能使用内嵌数据，请先上传到对象存储或提供公网素材地址")
+}
+
+func (s *Service) readyUserResource(userID, resourceID string) (*model.Resource, error) {
+	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	if err != nil {
+		return nil, fmt.Errorf("读取任务参考资源失败：%w", err)
+	}
+	if resource.Status != "ready" {
+		return nil, errors.New("任务参考资源尚未上传完成")
+	}
+	return resource, nil
+}
+
+func (s *Service) storeInlineProviderMedia(userID string, media *providerMedia) (*model.Resource, error) {
+	mimeType, data, err := s.decodeDataURL(media.DataURL)
+	if err != nil {
+		return nil, err
+	}
+	kind := normalizeResourceKind("", mimeType)
+	fileName := firstNonEmpty(strings.TrimSpace(media.Name), "reference"+resourceFileExtension("", mimeType, kind))
+	resource, _, err := s.storeResource(userID, kind, fileName, mimeType, int64(len(data)), media.Width, media.Height, media.DurationMs, bytes.NewReader(data), nil, false)
+	if err != nil {
+		return nil, err
+	}
+	return resource, nil
+}
+
+func (s *Service) assignProviderMediaFromResource(media *providerMedia, resource *model.Resource) error {
+	signedURL, err := s.directResourceURL(resource, time.Now().Add(providerResourceURLTTL))
+	if err != nil {
+		return fmt.Errorf("生成参考素材地址失败：%w", err)
+	}
+	media.URL = signedURL
+	media.DataURL = ""
+	media.MimeType = firstNonEmpty(media.MimeType, resource.MimeType)
+	media.Bytes = resource.Size
+	media.Width = resource.Width
+	media.Height = resource.Height
+	media.DurationMs = resource.DurationMs
+	if resource.ID != "" {
+		media.StorageKey = "resource:" + resource.ID
+	}
 	return nil
 }
 

@@ -520,13 +520,21 @@ func taskInputUsesClientSubmit(taskType string, input map[string]any) bool {
 	if !taskInputUsesCustomChannel(input) {
 		return false
 	}
+	if isJiasuPublicMediaURLProtocol(taskInputInterfaceType(input)) {
+		// 佳速协议只收公网 URL。用户渠道也走后台：本地素材先入库 OSS，再由服务端发请求。
+		return false
+	}
 	mode, _ := input["mode"].(string)
 	if strings.HasPrefix(taskType, "video_") || mode == "video" {
 		return true
 	}
+	return mode == "image" && taskInputInterfaceType(input) == string(model.ChannelInterfaceNewAPIChannel2)
+}
+
+func taskInputInterfaceType(input map[string]any) string {
 	config, _ := input["config"].(map[string]any)
 	iface, _ := config["interfaceType"].(string)
-	return mode == "image" && strings.TrimSpace(iface) == string(model.ChannelInterfaceNewAPIChannel2)
+	return strings.TrimSpace(iface)
 }
 
 func taskInputUsesCustomChannel(input map[string]any) bool {

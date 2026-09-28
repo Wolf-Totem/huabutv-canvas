@@ -776,6 +776,105 @@ func TestHydrateNewAPIChannel1ResourceUsesSignedLocalURL(t *testing.T) {
 	}
 }
 
+func TestHydrateRequireURLPromotesLocalResourceToOSS(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	var uploadedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		uploadedPath = r.URL.Path
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != "png-bytes" {
+			t.Errorf("body = %q", body)
+		}
+		w.Header().Set("ETag", `"promoted-etag"`)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	svc := newResourceTestService(t)
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: tencentCOSProvider, Endpoint: server.URL, Bucket: "private-bucket-1250000000",
+		AccessKeyID: "secret-id", AccessKeySecret: "secret-key",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	localDir := filepath.Join(svc.dataDir, "resources", "users", "user-1", "image")
+	if err := os.MkdirAll(localDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(localDir, "local.png"), []byte("png-bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resource := model.Resource{
+		ID: "resource-local-promote", UserID: "user-1", Kind: "image", Status: model.ResourceStatusReady,
+		Provider: "local", ObjectKey: "users/user-1/image/local.png", MimeType: "image/png", Size: 9,
+	}
+	if err := svc.repo.CreateResource(&resource); err != nil {
+		t.Fatal(err)
+	}
+	media := providerMedia{StorageKey: "resource:resource-local-promote", DataURL: "data:image/png;base64,old"}
+	if err := svc.hydrateProviderMedia("user-1", &media, providerMediaHydrationPolicy{requireURL: true}); err != nil {
+		t.Fatalf("hydrateProviderMedia() error = %v", err)
+	}
+	if media.DataURL != "" || (!strings.Contains(media.URL, "q-signature=") && !strings.Contains(media.URL, "Signature=")) {
+		t.Fatalf("media = %#v", media)
+	}
+	if !strings.HasPrefix(media.URL, server.URL+"/") {
+		t.Fatalf("media URL = %q, want COS endpoint prefix %q", media.URL, server.URL)
+	}
+	stored, err := svc.repo.Resource("resource-local-promote")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Provider != tencentCOSProvider || stored.ETag != "promoted-etag" || stored.ObjectKey == "users/user-1/image/local.png" {
+		t.Fatalf("promoted resource = %#v", stored)
+	}
+	if uploadedPath == "" || !strings.Contains(uploadedPath, "/users/user-1/image/") {
+		t.Fatalf("uploaded path = %q", uploadedPath)
+	}
+	if _, err := os.Stat(filepath.Join(localDir, "local.png")); !os.IsNotExist(err) {
+		t.Fatalf("local object still present: %v", err)
+	}
+}
+
+func TestHydrateRequireURLUploadsDataURLToOSS(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("ETag", `"inline-etag"`)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	svc := newResourceTestService(t)
+	settingJSON, _ := json.Marshal(ossSettingValue{
+		Enabled: true, Provider: tencentCOSProvider, Endpoint: server.URL, Bucket: "private-bucket-1250000000",
+		AccessKeyID: "secret-id", AccessKeySecret: "secret-key",
+	})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(settingJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	media := providerMedia{Name: "frame.png", DataURL: testReferenceImageDataURL}
+	if err := svc.hydrateProviderMedia("user-1", &media, providerMediaHydrationPolicy{requireURL: true}); err != nil {
+		t.Fatalf("hydrateProviderMedia() error = %v", err)
+	}
+	if media.DataURL != "" || !strings.HasPrefix(media.URL, server.URL+"/") || !strings.HasPrefix(media.StorageKey, "resource:") {
+		t.Fatalf("media = %#v", media)
+	}
+	resource, err := svc.repo.Resource(strings.TrimPrefix(media.StorageKey, "resource:"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resource.Provider != tencentCOSProvider || resource.UserID != "user-1" {
+		t.Fatalf("stored resource = %#v", resource)
+	}
+}
+
 func TestHydratePreferredURLUsesObjectStorageAndFallsBackLocal(t *testing.T) {
 	svc := newResourceTestService(t)
 	settingJSON, _ := json.Marshal(ossSettingValue{

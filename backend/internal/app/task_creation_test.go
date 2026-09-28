@@ -12,6 +12,21 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestTaskInputUsesClientSubmitSkipsJiasu(t *testing.T) {
+	customVideo := map[string]any{"mode": "video", "config": map[string]any{"baseUrl": "https://example.com", "apiKey": "k", "interfaceType": "openai-video"}}
+	if !taskInputUsesClientSubmit("canvas_video", customVideo) {
+		t.Fatal("custom video channel should still client-submit")
+	}
+	jiasuVideo := map[string]any{"mode": "video", "config": map[string]any{"baseUrl": "https://ai.jiasuapi.com", "apiKey": "k", "interfaceType": "jiasu-video"}}
+	if taskInputUsesClientSubmit("canvas_video", jiasuVideo) {
+		t.Fatal("jiasu video must be submitted by the backend so local media can be uploaded to OSS first")
+	}
+	jiasuImage := map[string]any{"mode": "image", "config": map[string]any{"baseUrl": "https://ai.jiasuapi.com", "apiKey": "k", "interfaceType": "jiasu-image"}}
+	if taskInputUsesClientSubmit("canvas_image", jiasuImage) {
+		t.Fatal("jiasu image must not client-submit")
+	}
+}
+
 func TestTaskInputUsesWorkflowProvider(t *testing.T) {
 	tests := []struct {
 		name  string

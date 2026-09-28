@@ -43,6 +43,7 @@ const providerResourceURLTTL = 4 * time.Hour
 const directResourceURLTTL = 5 * time.Minute
 
 var errInvalidGeneratedDataURL = errors.New("生成内容 data URL 无效")
+var errObjectStorageNotEnabled = errors.New("对象存储未启用")
 
 type ResourceStream = assets.ResourceStream
 type ResourceDeliveryOptions = assets.ResourceDeliveryOptions
@@ -580,6 +581,52 @@ func writeLocalResourceObject(filePath string, body io.Reader) error {
 		return copyErr
 	}
 	return closeErr
+}
+
+// promoteLocalResourceToOSS 把本地文件复制到当前可用的对象存储，并改写资源记录。
+// 加速等只收公网 URL 的协议在发请求前走这条路径，避免把本地字节或 data URL 塞进 url 字段。
+func (s *Service) promoteLocalResourceToOSS(resource *model.Resource) (*model.Resource, error) {
+	if resource == nil {
+		return nil, errors.New("资源不存在")
+	}
+	if resourceUsesObjectStorage(resource) {
+		return resource, nil
+	}
+	setting, storageSettingID, useOSS, err := s.activeResourceOSSSetting(resource.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if !useOSS {
+		return resource, errObjectStorageNotEnabled
+	}
+	if latest, latestErr := s.repo.Resource(resource.ID); latestErr == nil && resourceUsesObjectStorage(latest) {
+		return latest, nil
+	}
+	localPath := filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
+	file, err := os.Open(localPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取本地参考素材失败：%w", err)
+	}
+	defer file.Close()
+	objectKey := ossObjectKey(setting, resource.UserID, firstNonEmpty(resource.Kind, "file"), filepath.Base(resource.ObjectKey), resource.MimeType, time.Now())
+	etag, err := putOSSObject(setting, objectKey, resource.MimeType, resource.Size, file)
+	if err != nil {
+		return nil, fmt.Errorf("OSS 上传失败：%w", err)
+	}
+	updated := *resource
+	updated.Provider = setting.Provider
+	updated.Endpoint = setting.Endpoint
+	updated.Bucket = setting.Bucket
+	updated.StorageSettingID = storageSettingID
+	updated.ObjectKey = objectKey
+	updated.ETag = etag
+	updated.Error = ""
+	updated.UpdatedAt = time.Now()
+	if err := s.repo.SaveResource(&updated); err != nil {
+		return nil, err
+	}
+	_ = os.Remove(localPath)
+	return &updated, nil
 }
 
 // storeResourceObject 写入资源物理对象。对象存储不可用（配置错误、密钥失效、网络

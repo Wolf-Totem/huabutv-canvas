@@ -71,6 +71,29 @@ func TestProviderMediaHydrationPolicyPrefersObjectURLs(t *testing.T) {
 	if resourceUsesObjectStorage(&model.Resource{Provider: "local"}) {
 		t.Fatal("local resources should fall back to protocol-compatible bytes")
 	}
+	jiasuVideo := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: "jiasu-video"}})
+	if !jiasuVideo.requireURL || !jiasuVideo.preferURL {
+		t.Fatalf("jiasu video policy = %#v", jiasuVideo)
+	}
+	jiasuImage := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: "jiasu-image"}})
+	if !jiasuImage.requireURL || !jiasuImage.preferURL {
+		t.Fatalf("jiasu image policy = %#v", jiasuImage)
+	}
+	empty := providerMediaHydrationPolicyFor(withProtocolRegistry(context.Background(), emptyProtocolRegistry), canvasGenerationInput{Config: providerConfig{InterfaceType: "jiasu-video"}})
+	if !empty.requireURL || !empty.preferURL {
+		t.Fatalf("jiasu video policy without plugin registry = %#v", empty)
+	}
+}
+
+func TestHydrateRequireURLKeepsPublicHTTPURL(t *testing.T) {
+	svc := &Service{}
+	media := providerMedia{URL: "https://cdn.example.com/ref.png", DataURL: testReferenceImageDataURL}
+	if err := svc.hydrateProviderMedia("user-1", &media, providerMediaHydrationPolicy{requireURL: true}); err != nil {
+		t.Fatalf("hydrateProviderMedia() error = %v", err)
+	}
+	if media.URL != "https://cdn.example.com/ref.png" || media.DataURL != "" {
+		t.Fatalf("media = %#v", media)
+	}
 }
 
 func TestProviderRequestErrorDetails(t *testing.T) {
