@@ -7682,12 +7682,15 @@ html:not(.dark) .creation-studio-control:hover,
     }
 
     .canvas-model-picker-menu {
+        display: flex;
         width: max-content !important;
         min-width: max(var(--canvas-model-picker-trigger-width, 0px), 260px);
         max-width: calc(100vw - 24px);
-        max-height: min(420px, calc(100vh - 32px));
+        max-height: min(70vh, 560px);
+        flex-direction: column;
         overflow-x: hidden;
         overflow-y: auto;
+        overscroll-behavior: contain;
         padding: 4px;
     }
 
@@ -17151,6 +17154,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     display: grid;
     gap: 4px;
     width: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 .canvas-model-picker-brand {
     display: flex;
@@ -17212,20 +17218,28 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     width: min(360px, calc(100vw - 24px)) !important;
 }
 .canvas-model-picker-menu.is-model-list {
+    overflow: hidden;
     width: min(720px, calc(100vw - 24px)) !important;
 }
 .canvas-model-picker-two-pane {
     display: grid;
     width: 100%;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
     grid-template-columns: 250px minmax(0, 1fr);
     gap: 14px;
-    min-width: 0;
-    align-items: start;
+    align-items: stretch;
+    overflow: hidden;
 }
 .canvas-model-picker-menu.is-model-list .canvas-model-picker-brand-rail {
     display: grid;
+    min-height: 0;
     align-content: start;
     gap: 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     border-right: 1px solid var(--workspace-border);
     padding-right: 14px;
 }
@@ -17233,7 +17247,21 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     width: 100%;
 }
 .canvas-model-picker-model-pane {
+    display: flex;
     min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+}
+.canvas-model-picker-model-list {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    gap: 4px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 @media (max-width: 720px) {
     .canvas-model-picker-menu:is(.is-brand-list, .is-model-list) {
@@ -19177,8 +19205,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace :where(.ant-input:hover, .ant-input-affix-wrapper:hover, .ant-select-selector:hover, .ant-picker:hover) { border-color: var(--user-border-strong) !important; }
 .app-user-workspace :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector, .ant-picker-focused) { border-color: var(--user-accent) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--user-accent) 14%, transparent) !important; }
 .creation-model-picker-surface .creation-model-picker-menu {
-    max-height: none !important;
-    overflow: visible !important;
+    max-height: min(70vh, 560px) !important;
+    overflow: hidden !important;
     width: min(360px, calc(100vw - 24px)) !important;
     padding: 10px !important;
 }

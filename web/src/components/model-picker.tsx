@@ -171,8 +171,9 @@ export function ModelPicker({
         <div
             ref={menuRef}
             data-canvas-no-zoom
+            data-canvas-wheel-scroll
             className={cn(
-                "canvas-model-picker-menu creation-model-picker-menu max-w-[calc(100vw-24px)]",
+                "canvas-model-picker-menu creation-model-picker-menu thin-scrollbar max-w-[calc(100vw-24px)]",
                 activeGroupKey === null ? "is-brand-list" : "is-model-list",
             )}
             style={
@@ -187,6 +188,7 @@ export function ModelPicker({
             onKeyDown={handleMenuKeyDown}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
+            onWheel={(event) => event.stopPropagation()}
         >
             {optionGroups.length ? (
                 activeGroupKey === null ? (
@@ -213,12 +215,12 @@ export function ModelPicker({
                             </button>;
                         })}
                     </div>
-                    {optionGroups.filter((group) => group.key === activeGroupKey).map((group) => <section key={group.key} className="canvas-model-picker-group canvas-model-picker-model-pane min-w-0 overflow-hidden">
+                    {optionGroups.filter((group) => group.key === activeGroupKey).map((group) => <section key={group.key} className="canvas-model-picker-group canvas-model-picker-model-pane min-w-0">
                         <div className="canvas-model-picker-secondary-head">
                             <button type="button" className="canvas-model-picker-back" onClick={() => setActiveGroupKey(null)} aria-label="返回品牌列表"><ChevronLeft /></button>
                             <span><strong>{group.label}</strong>{group.scope ? <small>{group.scope}</small> : null}</span>
                         </div>
-                        <div className="grid min-w-0 gap-1">
+                        <div className="canvas-model-picker-model-list thin-scrollbar">
                             {group.models.map((modelGroup) => {
                                 const selected = modelGroup.models.includes(current);
                                 const model = compatibleModelInGroup(config, modelGroup.models, selectionRequirements, selected ? current : undefined);
