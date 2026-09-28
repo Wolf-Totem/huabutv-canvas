@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildStoryboardAssetCatalog } from "@/lib/canvas/canvas-storyboard-assets";
+import { applyStoryboardCopyMatches, buildStoryboardAssetCatalog, matchStoryboardCopy, storyboardAssetRoleForNode } from "@/lib/canvas/canvas-storyboard-assets";
 import { reconcileStoryboardTargetConnections, storyboardComposerContent, storyboardRowReferenceNodeIds } from "@/lib/canvas/canvas-storyboard-materializer";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type StoryboardRow } from "@/types/canvas";
 
@@ -85,5 +85,23 @@ describe("storyboard target materializer", () => {
         const reconciled = reconcileStoryboardTargetConnections(created, script, row, "target", ["character"]);
         expect(reconciled.some((edge) => edge.id === "manual-target")).toBe(true);
         expect(reconciled.some((edge) => edge.relation === "storyboard-asset-reference" && edge.fromNodeId === "prop")).toBe(false);
+    });
+});
+
+describe("storyboard copy matching", () => {
+    it("treats a named canvas image as a character binding", () => {
+        expect(storyboardAssetRoleForNode(node("zhang", CanvasNodeType.Image, { content: "data:image/png;base64,x" }))).toBe("character");
+    });
+
+    it("binds 张三 from shot copy onto that row only", () => {
+        const zhang = { ...node("zhang", CanvasNodeType.Image, { content: "data:image/png;base64,x", storageKey: "resource:zhang" }), title: "张三" };
+        const idle = { ...row, assetBindings: [] };
+        const dancing = { ...row, id: "row-2", shotNumber: 2, videoMotionPrompt: "张三在跳舞", assetBindings: [] };
+        const matches = matchStoryboardCopy([idle, dancing], [zhang]);
+        expect(matches[0].added).toEqual([]);
+        expect(matches[1].added.map((hit) => hit.nodeId)).toEqual(["zhang"]);
+        const applied = applyStoryboardCopyMatches([idle, dancing], matches);
+        expect(applied[0].assetBindings).toEqual([]);
+        expect(applied[1].assetBindings[0]).toMatchObject({ nodeId: "zhang", role: "character" });
     });
 });

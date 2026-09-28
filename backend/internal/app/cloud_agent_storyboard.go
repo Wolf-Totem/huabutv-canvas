@@ -28,11 +28,14 @@ type cloudAgentStoryboardCreateArgs struct {
 }
 
 type cloudAgentStoryboardEditArgs struct {
-	SnapshotHash string         `json:"snapshotHash"`
-	NodeID       string         `json:"nodeId"`
-	Action       string         `json:"action"`
-	RowID        string         `json:"rowId"`
-	Patch        map[string]any `json:"patch"`
+	SnapshotHash string                         `json:"snapshotHash"`
+	NodeID       string                         `json:"nodeId"`
+	Action       string                         `json:"action"`
+	RowID        string                         `json:"rowId"`
+	Patch        map[string]any                 `json:"patch"`
+	Assets       []cloudAgentStoryboardAssetRef `json:"assets"`
+	DryRun       bool                           `json:"dryRun"`
+	Mode         string                         `json:"mode"`
 }
 
 type cloudAgentStoryboardMutationPlan struct {
@@ -41,6 +44,8 @@ type cloudAgentStoryboardMutationPlan struct {
 	BeforeJSON         string
 	BeforeSnapshotHash string
 	Preview            cloudAgentApprovalPreview
+	DryRun             bool
+	Result             map[string]any
 }
 
 func storyboardArgumentError(action string) error {
@@ -218,8 +223,11 @@ func prepareCloudAgentStoryboardEdit(repo *repository.Repository, userID, canvas
 	if args.SnapshotHash == "" || args.NodeID == "" {
 		return nil, BadAuthRequest("编辑分镜需要快照和节点ID")
 	}
+	if cloudAgentStoryboardAssetActions(args.Action) {
+		return prepareCloudAgentStoryboardAssetEdit(repo, userID, canvasID, call, args)
+	}
 	if args.Action != "append" && args.Action != "update" && args.Action != "remove" {
-		return nil, BadAuthRequest("分镜操作必须是 append、update 或 remove")
+		return nil, BadAuthRequest("分镜操作必须是 append、update、remove、bind_assets、unbind_assets、bind_assets_all_rows 或 match_assets")
 	}
 	if err := validateCloudAgentID(args.NodeID, "分镜节点ID", 80); err != nil {
 		return nil, err
@@ -245,7 +253,7 @@ func prepareCloudAgentStoryboardEdit(repo *repository.Repository, userID, canvas
 	}
 	beforeHash := cloudAgentCanvasHash(doc)
 	if beforeHash != args.SnapshotHash {
-		return nil, creationConflict("画布已变化，本次未写入；请重新读取并重新申请审批")
+		return nil, cloudAgentStoryboardStaleSnapshot()
 	}
 	node, storyboard, rows, err := storyboardNodeFromDocument(doc, args.NodeID)
 	if err != nil {
@@ -334,6 +342,12 @@ func applyCloudAgentStoryboardMutation(repo *repository.Repository, userID, canv
 	if err != nil {
 		return nil, err
 	}
+	if plan.DryRun {
+		if plan.Result != nil {
+			return plan.Result, nil
+		}
+		return map[string]any{"dryRun": true, "preview": plan.Preview}, nil
+	}
 	if err := saveCloudAgentDocument(repo, plan.Canvas, plan.Document, policy); err != nil {
 		return nil, err
 	}
@@ -346,7 +360,13 @@ func applyCloudAgentStoryboardMutation(repo *repository.Repository, userID, canv
 	if len(plan.Preview.Items) > 0 {
 		nodeID = plan.Preview.Items[0].NodeID
 	}
-	return map[string]any{"canvasId": canvasID, "nodeId": nodeID, "snapshotHash": cloudAgentCanvasHash(plan.Document), "summary": plan.Preview.Description, "preview": plan.Preview}, nil
+	result := map[string]any{"canvasId": canvasID, "nodeId": nodeID, "snapshotHash": cloudAgentCanvasHash(plan.Document), "summary": plan.Preview.Description, "preview": plan.Preview}
+	for key, value := range plan.Result {
+		if _, exists := result[key]; !exists {
+			result[key] = value
+		}
+	}
+	return result, nil
 }
 
 func mapsAsAny(values []map[string]any) []any {
@@ -357,7 +377,7 @@ func mapsAsAny(values []map[string]any) []any {
 	return out
 }
 
-func cloudAgentStoryboardReadResult(view any, nodeID string) (map[string]any, error) {
+func cloudAgentStoryboardReadResult(view any, nodeID string, doc map[string]any) (map[string]any, error) {
 	state, ok := view.(map[string]any)
 	if !ok {
 		return nil, BadAuthRequest("分镜读取结果无效")
@@ -374,12 +394,14 @@ func cloudAgentStoryboardReadResult(view any, nodeID string) (map[string]any, er
 	if !ok {
 		return nil, BadAuthRequest("分镜读取结果缺少镜头行")
 	}
-	rows, _ := storyboard["rows"].([]any)
-	for _, value := range rows {
-		if row, ok := value.(map[string]any); ok {
-			row["rowId"] = row["id"]
-		}
+	parsedRows := creationMaps(storyboard["rows"])
+	if doc != nil {
+		cloudAgentEnrichStoryboardAssetBindings(doc, parsedRows)
 	}
+	for _, value := range parsedRows {
+		value["rowId"] = value["id"]
+	}
+	storyboard["rows"] = mapsAsAny(parsedRows)
 	return map[string]any{
 		"nodeId":       nodeID,
 		"title":        node["title"],

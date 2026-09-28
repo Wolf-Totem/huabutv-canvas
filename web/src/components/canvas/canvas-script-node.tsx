@@ -5,11 +5,14 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { CheckboxGroup } from "@/components/ui/base/checkbox";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Upload, Video } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleDollarSign, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, Link2, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Upload, Video } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { CanvasStoryboardImportModal } from "@/components/canvas/canvas-storyboard-import-modal";
 import { StoryboardAssetsCell } from "@/components/canvas/storyboard-assets-cell";
+import { applyStoryboardCopyMatches, matchStoryboardCopy } from "@/lib/canvas/canvas-storyboard-assets";
+import { modelQuoteRequest } from "@/lib/model-pricing";
+import { quoteLogicalModel, type LogicalModelQuote } from "@/services/api/logical-models";
 import { ModelPicker } from "@/components/model-picker";
 import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -179,13 +182,66 @@ export function CanvasScriptNodeContent({
     const [batchDetailsOpen, setBatchDetailsOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+    const [assetCheckOpen, setAssetCheckOpen] = useState(false);
+    const [quoteOpen, setQuoteOpen] = useState(false);
+    const [quoteLoading, setQuoteLoading] = useState(false);
+    const [quoteError, setQuoteError] = useState("");
+    const [quotes, setQuotes] = useState<Array<{ label: string; count: number; text: string }>>([]);
     const pipelineDisabled = !rows.length || node.metadata?.status === "loading" || hasActiveBatchItems;
     const missingImages = Math.max(0, pipeline.images.total - pipeline.images.created);
     const missingVideos = Math.max(0, pipeline.videos.total - pipeline.videos.created);
     const canMerge = pipeline.successfulVideoNodeIds.length >= 2 && pipeline.final.success === 0;
     const allRowIds = pipeline.rows.map((item) => item.row.id);
+    const assetMatches = useMemo(() => matchStoryboardCopy(rows, nodes), [nodes, rows]);
+    const inspectStoryboardAssets = () => setAssetCheckOpen(true);
+    const applyStoryboardAssets = () => {
+        onImportRows(applyStoryboardCopyMatches(rows, assetMatches), "replace");
+        setAssetCheckOpen(false);
+    };
+    const inspectStoryboardPrice = async () => {
+        setQuoteOpen(true);
+        setQuoteLoading(true);
+        setQuoteError("");
+        const videoModel = effectiveConfig.videoModel || effectiveConfig.model;
+        const imageModel = effectiveConfig.imageModel || effectiveConfig.model;
+        const videoCount = Math.max(0, pipeline.videos.incomplete);
+        const imageCount = Math.max(0, pipeline.images.incomplete);
+        const seconds = rows.find((row) => row.durationSeconds > 0)?.durationSeconds || Number(effectiveConfig.videoSeconds) || 5;
+        const jobs = [
+            { label: "视频生成", count: videoCount, capability: "video" as const, model: videoModel, requirements: { videoSeconds: String(seconds), input: { textCount: 0, imageCount: 1, videoCount: 0, audioCount: 0, characterCount: 0 } } },
+            { label: "分镜图", count: imageCount, capability: "image" as const, model: imageModel, requirements: { input: { textCount: 0, imageCount: 0, videoCount: 0, audioCount: 0, characterCount: 0 } } },
+        ].filter((job) => job.count > 0);
+        if (!jobs.length) {
+            setQuotes([]);
+            setQuoteLoading(false);
+            return;
+        }
+        try {
+            const next = await Promise.all(jobs.map(async (job) => {
+                const request = modelQuoteRequest(effectiveConfig, job.model, job.capability, job.requirements);
+                if (!request) return { label: job.label, count: job.count, text: "价格未知（自定义渠道不提供平台报价）" };
+                try {
+                    const payload = await quoteLogicalModel(request.logicalModelID, { ...request.intent, inputs: { ...(request.intent.inputs || {}), ...(job.capability === "video" ? { video: job.count } : { image: job.count }) } });
+                    const quote: LogicalModelQuote | undefined = payload.quote;
+                    if (!quote) return { label: job.label, count: job.count, text: "价格未知" };
+                    const amount = ((quote.amountMicrocredits * Math.max(1, job.count / Math.max(1, quote.quantity))) / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 3 });
+                    return { label: job.label, count: job.count, text: `${quote.estimated ? "预计" : ""} ${amount} 积分 · ${job.count} 个任务` };
+                } catch {
+                    return { label: job.label, count: job.count, text: "价格未知" };
+                }
+            }));
+            setQuotes(next);
+        } catch {
+            setQuoteError("询价失败，请稍后重试");
+            setQuotes([]);
+        } finally {
+            setQuoteLoading(false);
+        }
+    };
     const moreMenuItems: MenuProps["items"] = [
         { key: "import", icon: <Upload className="size-3.5" />, label: "导入分镜提示词", onClick: () => setImportOpen(true) },
+        { key: "check-assets", icon: <Link2 className="size-3.5" />, label: "检查关联", onClick: inspectStoryboardAssets },
+        { key: "quote", icon: <CircleDollarSign className="size-3.5" />, label: "询价", onClick: () => void inspectStoryboardPrice() },
         { type: "divider" },
         { key: "generate-images", icon: <ImageIcon className="size-3.5" />, label: "生成未完成分镜图", disabled: pipelineDisabled || pipeline.images.incomplete === 0, onClick: () => onGenerateImages(allRowIds) },
         { key: "generate-videos", icon: <Video className="size-3.5" />, label: "生成未完成视频", disabled: pipelineDisabled || pipeline.videos.incomplete === 0, onClick: () => onGenerateVideos(allRowIds) },
@@ -257,6 +313,36 @@ export function CanvasScriptNodeContent({
                 <span className="text-[var(--fs-caption)] font-semibold tabular-nums" style={{ color: theme.node.muted }}>
                     {rows.length} 镜 · {totalDuration}s
                 </span>
+                <Tooltip title="按镜头文案检查关联资产">
+                    <button
+                        type="button"
+                        className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            inspectStoryboardAssets();
+                        }}
+                        aria-label="检查关联"
+                    >
+                        <Link2 className="size-3.5" />
+                    </button>
+                </Tooltip>
+                <Tooltip title="查看本表生成价格">
+                    <button
+                        type="button"
+                        className="grid size-7 place-items-center rounded outline-none transition hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/10"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            void inspectStoryboardPrice();
+                        }}
+                        aria-label="询价"
+                    >
+                        <CircleDollarSign className="size-3.5" />
+                    </button>
+                </Tooltip>
                 <Tooltip title="全屏编辑">
                     <button
                         type="button"
@@ -302,6 +388,44 @@ export function CanvasScriptNodeContent({
                 onClose={() => setImportOpen(false)}
                 onImport={onImportRows}
             />
+            <Modal
+                title="检查关联"
+                open={assetCheckOpen}
+                onCancel={() => setAssetCheckOpen(false)}
+                okText="写入关联"
+                cancelText="取消"
+                onOk={applyStoryboardAssets}
+                okButtonProps={{ disabled: !assetMatches.some((item) => item.added.length) }}
+                width={560}
+                centered
+                destroyOnHidden
+            >
+                <p className="mb-3 text-xs text-foreground/55">根据镜头文案匹配画布节点标题。只新增唯一命中，歧义不会写入。素材库条目需要先放到画布上。</p>
+                <div className="thin-scrollbar max-h-72 space-y-2 overflow-y-auto">
+                    {assetMatches.map((item) => (
+                        <div key={item.rowId} className="rounded-md border border-foreground/10 px-3 py-2 text-xs">
+                            <div className="font-semibold">第 {item.shotNumber} 镜</div>
+                            <div className="mt-1 text-foreground/70">已有：{item.existing.map((hit) => hit.title).join("、") || "无"}</div>
+                            <div className="text-emerald-700 dark:text-emerald-300">将新增：{item.added.map((hit) => hit.title).join("、") || "无"}</div>
+                            {item.ambiguous.length ? <div className="text-amber-700 dark:text-amber-300">歧义：{item.ambiguous.map((entry) => `${entry.query}（${entry.titles.join(" / ")}）`).join("；")}</div> : null}
+                        </div>
+                    ))}
+                    {!rows.length ? <div className="text-foreground/45">还没有镜头行</div> : null}
+                </div>
+            </Modal>
+            <Modal title="询价" open={quoteOpen} onCancel={() => setQuoteOpen(false)} footer={null} width={420} centered destroyOnHidden>
+                {quoteLoading ? <div className="py-6 text-center text-sm text-foreground/55">正在询价…</div> : quoteError ? <div className="py-6 text-center text-sm text-red-600">{quoteError}</div> : quotes.length ? (
+                    <ul className="space-y-2 text-sm">
+                        {quotes.map((item) => (
+                            <li key={item.label} className="flex items-start justify-between gap-3 rounded-md border border-foreground/10 px-3 py-2">
+                                <span>{item.label} · {item.count} 个任务</span>
+                                <strong className="text-right">{item.text}</strong>
+                            </li>
+                        ))}
+                    </ul>
+                ) : <div className="py-6 text-center text-sm text-foreground/55">没有待生成的分镜图或视频，或价格未知。</div>}
+                <p className="mt-3 text-[11px] text-foreground/45">询价不提交任务、不扣费。自定义渠道无法给出平台报价时会显示价格未知。</p>
+            </Modal>
             <StoryboardMiniPipeline pipeline={pipeline} theme={theme} rows={rows} />
             <div className="storyboard-header-gutter grid h-9 shrink-0 items-center border-b text-xs font-semibold" style={{ borderColor: theme.node.stroke, color: theme.node.muted, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
                 <HeaderCell borderColor={theme.node.stroke} align="center">
@@ -740,6 +864,20 @@ export function CanvasScriptEditor({
                 <span className="min-w-0 flex-1" />
                 <Button icon={<Upload className="size-4" />} onClick={() => setImportOpen(true)}>
                     导入模板
+                </Button>
+                <Button icon={<Link2 className="size-4" />} onClick={() => {
+                    const matches = matchStoryboardCopy(rows, nodes);
+                    const added = matches.reduce((total, item) => total + item.added.length, 0);
+                    Modal.confirm({
+                        title: "检查关联",
+                        content: added ? `将根据镜头文案新增 ${added} 处素材绑定，歧义项不会写入。` : "没有从镜头文案匹配到新的画布素材。请确认节点标题出现在提示词里，且素材已在画布上。",
+                        okText: added ? "写入关联" : "知道了",
+                        cancelButtonProps: added ? undefined : { style: { display: "none" } },
+                        onOk: added ? () => onImportRows(applyStoryboardCopyMatches(rows, matches), "replace") : undefined,
+                        centered: true,
+                    });
+                }}>
+                    检查关联
                 </Button>
                 <Button icon={<Plus className="size-4" />} onClick={() => onUpdateRows([...rows, editorRow(rows.length + 1)])}>
                     新增镜头

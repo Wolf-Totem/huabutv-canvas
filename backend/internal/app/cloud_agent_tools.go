@@ -192,12 +192,26 @@ func compileCloudAgentTools(req CloudAgentRequest, includeProfileTool bool) []ma
 			"x":            map[string]any{"type": "number"},
 			"y":            map[string]any{"type": "number"},
 		}, "snapshotHash", "nodeId", "title", "rows")
-		add("canvas_edit_storyboard", "追加、修改或删除分镜脚本中的单个镜头行。必须先用 canvas_read_storyboard 读取最新 snapshotHash 和真实 rowId；append 不传 rowId，update/remove 必须传。patch 只允许镜头文本与时长，不能修改素材绑定、媒体节点ID、任务状态、资源URL或任意 metadata。", map[string]any{
+		add("canvas_edit_storyboard", "追加、修改、删除镜头，或把画布上已有素材绑定到镜头行。必须先用 canvas_read_storyboard 读取最新 snapshotHash 和真实 rowId。append/update/remove 的 patch 只允许镜头文本与时长。bind_assets 把画布节点挂到一行；bind_assets_all_rows 挂到全部行；unbind_assets 按 nodeId 移除，assets 为空则清空该行；match_assets 按镜头文案匹配画布节点标题（dryRun 只预演）。禁止素材库ID、外链 URL、整表连线冒充逐镜绑定。", map[string]any{
 			"snapshotHash": str("最近一次分镜读取返回的 snapshotHash"),
 			"nodeId":       str("真实分镜脚本节点ID"),
-			"action":       map[string]any{"type": "string", "enum": []string{"append", "update", "remove"}},
-			"rowId":        str("update/remove 使用 canvas_read_storyboard 返回的真实 rowId；append 留空"),
+			"action":       map[string]any{"type": "string", "enum": []string{"append", "update", "remove", "bind_assets", "unbind_assets", "bind_assets_all_rows", "match_assets"}},
+			"rowId":        str("update/remove/bind_assets/unbind_assets 使用真实 rowId；bind_assets_all_rows 留空；match_assets 可留空表示整表"),
 			"patch":        cloudAgentStoryboardPatchSchema(),
+			"assets": map[string]any{
+				"type": "array", "maxItems": cloudAgentStoryboardMaxAssetsPerRow,
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"nodeId": str("当前画布上的素材节点ID，不是素材库ID"),
+						"role":   map[string]any{"type": "string", "enum": []string{"character", "environment", "wardrobe", "prop", "weapon", "style", "motion", "audio"}},
+					},
+					"required":             []string{"nodeId"},
+					"additionalProperties": false,
+				},
+			},
+			"dryRun": map[string]any{"type": "boolean"},
+			"mode":   map[string]any{"type": "string", "enum": []string{"append", "replace"}},
 		}, "snapshotHash", "nodeId", "action")
 		add("canvas_edit_batch_table", "操作批量创作表组件：追加、修改或删除任务行，切换批量换装/创意生图，设置1/5/10并发，或新增参考图列。必须先用 canvas_read_batch_table 获取最新 snapshotHash 和真实 rowId。行 patch 仅允许 enabled、inputNodeIds、prompt；prompt 可使用读取结果中的 @参考图1、@参考图2 等 mentionToken 指代本行对应位置的图片。append 未传 inputNodeIds 时会继承上一行参考图；图片ID必须来自当前画布。不能写 outputNodeId、任务状态、URL、storageKey 或任意 metadata。本工具只编辑计划，不提交收费生成。", map[string]any{
 			"snapshotHash": str("最近一次批量创作表读取返回的 snapshotHash"),
@@ -405,7 +419,7 @@ func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloud
 		if err != nil {
 			return nil, err
 		}
-		return cloudAgentStoryboardReadResult(view, args.NodeID)
+		return cloudAgentStoryboardReadResult(view, args.NodeID, doc)
 	case "canvas_read_batch_table":
 		var args struct {
 			NodeID string `json:"nodeId"`

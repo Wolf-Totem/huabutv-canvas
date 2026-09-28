@@ -64,6 +64,24 @@ export function reconcileStoryboardTargetConnections(
     return next;
 }
 
+export function storyboardAssetReferenceConnections(scriptNodeId: string, rows: StoryboardRow[]): CanvasConnection[] {
+    return rows.flatMap((row) => (row.assetBindings || []).map((binding) => ({
+        id: `storyboard-asset:${scriptNodeId}:${row.id}:${binding.nodeId}`,
+        fromNodeId: binding.nodeId,
+        toNodeId: scriptNodeId,
+        toHandleId: `row:${row.id}`,
+        relation: "storyboard-asset-reference" as const,
+        storyboardRowId: row.id,
+    })));
+}
+
+export function replaceStoryboardAssetReferenceConnections(connections: CanvasConnection[], scriptNodeId: string, rows: StoryboardRow[]) {
+    return [
+        ...connections.filter((connection) => !(connection.toNodeId === scriptNodeId && connection.relation === "storyboard-asset-reference")),
+        ...storyboardAssetReferenceConnections(scriptNodeId, rows),
+    ];
+}
+
 export function bindingForConnectedNode(node: CanvasNodeData): StoryboardAssetBinding | null {
     const role = storyboardAssetRoleForNode(node);
     return role ? { nodeId: node.id, role, priority: defaultRolePriority(role) } : null;

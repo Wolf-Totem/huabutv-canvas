@@ -143,6 +143,13 @@ func TestCloudAgentStoryboardToolsAreScopedAndStructured(t *testing.T) {
 			t.Fatalf("protected field %s leaked into edit schema", protected)
 		}
 	}
+	actions, _ := functions["canvas_edit_storyboard"]["parameters"].(map[string]any)["properties"].(map[string]any)["action"].(map[string]any)["enum"].([]string)
+	joined := strings.Join(actions, ",")
+	for _, name := range []string{"bind_assets", "bind_assets_all_rows", "unbind_assets", "match_assets"} {
+		if !strings.Contains(joined, name) {
+			t.Fatalf("edit storyboard schema missing %s: %s", name, joined)
+		}
+	}
 	if !cloudAgentWrite("canvas_create_storyboard") || !cloudAgentWrite("canvas_edit_storyboard") {
 		t.Fatal("storyboard mutations are not classified as writes")
 	}

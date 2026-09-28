@@ -36,7 +36,7 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4 }: { bindings:
                         <button
                             type="button"
                             disabled={!node}
-                            className="relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-md border border-foreground/10 bg-foreground/[0.035] text-foreground/45 outline-none transition enabled:hover:border-foreground/30 enabled:hover:text-foreground/70 focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:cursor-not-allowed"
+                            className="flex min-w-0 max-w-[88px] items-center gap-1 rounded-md border border-foreground/10 bg-foreground/[0.035] px-0.5 py-0.5 text-left text-foreground/70 outline-none transition enabled:hover:border-foreground/30 enabled:hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:cursor-not-allowed"
                             aria-label={`预览${node?.title || "失效资产"}`}
                             onMouseDown={(event) => event.stopPropagation()}
                             onPointerDown={(event) => event.stopPropagation()}
@@ -45,8 +45,11 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4 }: { bindings:
                                 if (node) setPreviewNode(node);
                             }}
                         >
-                            {node ? <AssetThumbnail node={node} /> : <ImageIcon className="size-4" />}
-                            <span className="absolute bottom-0.5 right-0.5 rounded bg-black/65 px-1 text-[8px] leading-3 text-white">{ROLE_LABELS[binding.role].slice(0, 1)}</span>
+                            <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-[5px]">
+                                {node ? <AssetThumbnail node={node} /> : <ImageIcon className="size-4" />}
+                                <span className="absolute bottom-0 right-0 rounded bg-black/65 px-0.5 text-[7px] leading-3 text-white">{ROLE_LABELS[binding.role].slice(0, 1)}</span>
+                            </span>
+                            <span className="min-w-0 truncate text-[10px] font-medium leading-3">{node?.title || "已失效"}</span>
                         </button>
                     </Tooltip>
                 ))}

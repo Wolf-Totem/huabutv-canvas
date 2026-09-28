@@ -23,7 +23,7 @@ import { buildStoryboardAssetCatalog } from "@/lib/canvas/canvas-storyboard-asse
 import { resolveStoryboardGenerationContext } from "@/lib/canvas/canvas-storyboard-context";
 import { storyboardNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { userChannelDisconnectNotice } from "@/lib/generation-user-channel";
-import { reconcileStoryboardTargetConnections, storyboardComposerContent, storyboardRowReferenceNodeIds } from "@/lib/canvas/canvas-storyboard-materializer";
+import { reconcileStoryboardTargetConnections, replaceStoryboardAssetReferenceConnections, storyboardComposerContent, storyboardRowReferenceNodeIds } from "@/lib/canvas/canvas-storyboard-materializer";
 import { generationErrorMessage } from "@/lib/generation-error";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
@@ -111,12 +111,16 @@ export function useCanvasStoryboard({
         const storyboardRowIds = new Set(rows.map((row) => row.id));
         const previousRows = new Map((nodesRef.current.find((node) => node.id === nodeId)?.metadata?.storyboard?.rows || []).map((row) => [row.id, row]));
         const nextRows = rows.map((row) => invalidateEditedPromptVariables(previousRows.get(row.id), row));
-        setConnections((current) => current
-            .filter((connection) => connection.fromNodeId !== nodeId && connection.toNodeId !== nodeId || !connection.storyboardRowId || storyboardRowIds.has(connection.storyboardRowId))
-            .filter((connection) => connection.fromNodeId !== nodeId || !connection.fromHandleId?.startsWith("row:") || rowIds.has(connection.fromHandleId))
-            .filter((connection) => connection.toNodeId !== nodeId || !connection.toHandleId?.startsWith("row:") || rowIds.has(connection.toHandleId)));
+        setConnections((current) => {
+            const next = replaceStoryboardAssetReferenceConnections(current
+                .filter((connection) => connection.fromNodeId !== nodeId && connection.toNodeId !== nodeId || !connection.storyboardRowId || storyboardRowIds.has(connection.storyboardRowId))
+                .filter((connection) => connection.fromNodeId !== nodeId || !connection.fromHandleId?.startsWith("row:") || rowIds.has(connection.fromHandleId))
+                .filter((connection) => connection.toNodeId !== nodeId || !connection.toHandleId?.startsWith("row:") || rowIds.has(connection.toHandleId)), nodeId, nextRows);
+            connectionsRef.current = next;
+            return next;
+        });
         updateScriptRows(nodeId, () => nextRows);
-    }, [nodesRef, setConnections, updateScriptRows]);
+    }, [connectionsRef, nodesRef, setConnections, updateScriptRows]);
 
     const addScriptRow = useCallback((nodeId: string) => {
         updateScriptRows(nodeId, (rows) => [...rows, createStoryboardRow(rows.length + 1)]);
@@ -168,8 +172,15 @@ export function useCanvasStoryboard({
     }, [connectionsRef, nodesRef, setConnections, setNodes]);
 
     const updateScriptRow = useCallback((nodeId: string, rowId: string, patch: Partial<StoryboardRow>) => {
-        updateScriptRows(nodeId, (rows) => rows.map((row) => row.id === rowId ? invalidateEditedPromptVariables(row, { ...row, ...patch }) : row));
-    }, [updateScriptRows]);
+        const node = nodesRef.current.find((item) => item.id === nodeId);
+        const nextRows = (node?.metadata?.storyboard?.rows || []).map((row) => row.id === rowId ? invalidateEditedPromptVariables(row, { ...row, ...patch }) : row);
+        updateScriptRows(nodeId, () => nextRows);
+        if (patch.assetBindings) {
+            const nextConnections = replaceStoryboardAssetReferenceConnections(connectionsRef.current, nodeId, nextRows);
+            connectionsRef.current = nextConnections;
+            setConnections(nextConnections);
+        }
+    }, [connectionsRef, nodesRef, setConnections, updateScriptRows]);
 
     const removeScriptRow = useCallback((nodeId: string, rowId: string) => {
         const node = nodesRef.current.find((item) => item.id === nodeId);

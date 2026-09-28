@@ -3,6 +3,7 @@ export const AGENT_TOOL_METADATA: Record<string, { summary: string | ((context: 
     canvas_get_state: { summary: "已读取当前画布", failureMessage: "获取画布内容失败" },
     task_get: { summary: "已查询任务状态", failureMessage: "查询任务状态失败" },
     canvas_apply_ops: { summary: ({ pending }) => pending ? "准备更新画布内容" : "画布内容已保存至服务端", failureMessage: "更新画布内容失败" },
+    canvas_edit_storyboard: { summary: ({ pending }) => (pending ? "准备修改分镜" : "分镜已更新"), failureMessage: "修改分镜失败" },
     canvas_arrange_nodes: { summary: ({ pending }) => (pending ? "准备整理节点位置" : "已整理节点位置"), failureMessage: "整理节点位置失败" },
     model_list: { summary: "已获取可用模型", failureMessage: "获取可用模型失败" },
     generate_media: { summary: ({ pending, detail }) => pending ? "准备创建媒体节点并生成" : field(detail, "eventType") === "tool_completed" ? "生成结果已回写画布节点" : "媒体节点已创建，生成任务已提交", failureMessage: "媒体生成未完成" },
