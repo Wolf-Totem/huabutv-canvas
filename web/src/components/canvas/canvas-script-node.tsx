@@ -482,7 +482,11 @@ export function CanvasScriptNodeContent({
                             <CompactInput value={row.videoMotionPrompt} placeholder="描述视频运动、镜头和动作" onChange={(value) => onUpdateRow(row.id, { videoMotionPrompt: value })} borderColor={theme.node.stroke} />
                             <CompactInput value={row.dialogue} placeholder="台词或旁白" onChange={(value) => onUpdateRow(row.id, { dialogue: value })} borderColor={theme.node.stroke} />
                             <div className="flex h-full min-w-0 items-center px-3">
-                                <StoryboardAssetsCell bindings={row.assetBindings || []} nodes={nodes} />
+                                <StoryboardAssetsCell
+                                    bindings={row.assetBindings || []}
+                                    nodes={nodes}
+                                    onRemove={(nodeId) => onUpdateRow(row.id, { assetBindings: (row.assetBindings || []).filter((binding) => binding.nodeId !== nodeId) })}
+                                />
                             </div>
                         </div>
                     ))
@@ -814,7 +818,11 @@ export function CanvasScriptEditor({
                 ) : option.value === "durationSeconds" ? (
                     <InputNumber min={1} max={60} value={row.durationSeconds} addonAfter="s" onChange={(value) => updateRow(row.id, { durationSeconds: Number(value) || 1 })} />
                 ) : option.value === "assets" ? (
-                    <StoryboardAssetsCell bindings={row.assetBindings || []} nodes={nodes} />
+                    <StoryboardAssetsCell
+                        bindings={row.assetBindings || []}
+                        nodes={nodes}
+                        onRemove={(nodeId) => updateRow(row.id, { assetBindings: (row.assetBindings || []).filter((binding) => binding.nodeId !== nodeId) })}
+                    />
                 ) : option.value === "shotSize" ? (
                     <Select
                         className="w-full"

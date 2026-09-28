@@ -2,7 +2,7 @@ import { Modal } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useState } from "react";
 
-import { Image as ImageIcon, Music2, Play, UserRound } from "lucide-react";
+import { Image as ImageIcon, Music2, Play, UserRound, X } from "lucide-react";
 
 import { canvasNodeVideoPreviewUrl } from "@/lib/canvas/canvas-media-preview";
 import { isStoryboardPreviewAsset } from "@/lib/canvas/canvas-storyboard-materializer";
@@ -20,7 +20,7 @@ const ROLE_LABELS: Record<StoryboardAssetBinding["role"], string> = {
     audio: "音频",
 };
 
-export function StoryboardAssetsCell({ bindings, nodes, limit = 4 }: { bindings: StoryboardAssetBinding[]; nodes: CanvasNodeData[]; limit?: number }) {
+export function StoryboardAssetsCell({ bindings, nodes, limit = 4, onRemove }: { bindings: StoryboardAssetBinding[]; nodes: CanvasNodeData[]; limit?: number; onRemove?: (nodeId: string) => void }) {
     const [previewNode, setPreviewNode] = useState<CanvasNodeData | null>(null);
     const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
     const assets = bindings.map((binding) => ({ binding, node: nodeById.get(binding.nodeId) })).filter((item) => !item.node || isStoryboardPreviewAsset(item.node));
@@ -31,28 +31,49 @@ export function StoryboardAssetsCell({ bindings, nodes, limit = 4 }: { bindings:
     return (
         <>
             <div className="flex min-w-0 items-center gap-1.5" aria-label={`已关联 ${assets.length} 个资产`}>
-                {visible.map(({ binding, node }) => (
-                    <Tooltip key={binding.nodeId} title={`${node?.title || "资产已失效"} · ${ROLE_LABELS[binding.role]}`}>
-                        <button
-                            type="button"
-                            disabled={!node}
-                            className="flex min-w-0 max-w-[88px] items-center gap-1 rounded-md border border-foreground/10 bg-foreground/[0.035] px-0.5 py-0.5 text-left text-foreground/70 outline-none transition enabled:hover:border-foreground/30 enabled:hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:cursor-not-allowed"
-                            aria-label={`预览${node?.title || "失效资产"}`}
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                if (node) setPreviewNode(node);
-                            }}
-                        >
-                            <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-[5px]">
-                                {node ? <AssetThumbnail node={node} /> : <ImageIcon className="size-4" />}
-                                <span className="absolute bottom-0 right-0 rounded bg-black/65 px-0.5 text-[7px] leading-3 text-white">{ROLE_LABELS[binding.role].slice(0, 1)}</span>
-                            </span>
-                            <span className="min-w-0 truncate text-[10px] font-medium leading-3">{node?.title || "已失效"}</span>
-                        </button>
-                    </Tooltip>
-                ))}
+                {visible.map(({ binding, node }) => {
+                    const title = node?.title || "资产已失效";
+                    return (
+                        <div key={binding.nodeId} className="group relative min-w-0">
+                            <Tooltip title={`${title} · ${ROLE_LABELS[binding.role]}`}>
+                                <button
+                                    type="button"
+                                    disabled={!node}
+                                    className="flex min-w-0 max-w-[88px] items-center gap-1 rounded-md border border-foreground/10 bg-foreground/[0.035] px-0.5 py-0.5 pr-3.5 text-left text-foreground/70 outline-none transition enabled:hover:border-foreground/30 enabled:hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:cursor-not-allowed"
+                                    aria-label={`预览${node?.title || "失效资产"}`}
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (node) setPreviewNode(node);
+                                    }}
+                                >
+                                    <span className="relative grid size-8 shrink-0 place-items-center overflow-hidden rounded-[5px]">
+                                        {node ? <AssetThumbnail node={node} /> : <ImageIcon className="size-4" />}
+                                        <span className="absolute bottom-0 right-0 rounded bg-black/65 px-0.5 text-[7px] leading-3 text-white">{ROLE_LABELS[binding.role].slice(0, 1)}</span>
+                                    </span>
+                                    <span className="min-w-0 truncate text-[10px] font-medium leading-3">{node?.title || "已失效"}</span>
+                                </button>
+                            </Tooltip>
+                            {onRemove ? (
+                                <button
+                                    type="button"
+                                    className="absolute -right-0.5 -top-0.5 grid size-4 min-h-4 min-w-4 place-items-center rounded-full bg-foreground text-[10px] leading-none text-background opacity-90 shadow-sm outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] group-hover:opacity-100"
+                                    aria-label={node?.title ? `从本镜移除「${node.title}」` : "移除失效资产"}
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        onRemove(binding.nodeId);
+                                    }}
+                                >
+                                    <X className="size-2.5" strokeWidth={2.5} />
+                                </button>
+                            ) : null}
+                        </div>
+                    );
+                })}
                 {hiddenCount ? <span className="shrink-0 text-[var(--fs-caption)] font-medium text-foreground/45">+{hiddenCount}</span> : null}
             </div>
             <AssetPreviewModal node={previewNode} onClose={() => setPreviewNode(null)} />

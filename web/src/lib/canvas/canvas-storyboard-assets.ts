@@ -43,6 +43,13 @@ export function storyboardAssetRoleForNode(node: CanvasNodeData): StoryboardAsse
     return null;
 }
 
+export function removeStoryboardRowBinding(rows: StoryboardRow[], rowId: string, nodeId: string): StoryboardRow[] {
+    return rows.map((row) => row.id !== rowId ? row : {
+        ...row,
+        assetBindings: (row.assetBindings || []).filter((binding) => binding.nodeId !== nodeId),
+    });
+}
+
 export function normalizeStoryboardAssetBindings(bindings: StoryboardAssetBinding[] | undefined, nodes?: CanvasNodeData[]) {
     const nodeIds = nodes ? new Set(nodes.map((node) => node.id)) : null;
     const seen = new Set<string>();

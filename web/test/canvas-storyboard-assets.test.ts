@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { applyStoryboardCopyMatches, buildStoryboardAssetCatalog, matchStoryboardCopy, storyboardAssetRoleForNode } from "@/lib/canvas/canvas-storyboard-assets";
-import { reconcileStoryboardTargetConnections, storyboardComposerContent, storyboardRowReferenceNodeIds } from "@/lib/canvas/canvas-storyboard-materializer";
+import { applyStoryboardCopyMatches, buildStoryboardAssetCatalog, matchStoryboardCopy, removeStoryboardRowBinding, storyboardAssetRoleForNode } from "@/lib/canvas/canvas-storyboard-assets";
+import { reconcileStoryboardTargetConnections, replaceStoryboardAssetReferenceConnections, storyboardComposerContent, storyboardRowReferenceNodeIds } from "@/lib/canvas/canvas-storyboard-materializer";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type StoryboardRow } from "@/types/canvas";
 
 const node = (id: string, type: CanvasNodeType, metadata: CanvasNodeData["metadata"] = {}): CanvasNodeData => ({
@@ -103,5 +103,54 @@ describe("storyboard copy matching", () => {
         const applied = applyStoryboardCopyMatches([idle, dancing], matches);
         expect(applied[0].assetBindings).toEqual([]);
         expect(applied[1].assetBindings[0]).toMatchObject({ nodeId: "zhang", role: "character" });
+    });
+
+    it("does not strip an existing binding when the shot copy no longer names it", () => {
+        const zhang = { ...node("zhang", CanvasNodeType.Image, { content: "data:image/png;base64,x" }), title: "张三" };
+        const bound = { ...row, videoMotionPrompt: "画一个小猫", assetBindings: [{ nodeId: "zhang", role: "character" as const, priority: 100 }] };
+        const matches = matchStoryboardCopy([bound], [zhang]);
+        expect(matches[0].added).toEqual([]);
+        expect(matches[0].existing.map((hit) => hit.nodeId)).toEqual(["zhang"]);
+        expect(applyStoryboardCopyMatches([bound], matches)[0].assetBindings.map((item) => item.nodeId)).toEqual(["zhang"]);
+    });
+});
+
+describe("storyboard row unbind", () => {
+    it("removes one row binding without touching other rows", () => {
+        const bound = [{ nodeId: "zhang", role: "character" as const, priority: 100 }];
+        const rows = [
+            { ...row, assetBindings: bound },
+            { ...row, id: "row-2", shotNumber: 2, videoMotionPrompt: "张三在跳舞", assetBindings: bound },
+        ];
+        const next = removeStoryboardRowBinding(rows, "row-2", "zhang");
+        expect(next[0].assetBindings).toEqual(bound);
+        expect(next[1].assetBindings).toEqual([]);
+    });
+
+    it("can remove a stale nodeId and drop the matching asset edge", () => {
+        const rows = [
+            { ...row, assetBindings: [{ nodeId: "missing", role: "character", priority: 100 }] },
+            { ...row, id: "row-2", shotNumber: 2, assetBindings: [{ nodeId: "zhang", role: "character", priority: 100 }] },
+        ];
+        const next = removeStoryboardRowBinding(rows, "row-1", "missing");
+        expect(next[0].assetBindings).toEqual([]);
+        expect(next[1].assetBindings.map((item) => item.nodeId)).toEqual(["zhang"]);
+        const edges = replaceStoryboardAssetReferenceConnections(
+            [
+                { id: "stale", fromNodeId: "missing", toNodeId: "script", toHandleId: "row:row-1", relation: "storyboard-asset-reference", storyboardRowId: "row-1" },
+                { id: "keep", fromNodeId: "zhang", toNodeId: "script", toHandleId: "row:row-2", relation: "storyboard-asset-reference", storyboardRowId: "row-2" },
+            ],
+            "script",
+            next,
+        );
+        expect(edges.some((edge) => edge.fromNodeId === "missing")).toBe(false);
+        expect(edges.some((edge) => edge.fromNodeId === "zhang" && edge.storyboardRowId === "row-2")).toBe(true);
+    });
+
+    it("drops the unbound asset from that shot's generation references", () => {
+        const script = node("script", CanvasNodeType.Script, { storyboard: { rows: [], visibleColumns: ["assets"], referenceNodeIds: [] } });
+        const zhang = { ...node("zhang", CanvasNodeType.Image, { content: "data:image/png;base64,x" }), title: "张三" };
+        const unbound = { ...row, assetBindings: [] };
+        expect(storyboardRowReferenceNodeIds(script, unbound, [script, zhang], [], false)).not.toContain("zhang");
     });
 });
