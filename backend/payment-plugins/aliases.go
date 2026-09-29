@@ -22,12 +22,16 @@ var (
 )
 
 const (
-	ProviderWeChatNative = "wechat-native"
-	ProviderAlipayPage   = "alipay-page-pay"
-	ProviderXunHuPay     = "xunhupay-aggregate"
-	ProviderHuifuH5      = "huifu-h5-cashier"
-	PluginWeChatNative   = "official-payment-wechat-native"
-	PluginAlipayPage     = "official-payment-alipay-page"
-	PluginXunHuPay       = "official-payment-xunhupay"
-	PluginHuifuH5        = "official-payment-huifu-h5"
+	ProviderWeChatNative     = "wechat-native"
+	ProviderAlipayPage       = "alipay-page-pay"
+	ProviderXunHuPay         = "xunhupay-aggregate"
+	ProviderHuifuH5          = "huifu-h5-cashier"
+	ProviderHuifuJspay       = "huifu-aggregate-native"
+	ProviderHuifuWechatJspay = "huifu-wechat-native"
+	PluginWeChatNative       = "official-payment-wechat-native"
+	PluginAlipayPage         = "official-payment-alipay-page"
+	PluginXunHuPay           = "official-payment-xunhupay"
+	PluginHuifuH5            = "official-payment-huifu-h5"
+	PluginHuifuJspay         = "official-payment-huifu-jspay"
+	PluginHuifuWechatJspay   = "official-payment-huifu-wechat-jspay"
 )

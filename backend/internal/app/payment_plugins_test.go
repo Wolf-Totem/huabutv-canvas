@@ -117,6 +117,82 @@ func TestTopupProductCreditAmountStaysWithinSafeLimit(t *testing.T) {
 	}
 }
 
+func TestHuifuJspayOfficialPackageIsPaymentPlugin(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plugin PluginView
+	for _, item := range center.list() {
+		if item.Manifest.ID == "official-payment-huifu-jspay" {
+			plugin = item
+			plugin.Management = pluginManagementFromView(item)
+			break
+		}
+	}
+	if plugin.Manifest.ID == "" {
+		t.Fatal("official-payment-huifu-jspay is missing")
+	}
+	if plugin.Management.Kind != PluginKindPayment || plugin.Source != PluginOriginOfficial {
+		t.Fatalf("huifu jspay plugin = %#v", plugin)
+	}
+	if len(plugin.Manifest.Contributes.PaymentProviders) != 1 || plugin.Manifest.Contributes.PaymentProviders[0].ID != "huifu-aggregate-native" {
+		t.Fatalf("huifu jspay contributions = %#v", plugin.Manifest.Contributes.PaymentProviders)
+	}
+	if plugin.Manifest.Contributes.PaymentProviders[0].CheckoutMode != "qr_code" {
+		t.Fatalf("huifu jspay checkout mode = %s", plugin.Manifest.Contributes.PaymentProviders[0].CheckoutMode)
+	}
+	registry := center.paymentRegistrySnapshot()
+	if registry == nil {
+		t.Fatal("payment registry is nil")
+	}
+	provider, ok := registry.Get("huifu-aggregate-native")
+	if !ok {
+		t.Fatal("huifu-aggregate-native provider is missing")
+	}
+	if _, ok := provider.(*payment.RPCProvider); !ok {
+		t.Fatalf("huifu jspay provider type = %T", provider)
+	}
+}
+
+func TestHuifuWechatJspayOfficialPackageIsPaymentPlugin(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plugin PluginView
+	for _, item := range center.list() {
+		if item.Manifest.ID == "official-payment-huifu-wechat-jspay" {
+			plugin = item
+			plugin.Management = pluginManagementFromView(item)
+			break
+		}
+	}
+	if plugin.Manifest.ID == "" {
+		t.Fatal("official-payment-huifu-wechat-jspay is missing")
+	}
+	if plugin.Management.Kind != PluginKindPayment || plugin.Source != PluginOriginOfficial {
+		t.Fatalf("huifu wechat jspay plugin = %#v", plugin)
+	}
+	if len(plugin.Manifest.Contributes.PaymentProviders) != 1 || plugin.Manifest.Contributes.PaymentProviders[0].ID != "huifu-wechat-native" {
+		t.Fatalf("huifu wechat jspay contributions = %#v", plugin.Manifest.Contributes.PaymentProviders)
+	}
+	if plugin.Manifest.Contributes.PaymentProviders[0].CheckoutMode != "qr_code" {
+		t.Fatalf("huifu wechat jspay checkout mode = %s", plugin.Manifest.Contributes.PaymentProviders[0].CheckoutMode)
+	}
+	registry := center.paymentRegistrySnapshot()
+	if registry == nil {
+		t.Fatal("payment registry is nil")
+	}
+	provider, ok := registry.Get("huifu-wechat-native")
+	if !ok {
+		t.Fatal("huifu-wechat-native provider is missing")
+	}
+	if _, ok := provider.(*payment.RPCProvider); !ok {
+		t.Fatalf("huifu wechat jspay provider type = %T", provider)
+	}
+}
+
 func TestXunHuPayOfficialPackageIsPaymentPlugin(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {

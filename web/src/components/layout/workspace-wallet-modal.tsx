@@ -630,12 +630,12 @@ export function WorkspaceWalletModal({
                 </div>
             </AppModal>
 
-            <AppModal open={paymentOpen} title={paymentOrder?.status === "credited" ? creditedTitle(paymentOrder) : paymentOrder?.checkout.mode === "qr_code" ? "扫码支付" : "确认支付结果"} centered width={430} onCancel={() => setPaymentOpen(false)} footer={paymentFooter(paymentOrder, paymentQuerying, () => setPaymentOpen(false), cancelPayment, refreshPaymentStatus, retryCheckout)}>
+            <AppModal open={paymentOpen} title={paymentOrder?.status === "credited" ? creditedTitle(paymentOrder) : paymentOrder?.checkout.mode === "qr_code" ? t("wallet.scanPay") : t("wallet.confirmPay")} centered width={430} onCancel={() => setPaymentOpen(false)} footer={paymentFooter(paymentOrder, paymentQuerying, () => setPaymentOpen(false), cancelPayment, refreshPaymentStatus, retryCheckout)}>
                 {paymentOrder ? <div className="workspace-wallet-payment">
                     <span className="workspace-wallet-payment-icon"><CreditCard /></span>
                     <strong>¥ {(paymentOrder.amountFen / 100).toFixed(2)}</strong>
                     <p>{paymentOrderCaption(paymentOrder)}</p>
-                    {paymentOrder.status === "pending" && paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? <><PaymentCheckoutCode value={paymentOrder.checkout.value} /><span>请使用支付应用扫码完成支付</span></> : null}
+                    {paymentOrder.status === "pending" && paymentOrder.checkout.mode === "qr_code" && paymentOrder.checkout.value ? <><PaymentCheckoutCode value={paymentOrder.checkout.value} /><span>{paymentOrder.providerId === "huifu-aggregate-native" ? t("wallet.scanHintAlipay") : paymentOrder.providerId === "huifu-wechat-native" ? t("wallet.scanHintWechat") : t("wallet.scanHint")}</span></> : null}
                     <PaymentStatus order={paymentOrder} now={clock} />
                 </div> : null}
             </AppModal>

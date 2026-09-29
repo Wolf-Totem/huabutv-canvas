@@ -197,51 +197,7 @@ func (p *HuifuH5Provider) VerifyNotification(_ context.Context, config Config, _
 	if err := p.ValidateConfig(config); err != nil {
 		return Notification{}, err
 	}
-	values, err := parseHuifuNotification(rawBody)
-	if err != nil {
-		return Notification{}, err
-	}
-	respData := strings.TrimSpace(firstNonEmpty(values["resp_data"], values["data"]))
-	sign := strings.TrimSpace(values["sign"])
-	if respData == "" || sign == "" {
-		return Notification{}, errors.New("斗拱异步通知缺少 resp_data 或 sign")
-	}
-	publicKey, err := parseRSAPublicKey(config["huifuPublicKey"])
-	if err != nil {
-		return Notification{}, err
-	}
-	if err := rsaSHA256Verify(publicKey, []byte(respData), sign); err != nil {
-		return Notification{}, err
-	}
-	var payload huifuNotifyPayload
-	if err := json.Unmarshal([]byte(respData), &payload); err != nil {
-		return Notification{}, fmt.Errorf("解析斗拱异步通知：%w", err)
-	}
-	if strings.TrimSpace(payload.HuifuID) != strings.TrimSpace(config["huifuId"]) {
-		return Notification{}, errors.New("斗拱异步通知商户号不匹配")
-	}
-	merchantOrderNo := strings.TrimSpace(payload.ReqSeqID)
-	if merchantOrderNo == "" {
-		return Notification{}, errors.New("斗拱异步通知缺少 req_seq_id")
-	}
-	amount, err := parseYuanToFen(payload.TransAmt)
-	if err != nil {
-		return Notification{}, errors.New("斗拱异步通知金额无效")
-	}
-	paid := payload.TransStat == huifuTransSuccess
-	eventID := firstNonEmpty(payload.HfSeqID, merchantOrderNo) + ":" + payload.TransStat
-	return Notification{
-		EventID: eventID,
-		Result: Result{
-			MerchantOrderNo: merchantOrderNo,
-			ProviderTradeNo: strings.TrimSpace(payload.HfSeqID),
-			ProviderStatus:  firstNonEmpty(payload.TransStat, payload.RespCode),
-			AmountFen:       amount,
-			Currency:        "CNY",
-			Paid:            paid,
-			PaidAt:          parseHuifuDateTime(payload.EndTime, payload.TransFinishTime),
-		},
-	}, nil
+	return huifuVerifyNotification(config, rawBody)
 }
 
 func (p *HuifuH5Provider) DownloadTradeBill(context.Context, Config, time.Time) ([]BillRecord, error) {
@@ -287,20 +243,24 @@ func (p *HuifuH5Provider) queryOriginal(ctx context.Context, config Config, merc
 }
 
 func (p *HuifuH5Provider) call(ctx context.Context, config Config, path string, data map[string]string, output *huifuEnvelope) error {
+	origin, err := p.origin(config)
+	if err != nil {
+		return err
+	}
+	return huifuCall(ctx, p.client, origin, config, path, data, output)
+}
+
+func huifuCall(ctx context.Context, client *http.Client, origin string, config Config, path string, data map[string]string, output *huifuEnvelope) error {
 	payload, err := huifuSignedPayload(config, data)
 	if err != nil {
 		return err
 	}
-	endpoint, err := p.origin(config)
-	if err != nil {
-		return err
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+path, bytes.NewReader(payload))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, origin+path, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	response, err := p.client.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return &ProviderError{Code: "huifu_transport_error", Message: "斗拱网络请求失败", Temporary: true, Cause: err}
 	}
@@ -347,9 +307,12 @@ type huifuData struct {
 	OrgReqDate   string `json:"org_req_date"`
 	OrgReqSeqID  string `json:"org_req_seq_id"`
 	OrgHfSeqID   string `json:"org_hf_seq_id"`
+	HfSeqID      string `json:"hf_seq_id"`
+	QrCode       string `json:"qr_code"`
 	TransStat    string `json:"trans_stat"`
 	TransAmt     string `json:"trans_amt"`
 	TransTime    string `json:"trans_time"`
+	EndTime      string `json:"end_time"`
 	CloseStat    string `json:"close_stat"`
 	OrgTransStat string `json:"org_trans_stat"`
 	OrderStat    string `json:"order_stat"`
@@ -486,13 +449,13 @@ func huifuResult(merchantOrderNo string, data huifuData) Result {
 	closed := data.CloseStat == huifuCloseSuccess
 	return Result{
 		MerchantOrderNo: merchantOrderNo,
-		ProviderTradeNo: firstNonEmpty(data.OrgHfSeqID, data.PreOrderID),
+		ProviderTradeNo: firstNonEmpty(data.OrgHfSeqID, data.HfSeqID, data.PreOrderID),
 		ProviderStatus:  firstNonEmpty(data.TransStat, data.CloseStat, data.RespCode),
 		AmountFen:       amount,
 		Currency:        "CNY",
 		Paid:            paid,
 		Closed:          closed && !paid,
-		PaidAt:          parseHuifuDateTime(data.TransTime, ""),
+		PaidAt:          parseHuifuDateTime(data.EndTime, data.TransTime),
 	}
 }
 
@@ -501,7 +464,7 @@ func huifuBusinessError(code, desc string) error {
 	if message == "" {
 		message = "斗拱业务请求失败"
 	}
-	if code == "20000004" || code == "99010003" {
+	if code == "20000004" || code == "99010003" || code == "23000001" {
 		return fmt.Errorf("%w: %s", ErrOrderNotFound, message)
 	}
 	return &ProviderError{Code: code, Message: message}
@@ -553,6 +516,54 @@ func huifuTruncate(value string, limit int) string {
 
 func huifuLocation() *time.Location {
 	return time.FixedZone("CST", 8*60*60)
+}
+
+func huifuVerifyNotification(config Config, rawBody []byte) (Notification, error) {
+	values, err := parseHuifuNotification(rawBody)
+	if err != nil {
+		return Notification{}, err
+	}
+	respData := strings.TrimSpace(firstNonEmpty(values["resp_data"], values["data"]))
+	sign := strings.TrimSpace(values["sign"])
+	if respData == "" || sign == "" {
+		return Notification{}, errors.New("斗拱异步通知缺少 resp_data 或 sign")
+	}
+	publicKey, err := parseRSAPublicKey(config["huifuPublicKey"])
+	if err != nil {
+		return Notification{}, err
+	}
+	if err := rsaSHA256Verify(publicKey, []byte(respData), sign); err != nil {
+		return Notification{}, err
+	}
+	var payload huifuNotifyPayload
+	if err := json.Unmarshal([]byte(respData), &payload); err != nil {
+		return Notification{}, fmt.Errorf("解析斗拱异步通知：%w", err)
+	}
+	if strings.TrimSpace(payload.HuifuID) != strings.TrimSpace(config["huifuId"]) {
+		return Notification{}, errors.New("斗拱异步通知商户号不匹配")
+	}
+	merchantOrderNo := strings.TrimSpace(payload.ReqSeqID)
+	if merchantOrderNo == "" {
+		return Notification{}, errors.New("斗拱异步通知缺少 req_seq_id")
+	}
+	amount, err := parseYuanToFen(payload.TransAmt)
+	if err != nil {
+		return Notification{}, errors.New("斗拱异步通知金额无效")
+	}
+	paid := payload.TransStat == huifuTransSuccess
+	eventID := firstNonEmpty(payload.HfSeqID, merchantOrderNo) + ":" + payload.TransStat
+	return Notification{
+		EventID: eventID,
+		Result: Result{
+			MerchantOrderNo: merchantOrderNo,
+			ProviderTradeNo: strings.TrimSpace(payload.HfSeqID),
+			ProviderStatus:  firstNonEmpty(payload.TransStat, payload.RespCode),
+			AmountFen:       amount,
+			Currency:        "CNY",
+			Paid:            paid,
+			PaidAt:          parseHuifuDateTime(payload.EndTime, payload.TransFinishTime),
+		},
+	}, nil
 }
 
 func parseHuifuNotification(rawBody []byte) (map[string]string, error) {
