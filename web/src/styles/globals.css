@@ -17871,38 +17871,6 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     margin-top: 14px;
 }
 
-.workspace-wallet-providers {
-    display: flex;
-    min-width: 0;
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.workspace-wallet-providers button {
-    display: inline-flex;
-    min-height: 36px;
-    align-items: center;
-    gap: 6px;
-    border: 1px solid var(--user-border);
-    border-radius: 11px;
-    background: var(--user-surface-muted);
-    padding: 0 11px;
-    color: var(--user-ink-muted);
-    font-size: 11px;
-}
-
-.workspace-wallet-providers button.is-selected {
-    border-color: rgba(107, 94, 231, .32);
-    background: var(--user-accent-soft);
-    color: var(--user-accent);
-}
-
-.workspace-wallet-providers button svg {
-    width: 14px;
-    height: 14px;
-}
-
 .workspace-wallet-redeem-row .ant-input-affix-wrapper,
 .workspace-wallet-redeem-row .ant-input {
     min-width: 0;
@@ -18051,30 +18019,72 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .workspace-wallet-payment {
     display: grid;
     justify-items: center;
-    gap: 9px;
-    padding: 10px 0 4px;
+    gap: 10px;
+    padding: 4px 8px 10px;
     text-align: center;
 }
 
-.workspace-wallet-payment-icon {
-    display: grid;
-    width: 48px;
-    height: 48px;
-    place-items: center;
-    border-radius: 16px;
-    background: var(--user-accent-soft);
-    color: var(--user-accent);
+.workspace-wallet-payment-product {
+    margin: 0;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    font-size: 12px;
+}
+
+.workspace-wallet-payment-countdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    font-size: 13px;
+}
+
+.workspace-wallet-payment-countdown .anticon {
+    font-size: 16px;
 }
 
 .workspace-wallet-payment > strong {
-    font-size: 25px;
+    font-size: 28px;
+    color: #1677ff;
 }
 
-.workspace-wallet-payment p,
-.workspace-wallet-payment > span:not(.workspace-wallet-payment-icon) {
-    margin: 0;
-    color: color-mix(in srgb, var(--foreground) 48%, transparent);
-    font-size: 11px;
+.workspace-wallet-scan-channels {
+    display: inline-flex;
+    margin-top: 8px;
+    padding: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    gap: 2px;
+}
+
+.workspace-wallet-scan-channels button {
+    display: inline-flex;
+    min-width: 108px;
+    height: 38px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 0 16px;
+    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    font-size: 13px;
+}
+
+.workspace-wallet-scan-channels button.is-selected {
+    background: #ffffff;
+    color: var(--user-ink, #1d1d20);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+}
+
+.workspace-wallet-scan-channels button .anticon {
+    font-size: 16px;
+}
+
+.workspace-wallet-scan-qr-loading {
+    width: 232px;
+    height: 232px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--foreground) 6%, #ffffff);
 }
 
 .workspace-wallet-payment-status {

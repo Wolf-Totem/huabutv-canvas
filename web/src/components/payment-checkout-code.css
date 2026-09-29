@@ -1,4 +1,5 @@
 .payment-checkout-code {
+    position: relative;
     display: grid;
     place-items: center;
     box-sizing: border-box;
@@ -8,6 +9,26 @@
     border-radius: 16px;
     background: #ffffff;
 }
+
+.payment-checkout-code.is-loading {
+    background: color-mix(in srgb, var(--foreground) 6%, #ffffff);
+}
+
+.payment-checkout-code-mark {
+    position: absolute;
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px #ffffff;
+    font-size: 28px;
+    line-height: 1;
+}
+
+.payment-checkout-code-mark.is-wechat { color: #07c160; }
+.payment-checkout-code-mark.is-alipay { color: #1677ff; }
 
 .payment-checkout-code img,
 .payment-checkout-code canvas,

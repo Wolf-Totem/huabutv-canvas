@@ -28,6 +28,26 @@ describe("wallet history pagination", () => {
     });
 });
 
+describe("wallet scan checkout", () => {
+    test("keeps WeChat and Alipay inside the pay modal, not as catalog chips", () => {
+        const modal = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-wallet-modal.tsx"), "utf8");
+        expect(modal).toContain("workspace-wallet-scan-channels");
+        expect(modal).toContain("wallet.payWechat");
+        expect(modal).toContain("wallet.payAlipay");
+        expect(modal).toContain("selectScanBrand");
+        expect(modal).toContain("openScanCheckout");
+        expect(modal).toContain('footer={null}');
+        expect(modal).not.toContain("wallet.closeOrder");
+        expect(modal).not.toContain("wallet.iPaid");
+        expect(modal).not.toContain("paymentFooter");
+        expect(modal).not.toContain("selectedProviderId");
+        expect(modal).not.toContain("我已完成支付");
+        expect(modal).not.toContain("{provider.name}");
+        expect(modal).not.toContain("workspace-wallet-providers");
+        expect(modal).not.toContain("斗拱");
+    });
+});
+
 describe("wallet subscription center", () => {
     test("renders a 1080px three-column subscribe grid bound to API showcase fields", () => {
         const modal = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-wallet-modal.tsx"), "utf8");
