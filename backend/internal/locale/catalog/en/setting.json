@@ -114,6 +114,8 @@
   "wallet.redeemPlaceholder": "Enter the 32-character code",
   "wallet.redeemConfirm": "Redeem",
   "wallet.payMethod": "Payment method",
+  "wallet.choosePayLead": "Choose Alipay or WeChat first. The QR code is created after you pick.",
+  "wallet.closeOrderFailed": "Could not close the order",
   "wallet.openOrder": "You have an unfinished subscription order",
   "wallet.openOrderLead": "Finish or close it before buying another plan.",
   "wallet.continuePay": "Continue payment",

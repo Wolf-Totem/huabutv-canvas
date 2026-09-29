@@ -54,6 +54,8 @@
   "wallet.redeemPlaceholder": "Nhập mã 32 ký tự",
   "wallet.redeemConfirm": "Đổi ngay",
   "wallet.payMethod": "Cách thanh toán",
+  "wallet.choosePayLead": "Hãy chọn Alipay hoặc WeChat trước. Mã QR chỉ tạo sau khi chọn.",
+  "wallet.closeOrderFailed": "Không đóng được đơn",
   "wallet.openOrder": "Bạn có đơn đăng ký chưa hoàn tất",
   "wallet.openOrderLead": "Hãy hoàn tất hoặc đóng đơn trước khi mua gói khác.",
   "wallet.continuePay": "Tiếp tục thanh toán",

@@ -54,6 +54,8 @@
   "wallet.redeemPlaceholder": "กรอกโค้ด 32 ตัว",
   "wallet.redeemConfirm": "ยืนยันแลก",
   "wallet.payMethod": "วิธีชำระเงิน",
+  "wallet.choosePayLead": "เลือก Alipay หรือ WeChat ก่อน ถึงจะสร้างคิวอาร์",
+  "wallet.closeOrderFailed": "ปิดออเดอร์ไม่สำเร็จ",
   "wallet.openOrder": "คุณมีคำสั่งสมัครที่ยังไม่เสร็จ",
   "wallet.openOrderLead": "ปิดหรือจ่ายออเดอร์นี้ก่อนซื้อแพ็กอื่น",
   "wallet.continuePay": "จ่ายต่อ",

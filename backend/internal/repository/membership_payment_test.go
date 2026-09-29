@@ -100,6 +100,38 @@ func TestCreateMembershipPaymentOrderSameKeyReturnsExisting(t *testing.T) {
 	}
 }
 
+func TestAbandonUncreatedPaymentOrderFreesMembershipSlot(t *testing.T) {
+	db := openPaymentTestDB(t)
+	repo := New(db)
+	order := model.PaymentOrder{
+		ID: "mem-order-abandon", UserID: "user-1", IdempotencyKey: "abandon-key", MerchantOrderNo: "merchant-abandon",
+		ProductID: "membership-month", ProductName: "月卡", ProviderID: "huifu-wechat-native",
+		AmountFen: 3000, Currency: "CNY", ProductKind: model.ProductKindMembership, PlanSKU: model.MembershipSKUVipMonth,
+		Status: model.PaymentOrderCreated, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+	occupied, err := OccupiedMembershipCountInTx(db, "user-1")
+	if err != nil || occupied != 1 {
+		t.Fatalf("occupied before abandon = %d err=%v", occupied, err)
+	}
+	if err := repo.AbandonUncreatedPaymentOrder(order.ID, "23000004"); err != nil {
+		t.Fatal(err)
+	}
+	occupied, err = OccupiedMembershipCountInTx(db, "user-1")
+	if err != nil || occupied != 0 {
+		t.Fatalf("occupied after abandon = %d err=%v", occupied, err)
+	}
+	fresh, err := repo.PaymentOrder(order.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.Status != model.PaymentOrderClosed || fresh.LastError != "23000004" || fresh.ProviderStatus != "CREATE_FAILED" {
+		t.Fatalf("abandoned order = %#v", fresh)
+	}
+}
+
 func TestCompletePaymentOrderStorageTopupAddsBonus(t *testing.T) {
 	db := openPaymentTestDB(t)
 	repo := New(db)

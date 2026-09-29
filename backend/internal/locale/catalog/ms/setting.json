@@ -54,6 +54,8 @@
   "wallet.redeemPlaceholder": "Masukkan kod 32 aksara",
   "wallet.redeemConfirm": "Tebus",
   "wallet.payMethod": "Kaedah bayaran",
+  "wallet.choosePayLead": "Pilih Alipay atau WeChat dahulu. Kod QR dicipta selepas pilih.",
+  "wallet.closeOrderFailed": "Gagal menutup pesanan",
   "wallet.openOrder": "Ada pesanan langganan belum selesai",
   "wallet.openOrderLead": "Selesaikan atau tutup dahulu sebelum beli pelan lain.",
   "wallet.continuePay": "Teruskan bayaran",

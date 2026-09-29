@@ -7,7 +7,7 @@ import { PaymentCheckoutCode } from "@/components/payment-checkout-code";
 import { PaymentScanBrandMark } from "@/components/payment-scan-brand";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
-import { defaultPaymentScanBrand, hasPaymentScanChannel, paymentScanBrand, qrScanChannels, type PaymentScanBrand } from "@/lib/payment-brands";
+import { defaultPaymentScanBrand, hasPaymentScanChannel, paymentScanBrand, qrScanChannels, solePaymentScanBrand, type PaymentScanBrand } from "@/lib/payment-brands";
 import { closePaymentOrder, createPaymentOrder, getPaymentOrder, listPaymentProviders, listTopupProducts, queryPaymentOrder, type PaymentOrder, type PaymentProvider, type TopupProduct } from "@/services/api/payments";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { getMembership, listMembershipProducts } from "@/services/api/membership";
@@ -37,6 +37,15 @@ import {
 import { openWorkspaceWallet, resolveWalletTab, WORKSPACE_WALLET_OPEN_EVENT, type WalletModalTab, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
 import { useTranslation } from "react-i18next";
 import { useUserStore } from "@/stores/use-user-store";
+
+type WalletCheckoutIntent = {
+    productId: string;
+    productKind: "membership" | "credit_topup" | "storage_topup";
+    name: string;
+    amountFen: number;
+};
+
+type ScanCreateResult = "shown" | "paid" | "blocked" | "failed";
 
 export function WorkspaceWalletHost() {
     const { pathname, search } = useLocation();
@@ -133,10 +142,12 @@ export function WorkspaceWalletModal({
     const [paymentCreating, setPaymentCreating] = useState(false);
     const [paymentOrder, setPaymentOrder] = useState<PaymentOrder | null>(null);
     const [paymentOpen, setPaymentOpen] = useState(false);
+    const [brandOpen, setBrandOpen] = useState(false);
+    const [brandPicking, setBrandPicking] = useState<PaymentScanBrand | null>(null);
     const [orderResuming, setOrderResuming] = useState(false);
     const [orderCancelling, setOrderCancelling] = useState(false);
     const [scanBrand, setScanBrand] = useState<PaymentScanBrand>("wechat");
-    const [checkoutIntent, setCheckoutIntent] = useState<{ productId: string; productKind: "membership" | "credit_topup" | "storage_topup" } | null>(null);
+    const [checkoutIntent, setCheckoutIntent] = useState<WalletCheckoutIntent | null>(null);
     const [clock, setClock] = useState(Date.now());
     const completedOrderId = useRef("");
     const requestSequence = useRef(0);
@@ -293,15 +304,15 @@ export function WorkspaceWalletModal({
 
     const adoptPaymentOrder = (order: PaymentOrder) => {
         const kind = order.productKind === "membership" || order.productKind === "storage_topup" || order.productKind === "credit_topup" ? order.productKind : "credit_topup";
-        setCheckoutIntent({ productId: order.productId, productKind: kind });
+        setCheckoutIntent(intentFromPaymentOrder(order, kind));
         setScanBrand(paymentScanBrand(order.providerId) || defaultPaymentScanBrand(qrScanChannels(providers)) || "wechat");
+        setBrandOpen(false);
         setPaymentOrder(order);
         setPaymentOpen(true);
     };
 
     const startMembershipPayment = async (product: MembershipProduct) => {
-        const brand = defaultPaymentScanBrand(scanChannels);
-        if (!brand) {
+        if (!canScanPay) {
             message.error(t("wallet.noScanChannel"));
             return;
         }
@@ -312,7 +323,7 @@ export function WorkspaceWalletModal({
         }
         const pay = () => {
             setSelectedMembershipId(product.id);
-            void openScanCheckout({ productId: product.id, productKind: "membership" }, brand);
+            void beginBrandCheckout({ productId: product.id, productKind: "membership", name: product.name, amountFen: product.amountFen });
         };
         if (membership.advancedRemainingSeconds > 0) {
             modal.confirm({
@@ -326,62 +337,79 @@ export function WorkspaceWalletModal({
     };
 
     const startTopupPayment = async (product: TopupProduct, kind: "credit_topup" | "storage_topup") => {
-        const brand = defaultPaymentScanBrand(scanChannels);
-        if (!brand) {
+        if (!canScanPay) {
             message.error(t("wallet.noScanChannel"));
             return;
         }
-        void openScanCheckout({ productId: product.id, productKind: kind }, brand);
+        void beginBrandCheckout({ productId: product.id, productKind: kind, name: product.name, amountFen: product.amountFen });
     };
 
-    const openScanCheckout = async (intent: { productId: string; productKind: "membership" | "credit_topup" | "storage_topup" }, brand: PaymentScanBrand) => {
+    const beginBrandCheckout = async (intent: WalletCheckoutIntent) => {
+        if (paymentCreating || brandOpen) return;
         setCheckoutIntent(intent);
-        setScanBrand(brand);
-        setPaymentOpen(true);
-        const previous = isActivePaymentOrder(paymentOrder) ? paymentOrder : null;
+        setPaymentOrder(null);
+        const sole = solePaymentScanBrand(scanChannels);
+        if (sole) {
+            const result = await createScanOrder(intent, sole, null);
+            if (result === "shown" || result === "paid") setPaymentOpen(true);
+            return;
+        }
+        setBrandOpen(true);
+    };
+
+    const pickCheckoutBrand = async (brand: PaymentScanBrand) => {
+        if (!checkoutIntent || !scanChannels[brand] || paymentCreating || brandPicking) return;
+        setBrandPicking(brand);
+        const result = await createScanOrder(checkoutIntent, brand, null);
+        setBrandPicking(null);
+        if (result === "shown" || result === "paid") {
+            setBrandOpen(false);
+            setPaymentOpen(true);
+        }
+    };
+
+    const createScanOrder = async (
+        intent: WalletCheckoutIntent,
+        brand: PaymentScanBrand,
+        previous: PaymentOrder | null,
+    ): Promise<ScanCreateResult> => {
+        const provider = qrScanChannels(providers)[brand];
+        if (!provider) {
+            message.error(t("wallet.noScanChannel"));
+            return "failed";
+        }
         if (
             previous
             && previous.productId === intent.productId
             && previous.productKind === intent.productKind
             && paymentScanBrand(previous.providerId) === brand
+            && previous.status === "pending"
             && previous.checkout.mode === "qr_code"
             && previous.checkout.value
         ) {
+            setScanBrand(brand);
             setPaymentOrder(previous);
-            return;
-        }
-        if (!previous) setPaymentOrder(null);
-        await createScanOrder(intent, brand, previous);
-    };
-
-    const createScanOrder = async (
-        intent: { productId: string; productKind: "membership" | "credit_topup" | "storage_topup" },
-        brand: PaymentScanBrand,
-        previous: PaymentOrder | null,
-    ) => {
-        const provider = qrScanChannels(providers)[brand];
-        if (!provider) {
-            message.error(t("wallet.noScanChannel"));
-            return;
+            return "shown";
         }
         const generation = ++scanGeneration.current;
+        setScanBrand(brand);
         setPaymentCreating(true);
         try {
             if (previous && isActivePaymentOrder(previous)) {
                 try {
                     const closed = await closePaymentOrder(previous.id);
-                    if (generation !== scanGeneration.current) return;
+                    if (generation !== scanGeneration.current) return "failed";
                     if (closed.order.status === "credited") {
                         setPaymentOrder(closed.order);
                         setScanBrand(paymentScanBrand(closed.order.providerId) || brand);
                         await announceWalletUpdated(closed.order.id);
-                        return;
+                        return "paid";
                     }
                 } catch (error) {
-                    if (generation !== scanGeneration.current) return;
+                    if (generation !== scanGeneration.current) return "failed";
                     setScanBrand(paymentScanBrand(previous.providerId) || brand);
-                    message.error(error instanceof Error ? error.message : "关闭订单失败");
-                    return;
+                    message.error(error instanceof Error ? error.message : t("wallet.closeOrderFailed"));
+                    return "blocked";
                 }
             }
             const result = await createPaymentOrder({
@@ -394,26 +422,37 @@ export function WorkspaceWalletModal({
                 if (isActivePaymentOrder(result.order)) {
                     void closePaymentOrder(result.order.id).catch(() => undefined);
                 }
-                return;
+                return "failed";
             }
             setPaymentOrder(result.order);
             if (result.order.status === "credited") await announceWalletUpdated(result.order.id);
             if (result.order.checkout.mode === "redirect" && result.order.checkout.url) {
                 window.location.assign(result.order.checkout.url);
             }
+            return result.order.status === "credited" ? "paid" : "shown";
         } catch (error) {
-            if (generation !== scanGeneration.current) return;
+            if (generation !== scanGeneration.current) return "failed";
             message.error(error instanceof Error ? error.message : intent.productKind === "membership" ? "创建订阅订单失败" : "创建支付订单失败");
+            if (previous) await announceWalletUpdated();
+            return "failed";
         } finally {
             if (generation === scanGeneration.current) setPaymentCreating(false);
         }
     };
 
     const selectScanBrand = (brand: PaymentScanBrand) => {
-        if (!checkoutIntent || !scanChannels[brand]) return;
+        if (!checkoutIntent || !scanChannels[brand] || paymentCreating) return;
+        if (paymentOrder?.status === "credited") return;
         if (brand === scanBrand && paymentOrder && paymentOrder.status !== "create_failed") return;
-        setScanBrand(brand);
-        void createScanOrder(checkoutIntent, brand, paymentOrder);
+        const previousBrand = scanBrand;
+        void createScanOrder(checkoutIntent, brand, paymentOrder).then((result) => {
+            if (result === "blocked") setScanBrand(paymentScanBrand(paymentOrder?.providerId) || previousBrand);
+            if (result === "failed") {
+                setPaymentOrder(null);
+                setPaymentOpen(false);
+                setBrandOpen(true);
+            }
+        });
     };
 
     const resumeOpenMembershipOrder = async () => {
@@ -427,23 +466,24 @@ export function WorkspaceWalletModal({
             const { order } = await getPaymentOrder(id);
             const kind = order.productKind === "membership" || order.productKind === "storage_topup" || order.productKind === "credit_topup" ? order.productKind : "membership";
             const brand = paymentScanBrand(order.providerId) || defaultPaymentScanBrand(scanChannels) || "wechat";
-            const intent = { productId: order.productId, productKind: kind };
+            const intent = intentFromPaymentOrder(order, kind);
             setCheckoutIntent(intent);
             setScanBrand(brand);
-            setPaymentOpen(true);
+            setBrandOpen(false);
             if (order.status === "pending" && order.checkout.mode === "qr_code" && order.checkout.value) {
                 setPaymentOrder(order);
+                setPaymentOpen(true);
                 return;
             }
             if (order.status === "credited") {
                 setPaymentOrder(order);
+                setPaymentOpen(true);
                 await announceWalletUpdated(order.id);
                 return;
             }
-            setPaymentOrder(order);
-            if (isActivePaymentOrder(order)) {
-                await createScanOrder(intent, brand, order);
-            }
+            const result = await createScanOrder(intent, brand, isActivePaymentOrder(order) ? order : null);
+            if (result === "shown" || result === "paid") setPaymentOpen(true);
+            if (result === "failed") setBrandOpen(true);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取支付订单失败");
         } finally {
@@ -468,6 +508,7 @@ export function WorkspaceWalletModal({
                 return;
             }
             setPaymentOpen(false);
+            setBrandOpen(false);
             setPaymentOrder(null);
             setCheckoutIntent(null);
             await announceWalletUpdated();
@@ -518,7 +559,7 @@ export function WorkspaceWalletModal({
 
     const payButton = (onPay: () => void, disabled: boolean, label: string) => (
         <div className="workspace-wallet-provider-row">
-            <Button type="primary" size="large" disabled={disabled || !canScanPay || !membership.onlinePaymentEnabled} onClick={onPay}>{label}</Button>
+            <Button type="primary" size="large" loading={paymentCreating} disabled={disabled || !canScanPay || !membership.onlinePaymentEnabled || paymentCreating || brandOpen} onClick={onPay}>{label}</Button>
         </div>
     );
 
@@ -651,7 +692,7 @@ export function WorkspaceWalletModal({
                                                     ]}
                                                     features={selected.featureLines || []}
                                                     action={action}
-                                                    disabled={blocked.disabled || unpriced || !membership.onlinePaymentEnabled || !canScanPay}
+                                                    disabled={blocked.disabled || unpriced || !membership.onlinePaymentEnabled || !canScanPay || paymentCreating || brandOpen}
                                                     reason={blocked.disabled ? (blocked.reasonKey ? t(blocked.reasonKey) : blocked.reason) : ""}
                                                     current={isCurrent}
                                                     highlighted={Boolean(selected.highlighted)}
@@ -731,11 +772,45 @@ export function WorkspaceWalletModal({
             </AppModal>
 
             <AppModal
+                open={brandOpen}
+                title={checkoutIntent?.productKind === "membership" ? t("wallet.scanMembership") : t("wallet.scanPay")}
+                centered
+                width={430}
+                zIndex={1200}
+                footer={null}
+                onCancel={() => {
+                    if (paymentCreating) return;
+                    setBrandOpen(false);
+                    if (!paymentOrder) setCheckoutIntent(null);
+                }}
+            >
+                <div className="workspace-wallet-brand-picker">
+                    {checkoutIntent ? <p className="workspace-wallet-payment-product">{checkoutIntent.name}</p> : null}
+                    {checkoutIntent ? <strong>¥ {(checkoutIntent.amountFen / 100).toFixed(2)}</strong> : null}
+                    <p className="workspace-wallet-brand-picker-lead">{t("wallet.choosePayLead")}</p>
+                    <div className="workspace-wallet-brand-picker-actions" role="group" aria-label={t("wallet.payMethod")}>
+                        {scanChannels.wechat ? (
+                            <button type="button" disabled={paymentCreating} className={brandPicking === "wechat" ? "is-busy" : ""} onClick={() => void pickCheckoutBrand("wechat")}>
+                                <PaymentScanBrandMark brand="wechat" />
+                                {t("wallet.payWechat")}
+                            </button>
+                        ) : null}
+                        {scanChannels.alipay ? (
+                            <button type="button" disabled={paymentCreating} className={brandPicking === "alipay" ? "is-busy" : ""} onClick={() => void pickCheckoutBrand("alipay")}>
+                                <PaymentScanBrandMark brand="alipay" />
+                                {t("wallet.payAlipay")}
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
+            </AppModal>
+
+            <AppModal
                 open={paymentOpen}
                 title={paymentOrder?.status === "credited" ? creditedTitle(paymentOrder) : (checkoutIntent?.productKind === "membership" || paymentOrder?.productKind === "membership") ? t("wallet.scanMembership") : t("wallet.scanPay")}
                 centered
                 width={430}
-                zIndex={1200}
+                zIndex={1210}
                 footer={null}
                 onCancel={() => setPaymentOpen(false)}
             >
@@ -848,6 +923,10 @@ function WalletPlanCard({
             <Button type={tier === "free" ? "default" : "primary"} className={cn(tier === "svip" && "is-svip", tier === "vip" && "is-vip")} loading={loading} disabled={disabled} onClick={(event) => { event.stopPropagation(); onBuy?.(); }}>{action}</Button>
         </article>
     );
+}
+
+function intentFromPaymentOrder(order: PaymentOrder, kind: WalletCheckoutIntent["productKind"]): WalletCheckoutIntent {
+    return { productId: order.productId, productKind: kind, name: order.productName, amountFen: order.amountFen };
 }
 
 function creditedMessage(order: PaymentOrder) {

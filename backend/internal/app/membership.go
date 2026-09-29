@@ -33,34 +33,34 @@ type SupportContactSetting struct {
 }
 
 type MembershipPublicView struct {
-	PermanentActive           bool                    `json:"permanentActive"`
-	AdvancedPlanSKU           string                  `json:"advancedPlanSku"`
-	AdvancedExpiresAt         *time.Time              `json:"advancedExpiresAt,omitempty"`
-	AdvancedRemainingSeconds  int64                   `json:"advancedRemainingSeconds"`
-	Tier                      string                  `json:"tier,omitempty"`
-	CanPurchaseAdvanced       bool                    `json:"canPurchaseAdvanced"`
-	CanPurchasePermanent      bool                    `json:"canPurchasePermanent"`
-	CanPurchaseVip            bool                    `json:"canPurchaseVip"`
-	CanPurchaseSvip           bool                    `json:"canPurchaseSvip"`
-	HasOpenMembershipOrder    bool                    `json:"hasOpenMembershipOrder"`
-	OpenMembershipOrderID     string                  `json:"openMembershipOrderId,omitempty"`
-	PersonalStorageAllowed    bool                    `json:"personalStorageAllowed"`
-	PersonalBucketEnabled     bool                    `json:"personalBucketEnabled"`
-	StorageDisplay            string                  `json:"storageDisplay,omitempty"`
-	EffectiveStoredFileBytes  int64                   `json:"effectiveStoredFileBytes"`
-	QuotaSource               string                  `json:"quotaSource"`
-	StorageOverrideBytes      *int64                  `json:"storageOverrideBytes"`
-	StorageBonusBytes         int64                   `json:"storageBonusBytes"`
-	StorageExpansionMessage   string                  `json:"storageExpansionMessage"`
-	SupportTicketURL          string                  `json:"supportTicketUrl,omitempty"`
-	SupportQQ                 string                  `json:"supportQq,omitempty"`
-	MinPurchasableAdvancedSKU string                  `json:"minPurchasableAdvancedSku,omitempty"`
-	OnlinePaymentEnabled      bool                    `json:"onlinePaymentEnabled"`
-	RedeemEnabled             bool                    `json:"redeemEnabled"`
-	FeatureShowcase           []MembershipFeatureLine `json:"featureShowcase,omitempty"`
+	PermanentActive           bool                     `json:"permanentActive"`
+	AdvancedPlanSKU           string                   `json:"advancedPlanSku"`
+	AdvancedExpiresAt         *time.Time               `json:"advancedExpiresAt,omitempty"`
+	AdvancedRemainingSeconds  int64                    `json:"advancedRemainingSeconds"`
+	Tier                      string                   `json:"tier,omitempty"`
+	CanPurchaseAdvanced       bool                     `json:"canPurchaseAdvanced"`
+	CanPurchasePermanent      bool                     `json:"canPurchasePermanent"`
+	CanPurchaseVip            bool                     `json:"canPurchaseVip"`
+	CanPurchaseSvip           bool                     `json:"canPurchaseSvip"`
+	HasOpenMembershipOrder    bool                     `json:"hasOpenMembershipOrder"`
+	OpenMembershipOrderID     string                   `json:"openMembershipOrderId,omitempty"`
+	PersonalStorageAllowed    bool                     `json:"personalStorageAllowed"`
+	PersonalBucketEnabled     bool                     `json:"personalBucketEnabled"`
+	StorageDisplay            string                   `json:"storageDisplay,omitempty"`
+	EffectiveStoredFileBytes  int64                    `json:"effectiveStoredFileBytes"`
+	QuotaSource               string                   `json:"quotaSource"`
+	StorageOverrideBytes      *int64                   `json:"storageOverrideBytes"`
+	StorageBonusBytes         int64                    `json:"storageBonusBytes"`
+	StorageExpansionMessage   string                   `json:"storageExpansionMessage"`
+	SupportTicketURL          string                   `json:"supportTicketUrl,omitempty"`
+	SupportQQ                 string                   `json:"supportQq,omitempty"`
+	MinPurchasableAdvancedSKU string                   `json:"minPurchasableAdvancedSku,omitempty"`
+	OnlinePaymentEnabled      bool                     `json:"onlinePaymentEnabled"`
+	RedeemEnabled             bool                     `json:"redeemEnabled"`
+	FeatureShowcase           []MembershipFeatureLine  `json:"featureShowcase,omitempty"`
 	FreeShowcase              model.MembershipShowcase `json:"freeShowcase"`
-	DefaultStoredFileBytes    int64                   `json:"defaultStoredFileBytes"`
-	StorageBonusExpiresAt     *time.Time              `json:"storageBonusExpiresAt,omitempty"`
+	DefaultStoredFileBytes    int64                    `json:"defaultStoredFileBytes"`
+	StorageBonusExpiresAt     *time.Time               `json:"storageBonusExpiresAt,omitempty"`
 }
 
 type MembershipFeatureLine = model.MembershipFeatureLine
@@ -71,21 +71,21 @@ type MembershipProductView struct {
 }
 
 type UpdateMembershipProductRequest struct {
-	Name                string                        `json:"name"`
-	Description         string                        `json:"description"`
-	AmountFen           int64                         `json:"amountFen"`
-	Enabled             bool                          `json:"enabled"`
-	SortOrder           int                           `json:"sortOrder"`
-	OriginalAmountFen   *int64                        `json:"originalAmountFen"`
-	CreditsMicrocredits *int64                        `json:"creditsMicrocredits"`
-	StorageQuotaBytes   *int64                        `json:"storageQuotaBytes"`
-	Badge               *string                       `json:"badge"`
-	Highlighted         *bool                         `json:"highlighted"`
-	EntryLabel          *string                       `json:"entryLabel"`
-	Audience            *string                       `json:"audience"`
-	AddOnLabel          *string                       `json:"addOnLabel"`
+	Name                string                         `json:"name"`
+	Description         string                         `json:"description"`
+	AmountFen           int64                          `json:"amountFen"`
+	Enabled             bool                           `json:"enabled"`
+	SortOrder           int                            `json:"sortOrder"`
+	OriginalAmountFen   *int64                         `json:"originalAmountFen"`
+	CreditsMicrocredits *int64                         `json:"creditsMicrocredits"`
+	StorageQuotaBytes   *int64                         `json:"storageQuotaBytes"`
+	Badge               *string                        `json:"badge"`
+	Highlighted         *bool                          `json:"highlighted"`
+	EntryLabel          *string                        `json:"entryLabel"`
+	Audience            *string                        `json:"audience"`
+	AddOnLabel          *string                        `json:"addOnLabel"`
 	FeatureLines        *[]model.MembershipFeatureLine `json:"featureLines"`
-	SyncShowcaseToTier  bool                          `json:"syncShowcaseToTier"`
+	SyncShowcaseToTier  bool                           `json:"syncShowcaseToTier"`
 }
 
 type AdminStorageQuotaRequest struct {
@@ -715,7 +715,7 @@ func (s *Service) createMembershipPaymentOrder(ctx context.Context, actor *model
 	}
 	values, err := s.decryptPaymentConfig(config)
 	if err != nil {
-		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
+		s.abandonUncreatedPaymentOrder(order.ID, err)
 		return nil, err
 	}
 	baseURL := strings.TrimRight(values["publicBaseUrl"], "/")
@@ -726,11 +726,12 @@ func (s *Service) createMembershipPaymentOrder(ctx context.Context, actor *model
 		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
 	})
 	if err != nil {
-		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
+		s.abandonUncreatedPaymentOrder(order.ID, err)
 		return nil, WrapAppError(502, "支付渠道下单失败，请稍后重试", err)
 	}
 	if err := s.repo.SetPaymentOrderCheckout(order.ID, checkout.Mode, checkout.Value, checkout.ExpiresAt); err != nil {
-		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
+		_ = s.closePaymentOrder(ctx, order)
+		s.abandonUncreatedPaymentOrder(order.ID, err)
 		return nil, err
 	}
 	fresh, err := s.repo.PaymentOrder(order.ID)

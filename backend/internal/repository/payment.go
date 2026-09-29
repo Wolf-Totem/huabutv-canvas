@@ -121,6 +121,31 @@ func (r *Repository) SetPaymentOrderCreateFailure(id, message string) error {
 	}).Error
 }
 
+// AbandonUncreatedPaymentOrder closes an order that never became payable, keeping
+// last_error for admin diagnostics without occupying the membership slot.
+func (r *Repository) AbandonUncreatedPaymentOrder(id, message string) error {
+	now := time.Now()
+	updated := r.db.Model(&model.PaymentOrder{}).Where("id = ? AND status IN ?", id, []model.PaymentOrderStatus{
+		model.PaymentOrderCreated, model.PaymentOrderCreateFailed,
+	}).Updates(map[string]any{
+		"status": model.PaymentOrderClosed, "provider_status": "CREATE_FAILED",
+		"last_error": message, "closed_at": &now, "updated_at": now,
+	})
+	if updated.Error != nil {
+		return updated.Error
+	}
+	if updated.RowsAffected == 0 {
+		var order model.PaymentOrder
+		if err := r.db.First(&order, "id = ?", id).Error; err != nil {
+			return err
+		}
+		if order.Status != model.PaymentOrderClosed && order.Status != model.PaymentOrderCredited {
+			return ErrPaymentOrderStateConflict
+		}
+	}
+	return nil
+}
+
 func (r *Repository) PaymentOrderForUser(userID, id string) (*model.PaymentOrder, error) {
 	var order model.PaymentOrder
 	return &order, r.db.First(&order, "id = ? AND user_id = ?", strings.TrimSpace(id), strings.TrimSpace(userID)).Error

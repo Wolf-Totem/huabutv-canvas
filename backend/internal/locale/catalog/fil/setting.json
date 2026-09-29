@@ -54,6 +54,8 @@
   "wallet.redeemPlaceholder": "Ilagay ang 32-character code",
   "wallet.redeemConfirm": "I-redeem",
   "wallet.payMethod": "Paraan ng bayad",
+  "wallet.choosePayLead": "Pumili muna ng Alipay o WeChat. Saka gagawin ang QR.",
+  "wallet.closeOrderFailed": "Hindi naisara ang order",
   "wallet.openOrder": "May hindi tapos na subscription order",
   "wallet.openOrderLead": "Tapusin o isara muna bago bumili ng iba.",
   "wallet.continuePay": "Ituloy ang bayad",

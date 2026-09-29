@@ -18055,6 +18055,60 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     color: #1677ff;
 }
 
+.workspace-wallet-brand-picker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.workspace-wallet-brand-picker-lead {
+    margin: 0;
+    color: color-mix(in srgb, var(--user-ink, var(--foreground)) 62%, transparent);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.workspace-wallet-brand-picker-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.workspace-wallet-brand-picker-actions:has(button:only-child) {
+    grid-template-columns: 1fr;
+}
+
+.workspace-wallet-brand-picker-actions button {
+    display: inline-flex;
+    min-height: 76px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 16px;
+    background: #ffffff;
+    color: #16161a;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+}
+
+.workspace-wallet-brand-picker-actions button:disabled {
+    cursor: wait;
+    opacity: .65;
+}
+
+.workspace-wallet-brand-picker-actions button.is-busy {
+    box-shadow: 0 0 0 2px #07c160;
+}
+
+.workspace-wallet-brand-picker-actions button .anticon {
+    font-size: 22px;
+}
+
 .workspace-wallet-scan-channels {
     display: inline-flex;
     margin-top: 8px;

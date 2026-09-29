@@ -609,7 +609,7 @@ func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model
 	}
 	values, err := s.decryptPaymentConfig(config)
 	if err != nil {
-		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
+		s.abandonUncreatedPaymentOrder(order.ID, err)
 		return nil, err
 	}
 	baseURL := strings.TrimRight(values["publicBaseUrl"], "/")
@@ -620,11 +620,12 @@ func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model
 		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
 	})
 	if err != nil {
-		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
+		s.abandonUncreatedPaymentOrder(order.ID, err)
 		return nil, WrapAppError(http.StatusBadGateway, "支付渠道下单失败，请稍后重试", err)
 	}
 	if err := s.repo.SetPaymentOrderCheckout(order.ID, checkout.Mode, checkout.Value, checkout.ExpiresAt); err != nil {
-		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
+		_ = s.closePaymentOrder(ctx, order)
+		s.abandonUncreatedPaymentOrder(order.ID, err)
 		return nil, err
 	}
 	order, err = s.repo.PaymentOrder(order.ID)
@@ -765,7 +766,7 @@ func (s *Service) ClosePaymentOrder(ctx context.Context, actor *model.User, id s
 	}
 	if order.Status == model.PaymentOrderCreateFailed {
 		if err := s.closePaymentOrder(ctx, order); err != nil {
-			if markErr := s.repo.MarkPaymentOrderClosed(order.ID, "CREATE_FAILED"); markErr != nil {
+			if markErr := s.repo.AbandonUncreatedPaymentOrder(order.ID, firstNonEmpty(order.LastError, safePaymentError(err))); markErr != nil {
 				return nil, err
 			}
 		}
@@ -929,6 +930,18 @@ func (s *Service) closePaymentOrder(ctx context.Context, order *model.PaymentOrd
 	}
 	if queryNotFound && errors.Is(err, payment.ErrOrderNotFound) && errors.Is(recheckErr, payment.ErrOrderNotFound) {
 		return s.repo.MarkPaymentOrderClosed(order.ID, "NOT_FOUND")
+	}
+	return paymentCloseError(err)
+}
+
+func (s *Service) abandonUncreatedPaymentOrder(id string, cause error) {
+	_ = s.repo.AbandonUncreatedPaymentOrder(id, safePaymentError(cause))
+}
+
+func paymentCloseError(err error) error {
+	var providerErr *payment.ProviderError
+	if errors.As(err, &providerErr) && providerErr.Code == "20000001" {
+		return WrapAppError(http.StatusBadGateway, "原订单刚创建，请稍后再换支付方式", err)
 	}
 	return WrapAppError(http.StatusBadGateway, "支付渠道关单失败，请稍后重试", err)
 }

@@ -114,6 +114,8 @@
   "wallet.redeemPlaceholder": "输入 32 位兑换码",
   "wallet.redeemConfirm": "确认兑换",
   "wallet.payMethod": "支付方式",
+  "wallet.choosePayLead": "请先选择支付宝或微信。选定后才会创建订单并出示二维码。",
+  "wallet.closeOrderFailed": "关闭订单失败",
   "wallet.openOrder": "你有一笔未完成的订阅订单",
   "wallet.openOrderLead": "请先完成或关闭当前订单后再购买其他套餐。",
   "wallet.continuePay": "继续支付",

@@ -40,6 +40,15 @@ export function defaultPaymentScanBrand(channels: Partial<Record<PaymentScanBran
     return null;
 }
 
+export function solePaymentScanBrand(channels: Partial<Record<PaymentScanBrand, PaymentScanProvider>>): PaymentScanBrand | null {
+    const wechat = Boolean(channels.wechat);
+    const alipay = Boolean(channels.alipay);
+    if (wechat && !alipay) return "wechat";
+    if (alipay && !wechat) return "alipay";
+    return null;
+}
+
 export function hasPaymentScanChannel(providers: PaymentScanProvider[]) {
-    return defaultPaymentScanBrand(qrScanChannels(providers)) !== null;
+    const channels = qrScanChannels(providers);
+    return Boolean(channels.wechat || channels.alipay);
 }

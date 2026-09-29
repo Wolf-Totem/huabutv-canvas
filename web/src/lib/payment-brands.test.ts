@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { defaultPaymentScanBrand, hasPaymentScanChannel, paymentScanBrand, qrScanChannels } from "./payment-brands";
+import { defaultPaymentScanBrand, hasPaymentScanChannel, paymentScanBrand, qrScanChannels, solePaymentScanBrand } from "./payment-brands";
 
 const wechatHuifu = { id: "huifu-wechat-native", checkoutMode: "qr_code" };
 const wechatDirect = { id: "wechat-native", checkoutMode: "qr_code" };
@@ -35,4 +35,11 @@ test("默认先微信，没有微信再用支付宝", () => {
     assert.equal(defaultPaymentScanBrand(qrScanChannels([huifuH5, alipayPage])), null);
     assert.equal(hasPaymentScanChannel([huifuH5, alipayPage]), false);
     assert.equal(hasPaymentScanChannel([alipayHuifu]), true);
+});
+
+test("只有一个正扫品牌才跳过选择窗", () => {
+    assert.equal(solePaymentScanBrand(qrScanChannels([alipayHuifu, wechatHuifu])), null);
+    assert.equal(solePaymentScanBrand(qrScanChannels([alipayHuifu])), "alipay");
+    assert.equal(solePaymentScanBrand(qrScanChannels([wechatHuifu])), "wechat");
+    assert.equal(solePaymentScanBrand(qrScanChannels([huifuH5, alipayPage])), null);
 });
