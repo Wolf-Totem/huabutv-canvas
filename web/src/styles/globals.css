@@ -17989,6 +17989,13 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     margin-top: 3px;
 }
 
+.workspace-wallet-open-order-actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .workspace-wallet-pagination {
     display: flex;
     flex-shrink: 0;
@@ -18064,15 +18071,18 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     align-items: center;
     justify-content: center;
     gap: 6px;
+    border: 0;
     border-radius: 999px;
+    background: transparent;
     padding: 0 16px;
-    color: color-mix(in srgb, var(--foreground) 62%, transparent);
+    color: var(--user-ink, #f3f3f5);
     font-size: 13px;
+    cursor: pointer;
 }
 
 .workspace-wallet-scan-channels button.is-selected {
     background: #ffffff;
-    color: var(--user-ink, #1d1d20);
+    color: #16161a;
     box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
 }
 

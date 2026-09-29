@@ -763,6 +763,19 @@ func (s *Service) ClosePaymentOrder(ctx context.Context, actor *model.User, id s
 		view := paymentOrderView(*order)
 		return &view, nil
 	}
+	if order.Status == model.PaymentOrderCreateFailed {
+		if err := s.closePaymentOrder(ctx, order); err != nil {
+			if markErr := s.repo.MarkPaymentOrderClosed(order.ID, "CREATE_FAILED"); markErr != nil {
+				return nil, err
+			}
+		}
+		order, err = s.repo.PaymentOrder(order.ID)
+		if err != nil {
+			return nil, err
+		}
+		view := paymentOrderView(*order)
+		return &view, nil
+	}
 	if err := s.closePaymentOrder(ctx, order); err != nil {
 		return nil, err
 	}

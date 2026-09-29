@@ -31,13 +31,17 @@ describe("wallet history pagination", () => {
 describe("wallet scan checkout", () => {
     test("keeps WeChat and Alipay inside the pay modal, not as catalog chips", () => {
         const modal = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-wallet-modal.tsx"), "utf8");
+        const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
         expect(modal).toContain("workspace-wallet-scan-channels");
         expect(modal).toContain("wallet.payWechat");
         expect(modal).toContain("wallet.payAlipay");
         expect(modal).toContain("selectScanBrand");
         expect(modal).toContain("openScanCheckout");
+        expect(modal).toContain("resumeOpenMembershipOrder");
+        expect(modal).toContain("cancelOpenMembershipOrder");
+        expect(modal).toContain("wallet.continuePay");
+        expect(modal).toContain("wallet.closeOrder");
         expect(modal).toContain('footer={null}');
-        expect(modal).not.toContain("wallet.closeOrder");
         expect(modal).not.toContain("wallet.iPaid");
         expect(modal).not.toContain("paymentFooter");
         expect(modal).not.toContain("selectedProviderId");
@@ -45,6 +49,7 @@ describe("wallet scan checkout", () => {
         expect(modal).not.toContain("{provider.name}");
         expect(modal).not.toContain("workspace-wallet-providers");
         expect(modal).not.toContain("斗拱");
+        expect(css).toMatch(/\.workspace-wallet-scan-channels button\.is-selected\s*\{[^}]*color:\s*#16161a/s);
     });
 });
 
