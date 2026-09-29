@@ -48,6 +48,7 @@ func Models() []any {
 		&model.MembershipProduct{},
 		&model.UserMembership{},
 		&model.MembershipGrant{},
+		&model.StorageGrant{},
 		&model.PaymentProviderConfig{},
 		&model.PaymentOrder{},
 		&model.PaymentNotification{},

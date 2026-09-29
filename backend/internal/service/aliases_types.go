@@ -359,6 +359,7 @@ type (
 	WalletSummary                          = app.WalletSummary
 	MembershipPublicView                   = app.MembershipPublicView
 	UpdateMembershipProductRequest         = app.UpdateMembershipProductRequest
+	MembershipShowcase                     = app.MembershipShowcase
 	AdminStorageQuotaRequest               = app.AdminStorageQuotaRequest
 	AdminMembershipGrantRequest            = app.AdminMembershipGrantRequest
 	CommerceMethods                        = app.CommerceMethods

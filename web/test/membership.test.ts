@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { defaultMembership, formatMembershipStorage, groupMembershipProductsByTier, membershipPurchaseBlocked, membershipStatusLabel } from "../src/lib/membership";
+import { defaultMembership, formatMembershipStorage, formatStorageDuration, groupMembershipProductsByTier, membershipPurchaseBlocked, membershipStatusLabel, periodSavingsPercent, productForPeriod } from "../src/lib/membership";
 
 describe("membership purchase rules", () => {
     test("blocks all SKUs when an open membership order exists", () => {
@@ -45,6 +45,24 @@ describe("membership purchase rules", () => {
         ]);
         expect(grouped.vip.map((item) => item.sku)).toEqual(["vip_month"]);
         expect(grouped.svip.map((item) => item.sku)).toEqual(["svip_year"]);
+    });
+
+    test("computes period savings against the same-tier monthly price", () => {
+        expect(periodSavingsPercent(3000, 8000, 90)).toBe(11);
+        expect(periodSavingsPercent(3000, 28800, 365)).toBe(20);
+        expect(periodSavingsPercent(3000, 9000, 90)).toBe(0);
+        expect(periodSavingsPercent(3000, 3000, 30)).toBe(0);
+    });
+
+    test("picks the catalog card for the selected period", () => {
+        const products = [
+            { id: "m", sku: "vip_month", name: "VIP 月卡", amountFen: 3000, creditsMicrocredits: 1, storageQuotaBytes: 1, durationDays: 30, enabled: true, sortOrder: 1 },
+            { id: "y", sku: "vip_year", name: "VIP 年卡", amountFen: 28800, creditsMicrocredits: 1, storageQuotaBytes: 1, durationDays: 365, enabled: true, sortOrder: 2 },
+        ];
+        expect(productForPeriod(products, "year")?.sku).toBe("vip_year");
+        expect(productForPeriod(products, "month")?.sku).toBe("vip_month");
+        expect(formatStorageDuration(365)).toBe("1 年");
+        expect(formatStorageDuration(90)).toBe("90 天");
     });
 
     test("labels membership status for the sidebar account row", () => {

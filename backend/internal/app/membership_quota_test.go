@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"infinite-canvas/backend/internal/model"
 )
@@ -299,5 +300,104 @@ func TestUpdateMembershipProductCreditsAndStorage(t *testing.T) {
 	}
 	if updated.CreditsMicrocredits != credits || updated.StorageQuotaBytes != storage {
 		t.Fatalf("updated = %#v", updated)
+	}
+}
+
+func TestStorageGrantExpiryDropsBonus(t *testing.T) {
+	svc := newResourceTestService(t)
+	now := time.Now()
+	expired := now.Add(-time.Hour)
+	active := now.Add(48 * time.Hour)
+	if err := svc.repo.Create(&model.UserMembership{UserID: "user-grant"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.Create(&model.StorageGrant{ID: "grant-expired", UserID: "user-grant", Bytes: 20 << 30, Source: model.StorageGrantSourcePayment, DurationDays: 365, StartsAt: now.Add(-400 * 24 * time.Hour), EndsAt: &expired, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.Create(&model.StorageGrant{ID: "grant-active", UserID: "user-grant", Bytes: 50 << 30, Source: model.StorageGrantSourceRedeem, DurationDays: 365, StartsAt: now, EndsAt: &active, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.Create(&model.StorageGrant{ID: "grant-forever", UserID: "user-grant", Bytes: 10 << 30, Source: model.StorageGrantSourceMigrate, StartsAt: now, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := svc.ResolveEffectiveStoredFileBytes("user-grant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := svc.RuntimePolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := applyStorageBonus(gigabytes(policy.Resource.StoredFileGB), 60<<30)
+	if resolved.Bytes != want {
+		t.Fatalf("quota = %#v want %d", resolved, want)
+	}
+	view, err := svc.PublicMembership("user-grant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.StorageBonusBytes != 60<<30 {
+		t.Fatalf("bonus = %d", view.StorageBonusBytes)
+	}
+	if view.StorageBonusExpiresAt == nil || !view.StorageBonusExpiresAt.Equal(active) {
+		t.Fatalf("expiry = %v", view.StorageBonusExpiresAt)
+	}
+}
+
+func TestUpdateMembershipProductSyncsShowcaseToTier(t *testing.T) {
+	svc := newResourceTestService(t)
+	admin := &model.User{ID: "admin-2", Role: model.UserRoleAdmin}
+	if err := svc.repo.Create(admin); err != nil {
+		t.Fatal(err)
+	}
+	month := &model.MembershipProduct{ID: "membership-vip-month", SKU: model.MembershipSKUVipMonth, Name: "VIP 月卡", DurationDays: 30, Tier: model.MembershipTierVip, AmountFen: 3000, Enabled: true, SortOrder: 100}
+	year := &model.MembershipProduct{ID: "membership-vip-year", SKU: model.MembershipSKUVipYear, Name: "VIP 年卡", DurationDays: 365, Tier: model.MembershipTierVip, AmountFen: 28800, Enabled: true, SortOrder: 120, EntryLabel: "旧入口"}
+	if err := svc.repo.Create(month); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.Create(year); err != nil {
+		t.Fatal(err)
+	}
+	lines := []model.MembershipFeatureLine{{Text: "基础创作、画布、素材、任务", Included: true}, {Text: "短剧工作台", Included: false}}
+	entry := "创作工作台"
+	audience := "个人稳定产出"
+	addOn := "可叠加"
+	updated, err := svc.UpdateMembershipProduct(admin, month.ID, UpdateMembershipProductRequest{
+		Name: "VIP 月卡", AmountFen: 3000, Enabled: true, SortOrder: 100, EntryLabel: &entry, Audience: &audience, AddOnLabel: &addOn, FeatureLines: &lines, SyncShowcaseToTier: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.EntryLabel != entry || len(updated.FeatureLines) != 2 {
+		t.Fatalf("month = %#v", updated)
+	}
+	synced, err := svc.repo.MembershipProduct(year.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if synced.EntryLabel != entry || synced.Audience != audience || synced.AddOnLabel != addOn || len(synced.FeatureLines) != 2 || synced.AmountFen != 28800 {
+		t.Fatalf("year = %#v", synced)
+	}
+}
+
+func TestMembershipFreeShowcaseRoundTrip(t *testing.T) {
+	svc := newResourceTestService(t)
+	admin := &model.User{ID: "admin-3", Role: model.UserRoleAdmin}
+	if err := svc.repo.Create(admin); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.MembershipFreeShowcase()
+	if err != nil || got.Title != "免费使用" {
+		t.Fatalf("default = %#v err=%v", got, err)
+	}
+	got.Title = "未开通"
+	got.FeatureLines = []model.MembershipFeatureLine{{Text: "基础创作与预览", Included: true}}
+	saved, err := svc.UpdateMembershipFreeShowcase(admin, got)
+	if err != nil || saved.Title != "未开通" {
+		t.Fatalf("saved = %#v err=%v", saved, err)
+	}
+	view, err := svc.PublicMembership("nobody")
+	if err != nil || view.FreeShowcase.Title != "未开通" || len(view.FreeShowcase.FeatureLines) != 1 {
+		t.Fatalf("public = %#v err=%v", view, err)
 	}
 }

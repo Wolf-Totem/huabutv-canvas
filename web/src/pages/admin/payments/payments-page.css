@@ -15,3 +15,36 @@
     background: var(--btn-solid-active-bg) !important;
     color: var(--btn-solid-fg) !important;
 }
+
+.admin-membership-feature-list {
+    margin-bottom: 16px;
+}
+
+.admin-membership-feature-row {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr) 36px;
+    gap: 8px;
+    align-items: start;
+    margin-bottom: 8px;
+}
+
+.admin-membership-feature-row .ant-form-item {
+    margin-bottom: 0;
+}
+
+.admin-membership-feature-remove.ant-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+}
+
+.admin-membership-feature-empty {
+    border: 1px dashed var(--admin-control-border, var(--border));
+    border-radius: 8px;
+    background: var(--admin-layer-2, transparent);
+    padding: 18px 14px;
+    color: var(--admin-text-muted, var(--foreground));
+    font-size: 12px;
+    text-align: center;
+}

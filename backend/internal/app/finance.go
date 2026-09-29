@@ -70,6 +70,7 @@ type CreateRedeemBatchRequest struct {
 	PlanSKU            string     `json:"planSku"`
 	AmountMicrocredits int64      `json:"amountMicrocredits"`
 	StorageQuotaBytes  int64      `json:"storageQuotaBytes"`
+	DurationDays       int        `json:"durationDays"`
 	Count              int        `json:"count"`
 	Note               string     `json:"note"`
 	ExpiresAt          *time.Time `json:"expiresAt"`
@@ -216,6 +217,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	planSKU := strings.TrimSpace(req.PlanSKU)
 	amount := req.AmountMicrocredits
 	storageBytes := req.StorageQuotaBytes
+	durationDays := 0
 	if kind == model.RedeemKindMembership {
 		if !model.IsMembershipSKU(planSKU) {
 			return nil, BadAuthRequest("未知订阅套餐")
@@ -232,6 +234,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 		}
 		amount = 0
 		planSKU = ""
+		durationDays = model.NormalizeStorageGrantDays(req.DurationDays)
 	} else if amount <= 0 {
 		return nil, BadAuthRequest("兑换码积分必须大于 0")
 	} else {
@@ -244,7 +247,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	if req.ExpiresAt != nil && !req.ExpiresAt.After(time.Now()) {
 		return nil, BadAuthRequest("兑换码过期时间必须晚于当前时间")
 	}
-	batch := model.RedeemBatch{ID: newID(), Kind: kind, PlanSKU: planSKU, AmountMicrocredits: amount, StorageQuotaBytes: storageBytes, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, ExpiresAt: req.ExpiresAt}
+	batch := model.RedeemBatch{ID: newID(), Kind: kind, PlanSKU: planSKU, AmountMicrocredits: amount, StorageQuotaBytes: storageBytes, DurationDays: durationDays, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, ExpiresAt: req.ExpiresAt}
 	codes := make([]string, 0, req.Count)
 	items := make([]model.RedeemCode, 0, req.Count)
 	for range req.Count {
@@ -255,7 +258,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 		codes = append(codes, plain)
 		items = append(items, model.RedeemCode{
 			ID: newID(), BatchID: batch.ID, CodeHash: hashRedeemCode(plain), CodeSuffix: plain[len(plain)-4:],
-			Kind: kind, PlanSKU: planSKU, AmountMicrocredits: amount, StorageQuotaBytes: storageBytes, Status: model.RedeemCodeUnused, ExpiresAt: req.ExpiresAt,
+			Kind: kind, PlanSKU: planSKU, AmountMicrocredits: amount, StorageQuotaBytes: storageBytes, DurationDays: durationDays, Status: model.RedeemCodeUnused, ExpiresAt: req.ExpiresAt,
 		})
 	}
 	encodedCodes, err := json.Marshal(codes)

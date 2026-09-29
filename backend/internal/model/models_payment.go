@@ -43,6 +43,7 @@ type TopupProduct struct {
 	Kind                string    `json:"kind" gorm:"size:24;index"`
 	StorageBytes        int64     `json:"storageBytes"`
 	Badge               string    `json:"badge,omitempty" gorm:"size:40"`
+	DurationDays        int       `json:"durationDays"`
 	Enabled             bool      `json:"enabled" gorm:"index"`
 	SortOrder           int       `json:"sortOrder" gorm:"index"`
 	CreatedBy           string    `json:"createdBy" gorm:"index;size:36"`
@@ -86,6 +87,7 @@ type PaymentOrder struct {
 	PlanSKU                 string             `json:"planSku" gorm:"size:32"`
 	MembershipDurationDays  int                `json:"membershipDurationDays"`
 	StorageQuotaBytes       int64              `json:"storageQuotaBytes"`
+	StorageDurationDays     int                `json:"storageDurationDays"`
 	Status                  PaymentOrderStatus `json:"status" gorm:"size:24;index;index:idx_payment_order_status_expiry,priority:1"`
 	ProviderTradeNo       *string            `json:"providerTradeNo,omitempty" gorm:"size:96;uniqueIndex:idx_payment_provider_trade,priority:2"`
 	ProviderStatus        string             `json:"providerStatus,omitempty" gorm:"size:40;index"`

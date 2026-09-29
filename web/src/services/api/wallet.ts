@@ -162,6 +162,7 @@ export type RedeemBatch = {
     planSku?: string;
     amountMicrocredits: number;
     storageQuotaBytes?: number;
+    durationDays?: number;
     count: number;
     note?: string;
     createdBy: string;
@@ -350,7 +351,7 @@ export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
     return http.get<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
 }
 
-export function createAdminRedeemBatch(input: { kind?: "credits" | "membership" | "storage"; planSku?: string; amountMicrocredits?: number; storageQuotaBytes?: number; count: number; note?: string; expiresAt?: string }) {
+export function createAdminRedeemBatch(input: { kind?: "credits" | "membership" | "storage"; planSku?: string; amountMicrocredits?: number; storageQuotaBytes?: number; durationDays?: number; count: number; note?: string; expiresAt?: string }) {
     return http.post<{ batch: RedeemBatch; codes: string[] }>("/admin/redeem-batches", input, { timeout: 30_000 });
 }
 

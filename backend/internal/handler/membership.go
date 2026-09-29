@@ -101,6 +101,41 @@ func RegisterMembershipRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, setting)
 	})
+	r.GET("/admin/settings/membership-free-showcase", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireAdmin(user); err != nil {
+			failService(c, err)
+			return
+		}
+		showcase, err := svc.MembershipFreeShowcase()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, showcase)
+	})
+	r.PATCH("/admin/settings/membership-free-showcase", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.MembershipShowcase
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		showcase, err := svc.UpdateMembershipFreeShowcase(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, showcase)
+	})
 	r.GET("/admin/settings/commerce-methods", handleGetCommerceMethods(svc))
 	r.PATCH("/admin/settings/commerce-methods", handlePatchCommerceMethods(svc))
 	r.GET("/admin/commerce-methods", handleGetCommerceMethods(svc))

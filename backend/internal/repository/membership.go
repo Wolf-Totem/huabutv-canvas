@@ -296,6 +296,125 @@ func (r *Repository) UserPlatformStoredFileBytes(userID string) (int64, error) {
 	return total, err
 }
 
+type StorageBonusSummary struct {
+	ActiveBytes    int64
+	GrantCount     int64
+	EarliestExpiry *time.Time
+}
+
+func (r *Repository) ApplyStorageGrant(tx *gorm.DB, grant model.StorageGrant) error {
+	if tx == nil {
+		return errors.New("storage grant transaction is required")
+	}
+	if _, err := lockUserMembership(tx, grant.UserID); err != nil {
+		return err
+	}
+	now := time.Now()
+	if grant.ID == "" {
+		grant.ID = newRepositoryID()
+	}
+	if grant.StartsAt.IsZero() {
+		grant.StartsAt = now
+	}
+	if grant.CreatedAt.IsZero() {
+		grant.CreatedAt = now
+	}
+	if grant.PaymentOrderID != nil && strings.TrimSpace(*grant.PaymentOrderID) != "" {
+		var existing model.StorageGrant
+		err := tx.Where("payment_order_id = ?", strings.TrimSpace(*grant.PaymentOrderID)).First(&existing).Error
+		if err == nil {
+			return syncStorageBonusCache(tx, grant.UserID, now)
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	}
+	if grant.RedeemCodeID != nil && strings.TrimSpace(*grant.RedeemCodeID) != "" {
+		var existing model.StorageGrant
+		err := tx.Where("redeem_code_id = ?", strings.TrimSpace(*grant.RedeemCodeID)).First(&existing).Error
+		if err == nil {
+			return syncStorageBonusCache(tx, grant.UserID, now)
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	}
+	if err := tx.Create(&grant).Error; err != nil {
+		return err
+	}
+	return syncStorageBonusCache(tx, grant.UserID, now)
+}
+
+func (r *Repository) StorageBonusSummary(userID string, now time.Time) (StorageBonusSummary, error) {
+	return storageBonusSummary(r.db, userID, now)
+}
+
+func (r *Repository) SyncStorageBonusCache(userID string, now time.Time) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if _, err := lockUserMembership(tx, userID); err != nil {
+			return err
+		}
+		return syncStorageBonusCache(tx, userID, now)
+	})
+}
+
+func (r *Repository) ActiveStorageBonusByUsers(userIDs []string, now time.Time) (map[string]int64, error) {
+	result := make(map[string]int64, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	type row struct {
+		UserID string
+		Bytes  int64
+	}
+	var rows []row
+	err := r.db.Model(&model.StorageGrant{}).
+		Select("user_id as user_id, COALESCE(SUM(CASE WHEN ends_at IS NULL OR ends_at > ? THEN bytes ELSE 0 END), 0) as bytes", now).
+		Where("user_id IN ?", userIDs).
+		Group("user_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range rows {
+		result[item.UserID] = item.Bytes
+	}
+	return result, nil
+}
+
+func storageBonusSummary(db *gorm.DB, userID string, now time.Time) (StorageBonusSummary, error) {
+	var summary StorageBonusSummary
+	if err := db.Model(&model.StorageGrant{}).Where("user_id = ?", userID).Count(&summary.GrantCount).Error; err != nil {
+		return StorageBonusSummary{}, err
+	}
+	if err := db.Model(&model.StorageGrant{}).
+		Where("user_id = ? AND (ends_at IS NULL OR ends_at > ?)", userID, now).
+		Select("COALESCE(SUM(bytes), 0)").
+		Scan(&summary.ActiveBytes).Error; err != nil {
+		return StorageBonusSummary{}, err
+	}
+	var earliest *time.Time
+	if err := db.Model(&model.StorageGrant{}).
+		Where("user_id = ? AND ends_at IS NOT NULL AND ends_at > ?", userID, now).
+		Select("MIN(ends_at)").
+		Scan(&earliest).Error; err != nil {
+		return StorageBonusSummary{}, err
+	}
+	summary.EarliestExpiry = earliest
+	return summary, nil
+}
+
+func syncStorageBonusCache(tx *gorm.DB, userID string, now time.Time) error {
+	summary, err := storageBonusSummary(tx, userID, now)
+	if err != nil {
+		return err
+	}
+	return tx.Model(&model.UserMembership{}).Where("user_id = ?", userID).Updates(map[string]any{
+		"storage_bonus_bytes": summary.ActiveBytes,
+		"updated_at":          now,
+	}).Error
+}
+
 func OccupiedMembershipCountInTx(tx *gorm.DB, userID string) (int64, error) {
 	var count int64
 	err := tx.Model(&model.PaymentOrder{}).Where("user_id = ? AND product_kind = ? AND status IN ?", userID, model.ProductKindMembership, []model.PaymentOrderStatus{

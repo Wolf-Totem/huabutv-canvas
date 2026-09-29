@@ -58,29 +58,34 @@ type MembershipPublicView struct {
 	OnlinePaymentEnabled      bool                    `json:"onlinePaymentEnabled"`
 	RedeemEnabled             bool                    `json:"redeemEnabled"`
 	FeatureShowcase           []MembershipFeatureLine `json:"featureShowcase,omitempty"`
+	FreeShowcase              model.MembershipShowcase `json:"freeShowcase"`
+	DefaultStoredFileBytes    int64                   `json:"defaultStoredFileBytes"`
+	StorageBonusExpiresAt     *time.Time              `json:"storageBonusExpiresAt,omitempty"`
 }
 
-type MembershipFeatureLine struct {
-	Key      string `json:"key"`
-	Included bool   `json:"included"`
-}
+type MembershipFeatureLine = model.MembershipFeatureLine
+type MembershipShowcase = model.MembershipShowcase
 
 type MembershipProductView struct {
 	model.MembershipProduct
-	FeatureLines []MembershipFeatureLine `json:"featureLines"`
 }
 
 type UpdateMembershipProductRequest struct {
-	Name                string  `json:"name"`
-	Description         string  `json:"description"`
-	AmountFen           int64   `json:"amountFen"`
-	Enabled             bool    `json:"enabled"`
-	SortOrder           int     `json:"sortOrder"`
-	OriginalAmountFen   *int64  `json:"originalAmountFen"`
-	CreditsMicrocredits *int64  `json:"creditsMicrocredits"`
-	StorageQuotaBytes   *int64  `json:"storageQuotaBytes"`
-	Badge               *string `json:"badge"`
-	Highlighted         *bool   `json:"highlighted"`
+	Name                string                        `json:"name"`
+	Description         string                        `json:"description"`
+	AmountFen           int64                         `json:"amountFen"`
+	Enabled             bool                          `json:"enabled"`
+	SortOrder           int                           `json:"sortOrder"`
+	OriginalAmountFen   *int64                        `json:"originalAmountFen"`
+	CreditsMicrocredits *int64                        `json:"creditsMicrocredits"`
+	StorageQuotaBytes   *int64                        `json:"storageQuotaBytes"`
+	Badge               *string                       `json:"badge"`
+	Highlighted         *bool                         `json:"highlighted"`
+	EntryLabel          *string                       `json:"entryLabel"`
+	Audience            *string                       `json:"audience"`
+	AddOnLabel          *string                       `json:"addOnLabel"`
+	FeatureLines        *[]model.MembershipFeatureLine `json:"featureLines"`
+	SyncShowcaseToTier  bool                          `json:"syncShowcaseToTier"`
 }
 
 type AdminStorageQuotaRequest struct {
@@ -241,33 +246,65 @@ func (s *Service) PublicMembershipProducts() ([]MembershipProductView, error) {
 		if strings.TrimSpace(item.Tier) == "" {
 			item.Tier = model.MembershipSKUTier(item.SKU)
 		}
-		views = append(views, MembershipProductView{MembershipProduct: item, FeatureLines: membershipFeatureLines(true)})
+		model.ApplyDefaultMembershipShowcase(&item, false)
+		views = append(views, MembershipProductView{MembershipProduct: item})
 	}
 	return views, nil
 }
 
-func membershipFeatureLines(included bool) []MembershipFeatureLine {
-	keys := []string{"all_platform", "plan_storage", "gift_credits", "personal_oss"}
-	lines := make([]MembershipFeatureLine, 0, len(keys))
-	for _, key := range keys {
-		lines = append(lines, MembershipFeatureLine{Key: key, Included: included})
+func (s *Service) MembershipFreeShowcase() (model.MembershipShowcase, error) {
+	raw, err := s.repo.SystemSetting(model.MembershipFreeShowcaseSettingKey)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.DefaultFreeMembershipShowcase(), nil
+		}
+		return model.MembershipShowcase{}, err
 	}
-	return lines
+	showcase := model.DefaultFreeMembershipShowcase()
+	if strings.TrimSpace(raw.ValueJSON) == "" {
+		return showcase, nil
+	}
+	if err := json.Unmarshal([]byte(raw.ValueJSON), &showcase); err != nil {
+		return model.DefaultFreeMembershipShowcase(), nil
+	}
+	return model.NormalizeMembershipShowcase(showcase), nil
 }
 
-func membershipShowcaseFeatures(hasMembership bool) []MembershipFeatureLine {
-	lines := []MembershipFeatureLine{{Key: "basic", Included: true}}
-	for _, key := range []string{"storyboard", "director", "timeline", "short_drama", "custom_skills", "plugins", "cloud_agent", "personal_channels", "personal_oss", "plaza_publish"} {
-		lines = append(lines, MembershipFeatureLine{Key: key, Included: hasMembership})
+func (s *Service) UpdateMembershipFreeShowcase(actor *model.User, showcase model.MembershipShowcase) (model.MembershipShowcase, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return model.MembershipShowcase{}, err
 	}
-	return lines
+	showcase = model.NormalizeMembershipShowcase(showcase)
+	if strings.TrimSpace(showcase.Title) == "" {
+		showcase.Title = "免费使用"
+	}
+	encoded, err := json.Marshal(showcase)
+	if err != nil {
+		return model.MembershipShowcase{}, err
+	}
+	if err := s.repo.SaveSystemSetting(&model.SystemSetting{Key: model.MembershipFreeShowcaseSettingKey, ValueJSON: string(encoded), UpdatedBy: actor.ID}); err != nil {
+		return model.MembershipShowcase{}, err
+	}
+	if err := s.appendAdminAudit(actor, "membership_free_showcase.update", "system_setting", model.MembershipFreeShowcaseSettingKey, "更新未开通展示", map[string]any{"title": showcase.Title}); err != nil {
+		return model.MembershipShowcase{}, err
+	}
+	return showcase, nil
 }
 
 func (s *Service) AdminMembershipProducts(actor *model.User) ([]model.MembershipProduct, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	return s.repo.MembershipProducts(true)
+	products, err := s.repo.MembershipProducts(true)
+	if err != nil {
+		return nil, err
+	}
+	for i := range products {
+		if model.IsCatalogMembershipSKU(products[i].SKU) {
+			model.ApplyDefaultMembershipShowcase(&products[i], false)
+		}
+	}
+	return products, nil
 }
 
 func (s *Service) UpdateMembershipProduct(actor *model.User, id string, req UpdateMembershipProductRequest) (*model.MembershipProduct, error) {
@@ -314,6 +351,18 @@ func (s *Service) UpdateMembershipProduct(actor *model.User, id string, req Upda
 	if req.Highlighted != nil {
 		product.Highlighted = *req.Highlighted
 	}
+	if req.EntryLabel != nil {
+		product.EntryLabel = model.NormalizeShowcaseLabel(*req.EntryLabel)
+	}
+	if req.Audience != nil {
+		product.Audience = model.NormalizeShowcaseLabel(*req.Audience)
+	}
+	if req.AddOnLabel != nil {
+		product.AddOnLabel = model.NormalizeShowcaseLabel(*req.AddOnLabel)
+	}
+	if req.FeatureLines != nil {
+		product.FeatureLines = model.NormalizeMembershipFeatureLines(*req.FeatureLines)
+	}
 	if strings.TrimSpace(product.Tier) == "" {
 		product.Tier = model.MembershipSKUTier(product.SKU)
 	}
@@ -322,13 +371,48 @@ func (s *Service) UpdateMembershipProduct(actor *model.User, id string, req Upda
 	if err := s.repo.SaveMembershipProduct(product); err != nil {
 		return nil, err
 	}
+	if req.SyncShowcaseToTier {
+		if err := s.syncMembershipShowcaseToTier(actor.ID, product); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.appendAdminAudit(actor, "membership_product.update", "membership_product", product.ID, "更新订阅商品", map[string]any{
 		"sku": product.SKU, "amountFen": product.AmountFen, "creditsMicrocredits": product.CreditsMicrocredits,
-		"storageQuotaBytes": product.StorageQuotaBytes, "enabled": product.Enabled,
+		"storageQuotaBytes": product.StorageQuotaBytes, "enabled": product.Enabled, "syncShowcaseToTier": req.SyncShowcaseToTier,
 	}); err != nil {
 		return nil, err
 	}
 	return product, nil
+}
+
+func (s *Service) syncMembershipShowcaseToTier(actorID string, source *model.MembershipProduct) error {
+	if source == nil {
+		return nil
+	}
+	tier := source.EffectiveTier()
+	if tier == "" {
+		return nil
+	}
+	products, err := s.repo.MembershipProducts(true)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	for _, item := range products {
+		if item.ID == source.ID || item.EffectiveTier() != tier {
+			continue
+		}
+		item.EntryLabel = source.EntryLabel
+		item.Audience = source.Audience
+		item.AddOnLabel = source.AddOnLabel
+		item.FeatureLines = append([]model.MembershipFeatureLine(nil), source.FeatureLines...)
+		item.UpdatedBy = actorID
+		item.UpdatedAt = now
+		if err := s.repo.SaveMembershipProduct(&item); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) PublicMembership(userID string) (*MembershipPublicView, error) {
@@ -340,12 +424,24 @@ func (s *Service) PublicMembership(userID string) (*MembershipPublicView, error)
 		row = &model.UserMembership{UserID: userID}
 	}
 	now := time.Now()
+	bonus := row.StorageBonusBytes
+	var bonusExpires *time.Time
+	if summary, summaryErr := s.repo.StorageBonusSummary(userID, now); summaryErr == nil {
+		if summary.GrantCount > 0 {
+			bonus = summary.ActiveBytes
+			bonusExpires = summary.EarliestExpiry
+			if row.StorageBonusBytes != bonus {
+				_ = s.repo.SyncStorageBonusCache(userID, now)
+			}
+		}
+	}
 	view := &MembershipPublicView{
-		PermanentActive:      row.PermanentActive,
-		AdvancedPlanSKU:      row.AdvancedPlanSKU,
-		AdvancedExpiresAt:    row.AdvancedExpiresAt,
-		StorageOverrideBytes: row.StorageOverrideBytes,
-		StorageBonusBytes:    row.StorageBonusBytes,
+		PermanentActive:       row.PermanentActive,
+		AdvancedPlanSKU:       row.AdvancedPlanSKU,
+		AdvancedExpiresAt:     row.AdvancedExpiresAt,
+		StorageOverrideBytes:  row.StorageOverrideBytes,
+		StorageBonusBytes:     bonus,
+		StorageBonusExpiresAt: bonusExpires,
 	}
 	if row.AdvancedExpiresAt != nil && row.AdvancedExpiresAt.After(now) {
 		view.AdvancedRemainingSeconds = int64(row.AdvancedExpiresAt.Sub(now).Seconds())
@@ -372,13 +468,20 @@ func (s *Service) PublicMembership(userID string) (*MembershipPublicView, error)
 	} else if view.CanPurchaseSvip {
 		view.MinPurchasableAdvancedSKU = model.MembershipSKUSvipMonth
 	}
-	view.FeatureShowcase = membershipShowcaseFeatures(view.Tier != "" || row.PermanentActive)
+	if showcase, showcaseErr := s.MembershipFreeShowcase(); showcaseErr == nil {
+		view.FreeShowcase = showcase
+	} else {
+		view.FreeShowcase = model.DefaultFreeMembershipShowcase()
+	}
 	resolved, err := s.ResolveEffectiveStoredFileBytes(userID)
 	if err != nil {
 		return nil, err
 	}
 	view.EffectiveStoredFileBytes = resolved.Bytes
 	view.QuotaSource = resolved.Source
+	if policy, policyErr := s.RuntimePolicy(); policyErr == nil {
+		view.DefaultStoredFileBytes = gigabytes(policy.Resource.StoredFileGB)
+	}
 	isAdmin := false
 	if user, userErr := s.repo.User(userID); userErr == nil && user.Role == model.UserRoleAdmin {
 		isAdmin = true
@@ -444,14 +547,20 @@ func (s *Service) ResolveEffectiveStoredFileBytes(userID string) (ResolvedStorag
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return ResolvedStorageQuota{}, err
 	}
+	now := time.Now()
 	bonus := int64(0)
 	if row != nil {
 		bonus = row.StorageBonusBytes
 	}
+	if summary, summaryErr := s.repo.StorageBonusSummary(userID, now); summaryErr == nil && summary.GrantCount > 0 {
+		bonus = summary.ActiveBytes
+		if row != nil && row.StorageBonusBytes != bonus {
+			_ = s.repo.SyncStorageBonusCache(userID, now)
+		}
+	}
 	if row != nil && row.StorageOverrideBytes != nil {
 		return ResolvedStorageQuota{Bytes: applyStorageBonus(*row.StorageOverrideBytes, bonus), Source: model.QuotaSourceOverride}, nil
 	}
-	now := time.Now()
 	if row != nil && row.AdvancedExpiresAt != nil && row.AdvancedExpiresAt.After(now) && row.PlanStorageQuotaBytes > 0 {
 		return ResolvedStorageQuota{Bytes: applyStorageBonus(row.PlanStorageQuotaBytes, bonus), Source: model.QuotaSourcePlan}, nil
 	}

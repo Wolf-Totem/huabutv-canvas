@@ -21,6 +21,7 @@ export type TopupProduct = {
     kind?: "credit_topup" | "storage_topup" | string;
     storageBytes?: number;
     badge?: string;
+    durationDays?: number;
     enabled: boolean;
     sortOrder: number;
     createdBy: string;
@@ -44,6 +45,7 @@ export type PaymentOrder = {
     productKind?: "credit_topup" | "membership" | "storage_topup" | string;
     planSku?: string;
     storageQuotaBytes?: number;
+    storageDurationDays?: number;
     status: PaymentOrderStatus;
     providerStatus?: string;
     providerTradeNo?: string;
@@ -126,6 +128,7 @@ export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "credi
     kind?: "credit_topup" | "storage_topup" | string;
     storageBytes?: number;
     badge?: string;
+    durationDays?: number;
 };
 
 export function createAdminTopupProduct(input: TopupProductInput) {

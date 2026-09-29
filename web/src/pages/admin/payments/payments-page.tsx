@@ -5,7 +5,7 @@ import { AdminDrawer } from "@/pages/admin/ui/overlays";
 import { Switch } from "@/pages/admin/ui/controls";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
-import { Eye, Plus, RefreshCw, Search, Settings2, XCircle } from "lucide-react";
+import { Eye, Plus, RefreshCw, Search, Settings2, Trash2, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
@@ -29,8 +29,8 @@ import {
     type PaymentReconciliationRun,
     type TopupProduct,
 } from "@/services/api/payments";
-import { membershipSKUTier } from "@/lib/membership";
-import { getAdminCommerceMethods, listAdminMembershipProducts, updateAdminCommerceMethods, updateAdminMembershipProduct, type CommerceMethods, type MembershipProduct } from "@/services/api/membership";
+import { formatStorageDuration, membershipSKUTier } from "@/lib/membership";
+import { getAdminCommerceMethods, getAdminMembershipFreeShowcase, listAdminMembershipProducts, updateAdminCommerceMethods, updateAdminMembershipFreeShowcase, updateAdminMembershipProduct, type CommerceMethods, type MembershipProduct, type MembershipShowcase } from "@/services/api/membership";
 
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
@@ -50,10 +50,13 @@ type ProductFormValues = {
     credits: number;
     kind: "credit_topup" | "storage_topup";
     storageGiB: number;
+    durationDays?: number;
     badge?: string;
     enabled: boolean;
     sortOrder: number;
 };
+
+type MembershipFeatureFormLine = { text?: string; included?: boolean };
 
 type MembershipFormValues = {
     name: string;
@@ -66,6 +69,20 @@ type MembershipFormValues = {
     highlighted: boolean;
     enabled: boolean;
     sortOrder: number;
+    entryLabel?: string;
+    audience?: string;
+    addOnLabel?: string;
+    featureLines?: MembershipFeatureFormLine[];
+    syncShowcaseToTier?: boolean;
+};
+
+type FreeShowcaseFormValues = {
+    title?: string;
+    description?: string;
+    entryLabel?: string;
+    audience?: string;
+    addOnLabel?: string;
+    featureLines?: MembershipFeatureFormLine[];
 };
 
 const paymentOrderStatus: Record<string, { label: string; tone: "neutral" | "success" | "warning" | "error" | "info" }> = {
@@ -107,6 +124,10 @@ export default function AdminPaymentsPage() {
     const [membershipDrawer, setMembershipDrawer] = useState<MembershipProduct | null>(null);
     const [membershipSaving, setMembershipSaving] = useState(false);
     const [membershipForm] = Form.useForm<MembershipFormValues>();
+    const [freeShowcase, setFreeShowcase] = useState<MembershipShowcase>({});
+    const [freeDrawerOpen, setFreeDrawerOpen] = useState(false);
+    const [freeSaving, setFreeSaving] = useState(false);
+    const [freeForm] = Form.useForm<FreeShowcaseFormValues>();
 
     const [orders, setOrders] = useState<AdminPaymentOrder[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -139,11 +160,12 @@ export default function AdminPaymentsPage() {
     const loadBase = async () => {
         setLoading(true);
         try {
-            const [providerResult, productResult, membershipResult, methodsResult] = await Promise.all([listAdminPaymentProviders(), listAdminTopupProducts(), listAdminMembershipProducts(), getAdminCommerceMethods()]);
+            const [providerResult, productResult, membershipResult, methodsResult, freeResult] = await Promise.all([listAdminPaymentProviders(), listAdminTopupProducts(), listAdminMembershipProducts(), getAdminCommerceMethods(), getAdminMembershipFreeShowcase()]);
             setProviders(providerResult.providers);
             setProducts(productResult.products);
             setMembershipProducts(membershipResult.products);
             setCommerceMethods(methodsResult);
+            setFreeShowcase(freeResult);
             setBillProviderId((current) => current || providerResult.providers.find((item) => item.configured)?.id || providerResult.providers[0]?.id || "");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取支付配置失败");
@@ -234,11 +256,12 @@ export default function AdminPaymentsPage() {
                       credits: product.creditsMicrocredits / 1_000_000,
                       kind: nextKind,
                       storageGiB: product.storageBytes ? Math.round(product.storageBytes / 1024 ** 3) : 20,
+                      durationDays: nextKind === "storage_topup" ? product.durationDays || 365 : 0,
                       badge: product.badge,
                       enabled: product.enabled,
                       sortOrder: product.sortOrder,
                   }
-                : { enabled: true, sortOrder: products.length * 10, amountYuan: 10, credits: nextKind === "credit_topup" ? 10 : 0, kind: nextKind, storageGiB: 20 },
+                : { enabled: true, sortOrder: products.length * 10, amountYuan: 10, credits: nextKind === "credit_topup" ? 10 : 0, kind: nextKind, storageGiB: 20, durationDays: nextKind === "storage_topup" ? 365 : 0 },
         );
         setProductDrawer(product || null);
     };
@@ -254,6 +277,7 @@ export default function AdminPaymentsPage() {
             creditsMicrocredits: Math.round((values.credits || 0) * 1_000_000),
             kind,
             storageBytes: kind === "storage_topup" ? Math.round((values.storageGiB || 0) * 1024 ** 3) : 0,
+            durationDays: kind === "storage_topup" ? Math.round(Number(values.durationDays || 365)) : 0,
             badge: values.badge?.trim(),
             enabled: values.enabled,
             sortOrder: values.sortOrder || 0,
@@ -405,8 +429,11 @@ export default function AdminPaymentsPage() {
         },
         { title: "售价", dataIndex: "amountFen", width: 130, align: "right", render: (value) => <span className="font-medium tabular-nums">¥ {(value / 100).toFixed(2)}</span> },
         kind === "storage_topup"
-            ? { title: "加购容量", dataIndex: "storageBytes", width: 150, align: "right", render: (value: number) => <span className="tabular-nums">{value ? `${Math.round(value / 1024 ** 3)} GiB` : "--"}</span> }
+            ? { title: "加购容量", dataIndex: "storageBytes", width: 130, align: "right", render: (value: number) => <span className="tabular-nums">{value ? `${Math.round(value / 1024 ** 3)} GiB` : "--"}</span> }
             : { title: "到账积分", dataIndex: "creditsMicrocredits", width: 150, align: "right", render: (value) => <span className="tabular-nums">{formatCredits(value)}</span> },
+        ...(kind === "storage_topup"
+            ? [{ title: "有效期", dataIndex: "durationDays" as const, width: 110, align: "center" as const, render: (value: number) => formatStorageDuration(value || 365) }]
+            : []),
         { title: "排序", dataIndex: "sortOrder", width: 90, align: "center" },
         { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (value) => <AdminStatusBadge label={value ? "销售中" : "已停用"} tone={value ? "success" : "neutral"} /> },
         {
@@ -581,6 +608,18 @@ export default function AdminPaymentsPage() {
                                     <Switch checked={commerceMethods.redeemEnabled} onChange={(redeemEnabled) => {
                                         void updateAdminCommerceMethods({ ...commerceMethods, redeemEnabled }).then(setCommerceMethods).catch((error) => message.error(error instanceof Error ? error.message : "保存失败"));
                                     }} />
+                                    <Button size="small" onClick={() => {
+                                        freeForm.setFieldsValue({
+                                            title: freeShowcase.title || "免费使用",
+                                            description: freeShowcase.description,
+                                            entryLabel: freeShowcase.entryLabel,
+                                            audience: freeShowcase.audience,
+                                            addOnLabel: freeShowcase.addOnLabel,
+                                            featureLines: (freeShowcase.featureLines || []).map((item) => ({ text: item.text, included: item.included })),
+                                        });
+                                        setFreeDrawerOpen(true);
+                                    }}>编辑未开通列</Button>
+                                    <span className="text-xs text-foreground/45">未开通不是第七种会员，只改钱包免费列展示。云存储那一行仍读平台默认配额。</span>
                                 </div>
                                 <AdminDataTable
                                     table={{
@@ -610,6 +649,11 @@ export default function AdminPaymentsPage() {
                                                         highlighted: Boolean(product.highlighted),
                                                         enabled: product.enabled,
                                                         sortOrder: product.sortOrder,
+                                                        entryLabel: product.entryLabel,
+                                                        audience: product.audience,
+                                                        addOnLabel: product.addOnLabel,
+                                                        featureLines: (product.featureLines || []).map((item) => ({ text: item.text, included: item.included })),
+                                                        syncShowcaseToTier: false,
                                                     });
                                                 }}>编辑</Button>
                                             ) },
@@ -791,7 +835,7 @@ export default function AdminPaymentsPage() {
 
             <Drawer
                 title={membershipDrawer ? `编辑订阅 · ${membershipDrawer.sku}` : "编辑订阅"}
-                width={520}
+                width={640}
                 open={Boolean(membershipDrawer)}
                 destroyOnHidden
                 onClose={() => setMembershipDrawer(null)}
@@ -811,10 +855,16 @@ export default function AdminPaymentsPage() {
                                 highlighted: values.highlighted,
                                 enabled: values.enabled,
                                 sortOrder: values.sortOrder,
-                            }).then((result) => {
-                                setMembershipProducts((current) => current.map((item) => item.id === result.product.id ? result.product : item));
+                                entryLabel: values.entryLabel,
+                                audience: values.audience,
+                                addOnLabel: values.addOnLabel,
+                                featureLines: normalizeFeatureLines(values.featureLines),
+                                syncShowcaseToTier: Boolean(values.syncShowcaseToTier),
+                            }).then(async (result) => {
+                                if (values.syncShowcaseToTier) await loadBase();
+                                else setMembershipProducts((current) => current.map((item) => item.id === result.product.id ? result.product : item));
                                 setMembershipDrawer(null);
-                                message.success("已更新订阅商品");
+                                message.success(values.syncShowcaseToTier ? "已更新订阅商品，并同步到同档其他周期" : "已更新订阅商品");
                             });
                         }).catch((error) => {
                             if (error instanceof Error) message.error(error.message);
@@ -824,8 +874,8 @@ export default function AdminPaymentsPage() {
                     </Button>
                 }
             >
-                <Callout className="mb-4" tone="info" title="只影响之后的新订单">
-                    改价、赠送积分和套餐容量写入新订单快照。已支付订单仍按当时快照入账。SKU、档位和时长不可改。权益清单只读：全部平台功能。
+                <Callout className="mb-4" tone="info" title="价/积分/容量进新订单快照">
+                    改价、赠送积分和套餐容量只影响之后的新订单。功能清单、入口文案、适合谁和加购文案改完立刻出现在钱包，不写入订单。SKU、档位和时长不可改。清单只展示，不会锁定入口。
                 </Callout>
                 <Form form={membershipForm} layout="vertical">
                     <Form.Item name="name" label="名称" rules={[{ required: true, max: 120 }]}>
@@ -856,12 +906,80 @@ export default function AdminPaymentsPage() {
                     <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
                         <InputNumber precision={0} className="w-full" />
                     </Form.Item>
-                    <Form.Item name="highlighted" label="强调展示" valuePropName="checked">
-                        <Switch />
+                    <div className="grid grid-cols-2 gap-3">
+                        <Form.Item name="highlighted" label="强调展示" valuePropName="checked">
+                            <Switch />
+                        </Form.Item>
+                        <Form.Item name="enabled" label="上架销售" valuePropName="checked">
+                            <Switch />
+                        </Form.Item>
+                    </div>
+                    <Form.Item name="entryLabel" label="平台功能入口" extra="对照表那一行，最多 40 字。" rules={[{ max: 40 }]}>
+                        <Input placeholder="例如：创作工作台" />
                     </Form.Item>
-                    <Form.Item name="enabled" label="上架销售" valuePropName="checked">
-                        <Switch />
+                    <Form.Item name="audience" label="适合谁" extra="对照表那一行，最多 40 字。" rules={[{ max: 40 }]}>
+                        <Input placeholder="例如：个人稳定产出" />
                     </Form.Item>
+                    <Form.Item name="addOnLabel" label="容量加购文案" extra="对照表那一行，最多 40 字。" rules={[{ max: 40 }]}>
+                        <Input placeholder="例如：可叠加" />
+                    </Form.Item>
+                    <MembershipFeatureLinesFields />
+                    <Form.Item name="syncShowcaseToTier" valuePropName="checked" extra="只拷贝入口文案、适合谁、加购文案和功能清单，不同步价格和积分。">
+                        <Switch checkedChildren="同步到同档其他周期" unCheckedChildren="仅保存当前卡" />
+                    </Form.Item>
+                </Form>
+            </Drawer>
+
+            <Drawer
+                title="编辑未开通列"
+                width={640}
+                open={freeDrawerOpen}
+                destroyOnHidden
+                onClose={() => setFreeDrawerOpen(false)}
+                extra={
+                    <Button type="primary" loading={freeSaving} onClick={() => {
+                        void freeForm.validateFields().then((values) => {
+                            setFreeSaving(true);
+                            return updateAdminMembershipFreeShowcase({
+                                title: values.title,
+                                description: values.description,
+                                entryLabel: values.entryLabel,
+                                audience: values.audience,
+                                addOnLabel: values.addOnLabel,
+                                featureLines: normalizeFeatureLines(values.featureLines),
+                            }).then((result) => {
+                                setFreeShowcase(result);
+                                setFreeDrawerOpen(false);
+                                message.success("未开通列已更新");
+                            });
+                        }).catch((error) => {
+                            if (error instanceof Error) message.error(error.message);
+                        }).finally(() => setFreeSaving(false));
+                    }}>
+                        保存
+                    </Button>
+                }
+            >
+                <Callout className="mb-4" tone="info" title="这不是第七种会员">
+                    未开通列不能购买。云存储那一行仍读运行策略默认配额，不在这里填 GiB。改完立刻出现在钱包。
+                </Callout>
+                <Form form={freeForm} layout="vertical">
+                    <Form.Item name="title" label="标题" rules={[{ required: true, max: 40 }]}>
+                        <Input placeholder="免费使用" />
+                    </Form.Item>
+                    <Form.Item name="description" label="副文案" rules={[{ max: 120 }]}>
+                        <Input.TextArea rows={3} />
+                    </Form.Item>
+                    <Form.Item name="entryLabel" label="平台功能入口" rules={[{ max: 40 }]}>
+                        <Input placeholder="例如：开放（基础）" />
+                    </Form.Item>
+                    <Form.Item name="audience" label="适合谁" rules={[{ max: 40 }]}>
+                        <Input placeholder="例如：试用与轻量创作" />
+                    </Form.Item>
+                    <Form.Item name="addOnLabel" label="容量加购文案" rules={[{ max: 40 }]}>
+                        <Input placeholder="例如：可买，不加会员" />
+                    </Form.Item>
+                    <MembershipFeatureLinesFields />
                 </Form>
             </Drawer>
 
@@ -914,6 +1032,16 @@ export default function AdminPaymentsPage() {
                             </Form.Item>
                         )}
                     </div>
+                    {productKind === "storage_topup" ? (
+                        <Form.Item
+                            name="durationDays"
+                            label="有效天数"
+                            extra="默认 365 天。到期后该笔加购从配额拿掉，不删文件。范围 1–3650。"
+                            rules={[{ required: true }, { type: "number", min: 1, max: 3650 }]}
+                        >
+                            <InputNumber min={1} max={3650} precision={0} className="w-full" addonAfter="天" />
+                        </Form.Item>
+                    ) : null}
                     <Form.Item name="badge" label="角标" rules={[{ max: 40 }]}>
                         <Input placeholder="可选" />
                     </Form.Item>
@@ -981,4 +1109,42 @@ function PaymentBrandIcon({ providerId, compact = false }: { providerId: string;
 
 function formatDateTime(value: string) {
     return dayjs(value).format("YYYY-MM-DD HH:mm:ss");
+}
+
+function normalizeFeatureLines(lines?: MembershipFeatureFormLine[]) {
+    return (lines || [])
+        .map((item) => ({ text: (item.text || "").trim(), included: Boolean(item.included) }))
+        .filter((item) => item.text)
+        .slice(0, 12);
+}
+
+function MembershipFeatureLinesFields() {
+    return (
+        <Form.List name="featureLines">
+            {(fields, { add, remove }) => (
+                <div className="admin-membership-feature-list">
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                        <div>
+                            <div className="text-sm font-medium">功能清单</div>
+                            <p className="mt-0.5 text-xs text-foreground/45">最多 12 条，每条 40 字。含/不含只影响钱包展示，不会锁定入口。</p>
+                        </div>
+                        <Button type="text" size="small" icon={<Plus className="size-3.5" />} disabled={fields.length >= 12} onClick={() => add({ text: "", included: true })}>
+                            添加
+                        </Button>
+                    </div>
+                    {fields.length ? fields.map((field, index) => (
+                        <div className="admin-membership-feature-row" key={field.key}>
+                            <Form.Item name={[field.name, "included"]} valuePropName="checked">
+                                <Switch size="sm" checkedChildren="含" unCheckedChildren="不含" aria-label={`第 ${index + 1} 条是否包含`} />
+                            </Form.Item>
+                            <Form.Item name={[field.name, "text"]} rules={[{ required: true, message: "请填写清单文案" }, { max: 40, message: "每条不超过 40 字" }]}>
+                                <Input maxLength={40} placeholder="例如：短剧工作台" aria-label={`第 ${index + 1} 条文案`} />
+                            </Form.Item>
+                            <Button type="text" danger className="admin-membership-feature-remove" icon={<Trash2 className="size-4" />} aria-label={`删除第 ${index + 1} 条`} onClick={() => remove(field.name)} />
+                        </div>
+                    )) : <div className="admin-membership-feature-empty">还没有清单条目。前台该列会显示为空。</div>}
+                </div>
+            )}
+        </Form.List>
+    );
 }

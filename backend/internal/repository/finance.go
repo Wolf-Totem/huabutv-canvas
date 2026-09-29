@@ -1293,10 +1293,19 @@ func (r *Repository) RedeemCodeWithHooks(userID string, codeHash string, redeeme
 			}
 		}
 		if model.NormalizeRedeemKind(code.Kind) == model.RedeemKindStorage {
-			if err := tx.Model(&model.UserMembership{}).Where("user_id = ?", userID).Updates(map[string]any{
-				"storage_bonus_bytes": gorm.Expr("storage_bonus_bytes + ?", code.StorageQuotaBytes),
-				"updated_at":          now,
-			}).Error; err != nil {
+			days := model.NormalizeStorageGrantDays(code.DurationDays)
+			codeID := code.ID
+			if err := r.ApplyStorageGrant(tx, model.StorageGrant{
+				UserID:       userID,
+				Bytes:        code.StorageQuotaBytes,
+				Source:       model.StorageGrantSourceRedeem,
+				RedeemCodeID: &codeID,
+				ProductID:    code.BatchID,
+				DurationDays: days,
+				StartsAt:     now,
+				EndsAt:       model.StorageGrantEndsAt(now, days),
+				Note:         "兑换码扩容",
+			}); err != nil {
 				return err
 			}
 		}

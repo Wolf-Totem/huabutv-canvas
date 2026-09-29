@@ -83,6 +83,7 @@ type RedeemBatch struct {
 	PlanSKU            string     `json:"planSku" gorm:"size:32"`
 	AmountMicrocredits int64      `json:"amountMicrocredits"`
 	StorageQuotaBytes  int64      `json:"storageQuotaBytes"`
+	DurationDays       int        `json:"durationDays"`
 	Count              int        `json:"count"`
 	Note               string     `json:"note" gorm:"size:500"`
 	CreatedBy          string     `json:"createdBy" gorm:"index;size:36"`
@@ -104,6 +105,7 @@ type RedeemCode struct {
 	CodeSuffix         string           `json:"codeSuffix" gorm:"size:4"`
 	AmountMicrocredits int64            `json:"amountMicrocredits"`
 	StorageQuotaBytes  int64            `json:"storageQuotaBytes"`
+	DurationDays       int              `json:"durationDays"`
 	Status             RedeemCodeStatus `json:"status" gorm:"index;size:24;index:idx_redeem_codes_batch_status,priority:2"`
 	RedeemedBy         string           `json:"redeemedBy,omitempty" gorm:"index;size:36"`
 	RedeemedAt         *time.Time       `json:"redeemedAt"`

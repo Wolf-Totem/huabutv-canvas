@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/model"
@@ -11,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 46
+const CurrentSchemaVersion int64 = 47
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -105,6 +106,7 @@ var schemaMigrations = []migration{
 	{version: 44, name: "builtin_skill_tombstones", checksum: "sha256:builtin-skill-tombstones-v40-20260927", apply: migrateSchemaV44},
 	{version: 45, name: "resource_thumbnail", checksum: "sha256:resource-thumbnail-v41-20260927", apply: migrateSchemaV45},
 	{version: 46, name: "commerce_wallet_catalog", checksum: "sha256:commerce-wallet-catalog-v46-20260929", apply: migrateSchemaV46},
+	{version: 47, name: "subscription_center_showcase", checksum: "sha256:subscription-center-showcase-v47-20260929", apply: migrateSchemaV47},
 }
 
 func acknowledgeExistingSchema(_ *gorm.DB) error {
@@ -185,6 +187,111 @@ func migrateSchemaV46(tx *gorm.DB) error {
 			return err
 		}
 		if err := tx.Create(&item).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateSchemaV47(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(
+		&model.MembershipProduct{},
+		&model.TopupProduct{},
+		&model.PaymentOrder{},
+		&model.RedeemBatch{},
+		&model.RedeemCode{},
+		&model.StorageGrant{},
+	); err != nil {
+		return err
+	}
+	var products []model.MembershipProduct
+	if err := tx.Find(&products).Error; err != nil {
+		return err
+	}
+	for _, product := range products {
+		item := product
+		if !model.IsCatalogMembershipSKU(item.SKU) {
+			continue
+		}
+		model.ApplyDefaultMembershipShowcase(&item, false)
+		if err := tx.Save(&item).Error; err != nil {
+			return err
+		}
+	}
+	if err := tx.Exec(
+		"UPDATE topup_products SET duration_days = ? WHERE kind = ? AND (duration_days IS NULL OR duration_days <= 0)",
+		model.DefaultStorageGrantDays, model.ProductKindStorageTopup,
+	).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec(
+		"UPDATE topup_products SET duration_days = 0 WHERE kind <> ?",
+		model.ProductKindStorageTopup,
+	).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec(
+		"UPDATE topup_products SET description = REPLACE(description, '不过期，', '') WHERE kind = ? AND description LIKE ?",
+		model.ProductKindStorageTopup, "%不过期%",
+	).Error; err != nil {
+		return err
+	}
+	var storageProducts []model.TopupProduct
+	if err := tx.Where("kind = ?", model.ProductKindStorageTopup).Find(&storageProducts).Error; err != nil {
+		return err
+	}
+	for _, product := range storageProducts {
+		description := strings.TrimSpace(product.Description)
+		if description == "" || strings.Contains(description, "有效期") {
+			continue
+		}
+		if !strings.HasSuffix(description, "。") {
+			description += "。"
+		}
+		product.Description = description + "按商品有效期计入，到期失效。"
+		if err := tx.Save(&product).Error; err != nil {
+			return err
+		}
+	}
+	now := time.Now().UTC()
+	var freeSetting model.SystemSetting
+	err := tx.Where("key = ?", model.MembershipFreeShowcaseSettingKey).First(&freeSetting).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		raw, marshalErr := json.Marshal(model.DefaultFreeMembershipShowcase())
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if err := tx.Create(&model.SystemSetting{
+			Key: model.MembershipFreeShowcaseSettingKey, ValueJSON: string(raw), CreatedAt: now, UpdatedAt: now,
+		}).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	var rows []model.UserMembership
+	if err := tx.Where("storage_bonus_bytes > 0").Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		var existing int64
+		if err := tx.Model(&model.StorageGrant{}).Where("user_id = ? AND source = ?", row.UserID, model.StorageGrantSourceMigrate).Count(&existing).Error; err != nil {
+			return err
+		}
+		if existing > 0 {
+			continue
+		}
+		grant := model.StorageGrant{
+			ID:           "storage-grant-migrate-" + row.UserID,
+			UserID:       row.UserID,
+			Bytes:        row.StorageBonusBytes,
+			Source:       model.StorageGrantSourceMigrate,
+			DurationDays: 0,
+			StartsAt:     now,
+			Note:         "迁移回填：已售容量加购保持永久",
+			CreatedAt:    now,
+		}
+		if err := tx.Create(&grant).Error; err != nil {
 			return err
 		}
 	}

@@ -1,8 +1,10 @@
 package model
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 )
@@ -34,13 +36,23 @@ const (
 	MembershipGrantSourceRedeem  = "redeem"
 	MembershipGrantSourceAdmin   = "admin"
 
-	QuotaSourceOverride   = "admin_override"
-	QuotaSourcePlan       = "plan_grant"
-	QuotaSourceGlobal     = "global_default"
+	StorageGrantSourcePayment = "payment"
+	StorageGrantSourceRedeem  = "redeem"
+	StorageGrantSourceAdmin   = "admin"
+	StorageGrantSourceMigrate = "migrate"
+
+	QuotaSourceOverride    = "admin_override"
+	QuotaSourcePlan        = "plan_grant"
+	QuotaSourceGlobal      = "global_default"
 	StorageDisplayPlatform = "platform"
 	StorageDisplayPersonal = "personal"
 	MaxMembershipStorageB  = int64(3) << 40
 	CreditScale            = int64(1_000_000)
+	DefaultStorageGrantDays = 365
+	MaxStorageGrantDays     = 3650
+	MaxMembershipFeatureLines = 12
+	MaxMembershipShowcaseRunes = 40
+	MembershipFreeShowcaseSettingKey = "membership_free_showcase"
 
 	MembershipRenewalWindow = 30 * 24 * time.Hour
 
@@ -51,25 +63,66 @@ const (
 	MembershipPurchaseBlockPermanentOwned = "已拥有永久订阅"
 )
 
+type MembershipFeatureLine struct {
+	Text     string `json:"text"`
+	Included bool   `json:"included"`
+}
+
+type MembershipShowcase struct {
+	Title        string                  `json:"title,omitempty"`
+	Description  string                  `json:"description,omitempty"`
+	EntryLabel   string                  `json:"entryLabel,omitempty"`
+	Audience     string                  `json:"audience,omitempty"`
+	AddOnLabel   string                  `json:"addOnLabel,omitempty"`
+	FeatureLines []MembershipFeatureLine `json:"featureLines,omitempty"`
+}
+
 type MembershipProduct struct {
-	ID                   string    `json:"id" gorm:"primaryKey;size:36"`
-	SKU                  string    `json:"sku" gorm:"size:32;uniqueIndex"`
-	Name                 string    `json:"name" gorm:"size:120"`
-	Description          string    `json:"description" gorm:"size:500"`
-	AmountFen            int64     `json:"amountFen"`
-	OriginalAmountFen    int64     `json:"originalAmountFen"`
-	CreditsMicrocredits  int64     `json:"creditsMicrocredits"`
-	StorageQuotaBytes    int64     `json:"storageQuotaBytes"`
-	DurationDays         int       `json:"durationDays"`
-	Tier                 string    `json:"tier" gorm:"size:16;index"`
-	Badge                string    `json:"badge" gorm:"size:40"`
-	Highlighted          bool      `json:"highlighted"`
-	Enabled              bool      `json:"enabled" gorm:"index"`
-	SortOrder            int       `json:"sortOrder" gorm:"index"`
-	CreatedBy            string    `json:"createdBy" gorm:"size:36"`
-	UpdatedBy            string    `json:"updatedBy" gorm:"size:36"`
-	CreatedAt            time.Time `json:"createdAt"`
-	UpdatedAt            time.Time `json:"updatedAt"`
+	ID                   string                  `json:"id" gorm:"primaryKey;size:36"`
+	SKU                  string                  `json:"sku" gorm:"size:32;uniqueIndex"`
+	Name                 string                  `json:"name" gorm:"size:120"`
+	Description          string                  `json:"description" gorm:"size:500"`
+	AmountFen            int64                   `json:"amountFen"`
+	OriginalAmountFen    int64                   `json:"originalAmountFen"`
+	CreditsMicrocredits  int64                   `json:"creditsMicrocredits"`
+	StorageQuotaBytes    int64                   `json:"storageQuotaBytes"`
+	DurationDays         int                     `json:"durationDays"`
+	Tier                 string                  `json:"tier" gorm:"size:16;index"`
+	Badge                string                  `json:"badge" gorm:"size:40"`
+	Highlighted          bool                    `json:"highlighted"`
+	Enabled              bool                    `json:"enabled" gorm:"index"`
+	SortOrder            int                     `json:"sortOrder" gorm:"index"`
+	EntryLabel           string                  `json:"entryLabel" gorm:"size:40"`
+	Audience             string                  `json:"audience" gorm:"size:40"`
+	AddOnLabel           string                  `json:"addOnLabel" gorm:"size:40"`
+	FeatureLines         []MembershipFeatureLine `json:"featureLines" gorm:"-"`
+	FeatureLinesJSON     string                  `json:"-" gorm:"column:feature_lines;type:text"`
+	CreatedBy            string                  `json:"createdBy" gorm:"size:36"`
+	UpdatedBy            string                  `json:"updatedBy" gorm:"size:36"`
+	CreatedAt            time.Time               `json:"createdAt"`
+	UpdatedAt            time.Time               `json:"updatedAt"`
+}
+
+func (p *MembershipProduct) BeforeSave(_ *gorm.DB) error {
+	if p == nil {
+		return nil
+	}
+	p.FeatureLines = NormalizeMembershipFeatureLines(p.FeatureLines)
+	p.EntryLabel = TruncateRunes(strings.TrimSpace(p.EntryLabel), MaxMembershipShowcaseRunes)
+	p.Audience = TruncateRunes(strings.TrimSpace(p.Audience), MaxMembershipShowcaseRunes)
+	p.AddOnLabel = TruncateRunes(strings.TrimSpace(p.AddOnLabel), MaxMembershipShowcaseRunes)
+	p.FeatureLinesJSON = EncodeMembershipFeatureLines(p.FeatureLines)
+	return nil
+}
+
+func (p *MembershipProduct) AfterFind(_ *gorm.DB) error {
+	if p == nil {
+		return nil
+	}
+	if len(p.FeatureLines) == 0 {
+		p.FeatureLines = DecodeMembershipFeatureLines(p.FeatureLinesJSON)
+	}
+	return nil
 }
 
 type UserMembership struct {
@@ -106,6 +159,23 @@ type MembershipGrant struct {
 }
 
 func (MembershipGrant) TableName() string { return "membership_grants" }
+
+type StorageGrant struct {
+	ID             string     `json:"id" gorm:"primaryKey;size:36"`
+	UserID         string     `json:"userId" gorm:"size:36;index"`
+	Bytes          int64      `json:"bytes"`
+	Source         string     `json:"source" gorm:"size:24;index"`
+	PaymentOrderID *string    `json:"paymentOrderId,omitempty" gorm:"size:36;uniqueIndex"`
+	RedeemCodeID   *string    `json:"redeemCodeId,omitempty" gorm:"size:36;uniqueIndex"`
+	ProductID      string     `json:"productId" gorm:"size:36"`
+	DurationDays   int        `json:"durationDays"`
+	StartsAt       time.Time  `json:"startsAt"`
+	EndsAt         *time.Time `json:"endsAt,omitempty" gorm:"index"`
+	Note           string     `json:"note" gorm:"size:500"`
+	CreatedAt      time.Time  `json:"createdAt" gorm:"index"`
+}
+
+func (StorageGrant) TableName() string { return "storage_grants" }
 
 // MembershipGrantSnapshot is persisted by repository inside the credit/redeem transaction.
 type MembershipGrantSnapshot struct {
@@ -366,4 +436,151 @@ func (code *RedeemCode) BeforeCreate(_ *gorm.DB) error {
 	}
 	code.Kind = NormalizeRedeemKind(code.Kind)
 	return nil
+}
+
+func TruncateRunes(value string, limit int) string {
+	if limit <= 0 || utf8.RuneCountInString(value) <= limit {
+		return value
+	}
+	runes := []rune(value)
+	return string(runes[:limit])
+}
+
+func NormalizeMembershipFeatureLines(lines []MembershipFeatureLine) []MembershipFeatureLine {
+	out := make([]MembershipFeatureLine, 0, len(lines))
+	for _, line := range lines {
+		text := TruncateRunes(strings.TrimSpace(line.Text), MaxMembershipShowcaseRunes)
+		if text == "" {
+			continue
+		}
+		out = append(out, MembershipFeatureLine{Text: text, Included: line.Included})
+		if len(out) >= MaxMembershipFeatureLines {
+			break
+		}
+	}
+	return out
+}
+
+func EncodeMembershipFeatureLines(lines []MembershipFeatureLine) string {
+	lines = NormalizeMembershipFeatureLines(lines)
+	if len(lines) == 0 {
+		return ""
+	}
+	raw, err := json.Marshal(lines)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+func DecodeMembershipFeatureLines(raw string) []MembershipFeatureLine {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var lines []MembershipFeatureLine
+	if err := json.Unmarshal([]byte(raw), &lines); err != nil {
+		return nil
+	}
+	return NormalizeMembershipFeatureLines(lines)
+}
+
+func NormalizeShowcaseLabel(value string) string {
+	return TruncateRunes(strings.TrimSpace(value), MaxMembershipShowcaseRunes)
+}
+
+func NormalizeStorageGrantDays(days int) int {
+	if days <= 0 {
+		return DefaultStorageGrantDays
+	}
+	if days > MaxStorageGrantDays {
+		return MaxStorageGrantDays
+	}
+	return days
+}
+
+func StorageGrantEndsAt(starts time.Time, days int) *time.Time {
+	if days <= 0 {
+		return nil
+	}
+	end := starts.Add(time.Duration(days) * 24 * time.Hour)
+	return &end
+}
+
+func DefaultMembershipShowcaseCopy(tier string) (entry, audience, addOn string, lines []MembershipFeatureLine) {
+	switch strings.ToLower(strings.TrimSpace(tier)) {
+	case MembershipTierSvip:
+		return "含短剧与投稿展示", "短剧 / 多项目", "可叠加", []MembershipFeatureLine{
+			{Text: "包含 VIP 全部能力", Included: true},
+			{Text: "短剧工作台", Included: true},
+			{Text: "广场投稿", Included: true},
+			{Text: "个人对象存储", Included: true},
+			{Text: "更大开通礼包与套餐容量", Included: true},
+		}
+	case MembershipTierVip:
+		return "创作工作台", "个人稳定产出", "可叠加", []MembershipFeatureLine{
+			{Text: "基础创作、画布、素材、任务", Included: true},
+			{Text: "剧本 / 分镜 / 批量表", Included: true},
+			{Text: "导演台 / 时间线", Included: true},
+			{Text: "云端 Agent、技能库、插件、个人渠道", Included: true},
+			{Text: "个人对象存储", Included: true},
+			{Text: "SVIP 短剧工作台与广场投稿", Included: false},
+		}
+	default:
+		return "开放（基础）", "试用与轻量创作", "可买，不加会员", []MembershipFeatureLine{
+			{Text: "基础创作与预览", Included: true},
+			{Text: "素材库、任务、广场浏览", Included: true},
+			{Text: "剧本 / 分镜 / 导演台 / 时间线", Included: false},
+			{Text: "云端 Agent、技能、插件、个人渠道", Included: false},
+			{Text: "短剧工作台与广场投稿", Included: false},
+			{Text: "个人对象存储", Included: false},
+		}
+	}
+}
+
+func ApplyDefaultMembershipShowcase(product *MembershipProduct, overwrite bool) {
+	if product == nil {
+		return
+	}
+	tier := product.EffectiveTier()
+	entry, audience, addOn, lines := DefaultMembershipShowcaseCopy(tier)
+	if overwrite || strings.TrimSpace(product.EntryLabel) == "" {
+		product.EntryLabel = entry
+	}
+	if overwrite || strings.TrimSpace(product.Audience) == "" {
+		product.Audience = audience
+	}
+	if overwrite || strings.TrimSpace(product.AddOnLabel) == "" {
+		product.AddOnLabel = addOn
+	}
+	if overwrite || len(NormalizeMembershipFeatureLines(product.FeatureLines)) == 0 {
+		if len(product.FeatureLines) == 0 {
+			product.FeatureLines = DecodeMembershipFeatureLines(product.FeatureLinesJSON)
+		}
+		if overwrite || len(product.FeatureLines) == 0 {
+			product.FeatureLines = lines
+		}
+	}
+}
+
+func DefaultFreeMembershipShowcase() MembershipShowcase {
+	entry, audience, addOn, lines := DefaultMembershipShowcaseCopy("")
+	return MembershipShowcase{
+		Title:        "免费使用",
+		Description:  "平台基础功能开放；VIP / SVIP 主要提升云存储、开通礼包与创作额度。",
+		EntryLabel:   entry,
+		Audience:     audience,
+		AddOnLabel:   addOn,
+		FeatureLines: lines,
+	}
+}
+
+func NormalizeMembershipShowcase(value MembershipShowcase) MembershipShowcase {
+	value.Title = TruncateRunes(strings.TrimSpace(value.Title), MaxMembershipShowcaseRunes)
+	value.Description = TruncateRunes(strings.TrimSpace(value.Description), 120)
+	value.EntryLabel = NormalizeShowcaseLabel(value.EntryLabel)
+	value.Audience = NormalizeShowcaseLabel(value.Audience)
+	value.AddOnLabel = NormalizeShowcaseLabel(value.AddOnLabel)
+	value.FeatureLines = NormalizeMembershipFeatureLines(value.FeatureLines)
+	return value
 }

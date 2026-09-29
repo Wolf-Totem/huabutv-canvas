@@ -1,7 +1,7 @@
 import { http } from "@/services/api/request";
-import type { MembershipProduct, MembershipStatus } from "@/lib/membership";
+import type { MembershipProduct, MembershipShowcase, MembershipStatus } from "@/lib/membership";
 
-export type { MembershipProduct, MembershipStatus };
+export type { MembershipProduct, MembershipShowcase, MembershipStatus };
 
 export type CommerceMethods = {
     onlinePaymentEnabled: boolean;
@@ -38,9 +38,22 @@ export function updateAdminMembershipProduct(
         storageQuotaBytes?: number;
         badge?: string;
         highlighted?: boolean;
+        entryLabel?: string;
+        audience?: string;
+        addOnLabel?: string;
+        featureLines?: MembershipShowcase["featureLines"];
+        syncShowcaseToTier?: boolean;
     },
 ) {
     return http.patch<{ product: MembershipProduct }>(`/admin/membership/products/${encodeURIComponent(id)}`, input);
+}
+
+export function getAdminMembershipFreeShowcase() {
+    return http.get<MembershipShowcase>("/admin/settings/membership-free-showcase");
+}
+
+export function updateAdminMembershipFreeShowcase(input: MembershipShowcase) {
+    return http.patch<MembershipShowcase>("/admin/settings/membership-free-showcase", input);
 }
 
 export function getAdminCommerceMethods() {

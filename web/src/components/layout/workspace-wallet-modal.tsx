@@ -1,5 +1,5 @@
 import { App, Button, Input, Skeleton, type InputRef } from "antd";
-import { Check, ChevronLeft, ChevronRight, CircleAlert, Coins, CreditCard, HardDrive, History, RefreshCw, TicketCheck, WalletCards } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CircleAlert, Coins, CreditCard, HardDrive, History, Minus, RefreshCw, TicketCheck, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 
@@ -14,14 +14,21 @@ import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usa
 import { accountStorageMeter } from "@/lib/account-storage-usage";
 import { cn } from "@/lib/utils";
 import {
+    dailyPriceYuan,
     defaultMembership,
     formatMembershipStorage,
     groupMembershipProductsByTier,
     isCatalogMembershipSKU,
-    MEMBERSHIP_ADVANCED_FEATURE_KEYS,
     membershipPurchaseBlocked,
+    MEMBERSHIP_PERIODS,
+    membershipSKUDurationDays,
     membershipSKUTier,
+    membershipStatusKey,
     membershipStatusLabel,
+    periodFromDurationDays,
+    periodSavingsPercent,
+    productForPeriod,
+    type MembershipPeriod,
     type MembershipProduct,
     type MembershipStatus,
 } from "@/lib/membership";
@@ -108,6 +115,7 @@ export function WorkspaceWalletModal({
     const [membership, setMembership] = useState<MembershipStatus>(defaultMembership);
     const [membershipProducts, setMembershipProducts] = useState<MembershipProduct[]>([]);
     const [selectedMembershipId, setSelectedMembershipId] = useState("");
+    const [period, setPeriod] = useState<MembershipPeriod>("year");
     const membershipIdempotencyKey = useRef("");
     const [wallet, setWallet] = useState<WalletSummary | null>(null);
     const [walletLoading, setWalletLoading] = useState(false);
@@ -192,7 +200,12 @@ export function WorkspaceWalletModal({
             if (membershipProductResult.status === "fulfilled") {
                 const listed = membershipProductResult.value.products.filter((item) => item.enabled && isCatalogMembershipSKU(item.sku));
                 setMembershipProducts(listed);
-                setSelectedMembershipId((current) => current || listed.find((item) => item.highlighted)?.id || listed[0]?.id || "");
+                const membershipValue = membershipResult.status === "fulfilled" ? membershipResult.value : undefined;
+                const preferredDays = membershipSKUDurationDays(membershipValue?.advancedPlanSku);
+                const nextPeriod = preferredDays ? periodFromDurationDays(preferredDays) : listed.some((item) => item.durationDays === 365) ? "year" : listed.some((item) => item.durationDays === 90) ? "quarter" : "month";
+                setPeriod(nextPeriod);
+                const days = MEMBERSHIP_PERIODS.find((item) => item.id === nextPeriod)?.days;
+                setSelectedMembershipId((current) => current || listed.find((item) => item.durationDays === days && item.highlighted)?.id || listed.find((item) => item.durationDays === days)?.id || listed.find((item) => item.highlighted)?.id || listed[0]?.id || "");
             }
             setPaymentsLoading(false);
         })();
@@ -422,7 +435,7 @@ export function WorkspaceWalletModal({
                 title={null}
                 footer={null}
                 centered
-                width="min(880px, calc(100vw - 28px))"
+                width="min(1080px, calc(100vw - 28px))"
                 onCancel={onClose}
                 rootClassName="workspace-wallet-modal"
                 classNames={{ root: "workspace-wallet-modal", wrapper: "workspace-wallet-modal", container: "workspace-wallet-modal", body: "workspace-wallet-modal-body" }}
@@ -461,69 +474,103 @@ export function WorkspaceWalletModal({
 
                     {tab === "subscribe" ? (
                         <div className="workspace-wallet-content is-topup">
-                            {membershipStatusLabel(membership) === "未开通" ? (
-                                <section className="workspace-wallet-section">
-                                    <div className="workspace-wallet-section-heading"><div><h3>{t("wallet.compareTitle")}</h3><p>{t("wallet.compareLead")}</p></div></div>
-                                    <ul className="workspace-wallet-feature-list">
-                                        {MEMBERSHIP_ADVANCED_FEATURE_KEYS.map((key) => (
-                                            <li key={key}><span aria-hidden="true">×</span>{t(`wallet.feature.${key}`)}</li>
-                                        ))}
-                                    </ul>
-                                </section>
-                            ) : null}
                             <section className="workspace-wallet-section">
-                                <div className="workspace-wallet-section-heading"><div><h3>{t("wallet.plans")}</h3><p>{t("wallet.plansLead")}</p></div><WalletCards /></div>
-                                {paymentsLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : membershipProducts.length ? <>
+                                {paymentsLoading ? <Skeleton active paragraph={{ rows: 6 }} /> : membershipProducts.length ? <>
                                     {membership.hasOpenMembershipOrder ? <div className="workspace-wallet-inline-state"><CircleAlert /><div><strong>{t("wallet.openOrder")}</strong><span>{t("wallet.openOrderLead")}</span></div><Button onClick={() => { if (membership.openMembershipOrderId) { void getPaymentOrder(membership.openMembershipOrderId).then(({ order }) => { setPaymentOrder(order); setPaymentOpen(true); }); } }}>{t("wallet.continuePay")}</Button></div> : null}
-                                    <div className="workspace-wallet-plan-scroller">
+                                    <div className="workspace-wallet-period">
+                                        <div className="workspace-wallet-period-switch" role="tablist" aria-label={t("wallet.period")}>
+                                            {MEMBERSHIP_PERIODS.map((item) => {
+                                                const vipMonth = groupedPlans.vip.find((product) => product.durationDays === 30);
+                                                const svipMonth = groupedPlans.svip.find((product) => product.durationDays === 30);
+                                                const vipPeriod = groupedPlans.vip.find((product) => product.durationDays === item.days);
+                                                const svipPeriod = groupedPlans.svip.find((product) => product.durationDays === item.days);
+                                                const vipSave = vipMonth && vipPeriod ? periodSavingsPercent(vipMonth.amountFen, vipPeriod.amountFen, item.days) : 0;
+                                                const svipSave = svipMonth && svipPeriod ? periodSavingsPercent(svipMonth.amountFen, svipPeriod.amountFen, item.days) : 0;
+                                                const shownSave = Math.max(vipSave, svipSave);
+                                                return (
+                                                    <button key={item.id} type="button" role="tab" aria-selected={period === item.id} className={period === item.id ? "is-selected" : ""} onClick={() => {
+                                                        setPeriod(item.id);
+                                                        const next = productForPeriod(groupedPlans.svip, item.id) || productForPeriod(groupedPlans.vip, item.id);
+                                                        if (next) setSelectedMembershipId(next.id);
+                                                    }}>
+                                                        {t(`sku.period.${item.days}`)}
+                                                        {shownSave > 0 ? <small>{t("wallet.savePercent", { value: shownSave })}</small> : null}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div className="workspace-wallet-plan-grid">
+                                        <WalletPlanCard
+                                            tier="free"
+                                            title={membership.freeShowcase?.title || t("wallet.freeTitle")}
+                                            price="¥0"
+                                            unit={t("wallet.freeUnit")}
+                                            gift={membership.freeShowcase?.description || t("wallet.freeGift", { size: formatMembershipStorage(membership.defaultStoredFileBytes || 0) })}
+                                            specs={[
+                                                { label: t("wallet.specEntry"), value: membership.freeShowcase?.entryLabel || t("wallet.specDash") },
+                                                { label: t("wallet.specStorage"), value: formatMembershipStorage(membership.defaultStoredFileBytes || 0) },
+                                                { label: t("wallet.specGift"), value: t("wallet.specDash") },
+                                                { label: t("wallet.specAddOn"), value: membership.freeShowcase?.addOnLabel || t("wallet.specDash") },
+                                                { label: t("wallet.specAudience"), value: membership.freeShowcase?.audience || t("wallet.specDash") },
+                                            ]}
+                                            features={membership.freeShowcase?.featureLines || []}
+                                            action={membershipStatusKey(membership) === "none" ? t("wallet.currentPlan") : t("wallet.freeTitle")}
+                                            disabled
+                                            current={membershipStatusKey(membership) === "none"}
+                                        />
                                         {(["vip", "svip"] as const).map((tier) => {
                                             const items = groupedPlans[tier];
-                                            if (!items.length) return null;
-                                            const selected = items.find((item) => item.id === selectedMembershipId) || items[0];
+                                            const selected = productForPeriod(items, period);
+                                            if (!selected) return null;
                                             const blocked = membershipPurchaseBlocked(membership, selected.sku);
                                             const unpriced = selected.amountFen <= 0;
+                                            const isCurrent = (membership.tier || membershipSKUTier(membership.advancedPlanSku)) === tier && membershipSKUDurationDays(membership.advancedPlanSku) === selected.durationDays && membership.advancedRemainingSeconds > 0;
+                                            const daily = dailyPriceYuan(selected.amountFen, selected.durationDays);
+                                            const action = isCurrent ? (blocked.disabled ? t("wallet.currentPlan") : t("wallet.renew")) : t(tier === "svip" ? "wallet.buySvip" : "wallet.buyVip");
                                             return (
-                                                <article key={tier} className={cn("workspace-wallet-plan-card", selected.highlighted && "is-highlighted", membershipSKUTier(membership.tier || membership.advancedPlanSku) === tier && "is-current")}>
-                                                    <header>
-                                                        <strong>{tier === "svip" ? "SVIP" : "VIP"}</strong>
-                                                        {selected.badge ? <em>{selected.badge}</em> : null}
-                                                    </header>
-                                                    <div className="workspace-wallet-plan-periods" role="tablist">
-                                                        {items.map((item) => (
-                                                            <button key={item.id} type="button" className={item.id === selected.id ? "is-selected" : ""} onClick={() => setSelectedMembershipId(item.id)}>
-                                                                {t(`sku.period.${item.durationDays}`, { defaultValue: `${item.durationDays} 天` })}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                    <p className="workspace-wallet-plan-price">
-                                                        <b>{selected.amountFen > 0 ? `¥ ${(selected.amountFen / 100).toFixed(0)}` : t("wallet.unpriced")}</b>
-                                                        {selected.originalAmountFen && selected.originalAmountFen > selected.amountFen ? <s>¥ {(selected.originalAmountFen / 100).toFixed(0)}</s> : null}
-                                                    </p>
-                                                    <ul>
-                                                        <li>{t("wallet.planAllFeatures")}</li>
-                                                        <li>{t("wallet.planGift", { credits: formatCredits(selected.creditsMicrocredits, 0) })}</li>
-                                                        <li>{t("wallet.planStorage", { size: formatMembershipStorage(selected.storageQuotaBytes) })}</li>
-                                                    </ul>
-                                                    {blocked.disabled ? <small>{blocked.reasonKey ? t(blocked.reasonKey) : blocked.reason}</small> : null}
-                                                    <Button type="primary" loading={paymentCreating} disabled={blocked.disabled || unpriced || !membership.onlinePaymentEnabled || !selectedProvider} onClick={() => void startMembershipPayment(selected)}>{t("wallet.buy")}</Button>
-                                                </article>
+                                                <WalletPlanCard
+                                                    key={tier}
+                                                    tier={tier}
+                                                    title={selected.name}
+                                                    badge={selected.badge}
+                                                    price={selected.amountFen > 0 ? `¥${Math.round(selected.amountFen / 100)}` : t("wallet.unpriced")}
+                                                    origin={selected.originalAmountFen && selected.originalAmountFen > selected.amountFen ? `¥${Math.round(selected.originalAmountFen / 100)}` : undefined}
+                                                    unit={`${t(`sku.period.${selected.durationDays}`)}${daily ? ` · ${t("wallet.perDay", { value: daily })}` : ""}`}
+                                                    gift={t("wallet.giftBar", { credits: formatCredits(selected.creditsMicrocredits, 0), size: formatMembershipStorage(selected.storageQuotaBytes) })}
+                                                    specs={[
+                                                        { label: t("wallet.specEntry"), value: selected.entryLabel || t("wallet.specDash") },
+                                                        { label: t("wallet.specStorage"), value: formatMembershipStorage(selected.storageQuotaBytes) },
+                                                        { label: t("wallet.specGift"), value: formatCredits(selected.creditsMicrocredits, 0) },
+                                                        { label: t("wallet.specAddOn"), value: selected.addOnLabel || t("wallet.specDash") },
+                                                        { label: t("wallet.specAudience"), value: selected.audience || t("wallet.specDash") },
+                                                    ]}
+                                                    features={selected.featureLines || []}
+                                                    action={action}
+                                                    disabled={blocked.disabled || unpriced || !membership.onlinePaymentEnabled || !selectedProvider}
+                                                    loading={paymentCreating && selectedMembershipId === selected.id}
+                                                    reason={blocked.disabled ? (blocked.reasonKey ? t(blocked.reasonKey) : blocked.reason) : ""}
+                                                    current={isCurrent}
+                                                    highlighted={Boolean(selected.highlighted)}
+                                                    onSelect={() => setSelectedMembershipId(selected.id)}
+                                                    onBuy={() => { setSelectedMembershipId(selected.id); void startMembershipPayment(selected); }}
+                                                />
                                             );
                                         })}
                                     </div>
-                                    {providerBar(() => {
-                                        const product = membershipProducts.find((item) => item.id === selectedMembershipId);
-                                        if (product) void startMembershipPayment(product);
-                                    }, !selectedMembershipId || membershipPurchaseBlocked(membership, membershipProducts.find((item) => item.id === selectedMembershipId)?.sku || "").disabled || (membershipProducts.find((item) => item.id === selectedMembershipId)?.amountFen || 0) <= 0, t("wallet.buy"))}
+                                    <div className="workspace-wallet-providers" role="radiogroup" aria-label={t("wallet.payMethod")}>
+                                        {providers.map((provider) => <button key={provider.id} type="button" role="radio" aria-checked={selectedProviderId === provider.id} className={selectedProviderId === provider.id ? "is-selected" : ""} onClick={() => setSelectedProviderId(provider.id)}><CreditCard />{provider.name}</button>)}
+                                    </div>
+                                    <p className="workspace-wallet-display-only">{t("wallet.displayOnly")}</p>
                                 </> : <div className="workspace-wallet-inline-state"><CircleAlert /><div><strong>{t("wallet.unlisted")}</strong><span>{t("wallet.unlistedLead")}</span></div></div>}
                             </section>
-                            {redeemBlock}
                         </div>
                     ) : null}
 
                     {tab === "storage" ? (
                         <div className="workspace-wallet-content is-topup">
                             <section className="workspace-wallet-section">
-                                <div className="workspace-wallet-section-heading"><div><h3>{t("wallet.storage")}</h3><p>{personalStorage ? t("wallet.storagePersonalLead") : t("wallet.storageLead", { size: formatMembershipStorage(membership.effectiveStoredFileBytes) })}{!personalStorage && membership.storageBonusBytes ? t("wallet.storageBonus", { size: formatMembershipStorage(membership.storageBonusBytes) }) : ""}</p></div><HardDrive /></div>
+                                <div className="workspace-wallet-section-heading"><div><h3>{t("wallet.storage")}</h3><p>{personalStorage ? t("wallet.storagePersonalLead") : t("wallet.storageLead", { size: formatMembershipStorage(membership.effectiveStoredFileBytes) })}{!personalStorage && membership.storageBonusBytes ? t("wallet.storageBonus", { size: formatMembershipStorage(membership.storageBonusBytes) }) : ""}{!personalStorage && membership.storageBonusExpiresAt ? t("wallet.storageBonusExpiry", { date: new Date(membership.storageBonusExpiresAt).toLocaleDateString() }) : ""}</p></div><HardDrive /></div>
                                 {personalStorage ? <div className="workspace-wallet-inline-state"><CircleAlert /><div><strong>{t("wallet.personalActive")}</strong><span>{t("wallet.storagePersonalHint")}</span></div><Button onClick={() => { onClose(); navigate("/settings"); }}>{t("wallet.manageStorage")}</Button></div> : null}
                                 {paymentsLoading ? <Skeleton active paragraph={{ rows: 4 }} /> : storageProducts.length && providers.length ? <>
                                     <div className="workspace-wallet-products">
@@ -531,7 +578,7 @@ export function WorkspaceWalletModal({
                                             <button key={product.id} type="button" className={cn("workspace-wallet-product", selectedStorageId === product.id && "is-selected")} aria-pressed={selectedStorageId === product.id} onClick={() => setSelectedStorageId(product.id)}>
                                                 <span>{product.name}</span>
                                                 <strong>{formatMembershipStorage(product.storageBytes || 0)}</strong>
-                                                <small>¥ {(product.amountFen / 100).toFixed(2)}{product.description ? ` · ${product.description}` : ""}</small>
+                                                <small>¥ {(product.amountFen / 100).toFixed(2)} · {t("wallet.storageExpiry", { duration: (product.durationDays || 365) === 365 ? t("wallet.durationYear") : t("wallet.durationDays", { count: product.durationDays || 365 }) })}{product.badge ? ` · ${product.badge}` : ""}</small>
                                                 {selectedStorageId === product.id ? <Check /> : null}
                                             </button>
                                         ))}
@@ -567,7 +614,7 @@ export function WorkspaceWalletModal({
 
                     {tab === "history" ? (
                         <div className="workspace-wallet-content is-history">
-                            <div className="workspace-wallet-history-toolbar"><div><h3>{t("wallet.tabHistory")}</h3><p>{t("wallet.historyLead")}</p></div><Button type="text" icon={<RefreshCw />} loading={walletLoading} onClick={() => void reloadWallet(page)}>{t("wallet.refresh")}</Button></div>
+                            <div className="workspace-wallet-history-toolbar"><div><h3>{t("wallet.historyTitle")}</h3><p>{t("wallet.historyLead")}</p></div><Button type="text" icon={<RefreshCw />} loading={walletLoading} onClick={() => void reloadWallet(page)}>{t("wallet.refresh")}</Button></div>
                             <div className="workspace-wallet-history-scroll">
                                 {walletError ? <div className="workspace-wallet-inline-state is-error"><CircleAlert /><div><strong>{t("wallet.loadFailed")}</strong><span>{walletError}</span></div><Button onClick={() => void reloadWallet(page)}>{t("wallet.retry")}</Button></div> : walletLoading && !wallet ? <Skeleton active paragraph={{ rows: 6 }} /> : wallet?.entries.length ? <div className="workspace-wallet-ledger">
                                     {wallet.entries.map((entry) => <WalletLedgerRow key={entry.id} entry={entry} />)}
@@ -593,6 +640,77 @@ export function WorkspaceWalletModal({
                 </div> : null}
             </AppModal>
         </>
+    );
+}
+
+function WalletPlanCard({
+    tier,
+    title,
+    badge,
+    price,
+    origin,
+    unit,
+    gift,
+    specs,
+    features,
+    action,
+    disabled,
+    loading,
+    reason,
+    current,
+    highlighted,
+    onSelect,
+    onBuy,
+}: {
+    tier: "free" | "vip" | "svip";
+    title: string;
+    badge?: string;
+    price: string;
+    origin?: string;
+    unit: string;
+    gift: string;
+    specs: { label: string; value: string }[];
+    features: { text: string; included: boolean }[];
+    action: string;
+    disabled?: boolean;
+    loading?: boolean;
+    reason?: string;
+    current?: boolean;
+    highlighted?: boolean;
+    onSelect?: () => void;
+    onBuy?: () => void;
+}) {
+    return (
+        <article className={cn("workspace-wallet-plan-card", `is-${tier}`, highlighted && "is-highlighted", current && "is-current")} onClick={onSelect}>
+            <header>
+                <strong>{title}</strong>
+                {badge ? <em>{badge}</em> : null}
+            </header>
+            <p className="workspace-wallet-plan-price">
+                <b>{price}</b>
+                {origin ? <s>{origin}</s> : null}
+            </p>
+            <p className="workspace-wallet-plan-unit">{unit}</p>
+            <p className="workspace-wallet-plan-gift">{gift}</p>
+            <div className="workspace-wallet-plan-specs">
+                {specs.map((row) => (
+                    <div key={row.label} className="workspace-wallet-plan-spec">
+                        <span>{row.label}</span>
+                        <b>{row.value}</b>
+                    </div>
+                ))}
+            </div>
+            <ul className="workspace-wallet-plan-features">
+                {features.map((item) => (
+                    <li key={item.text} className={item.included ? undefined : "is-off"}>
+                        {item.included ? <Check aria-hidden="true" /> : <Minus aria-hidden="true" />}
+                        {item.text}
+                    </li>
+                ))}
+            </ul>
+            {reason ? <small>{reason}</small> : null}
+            <Button type={tier === "free" ? "default" : "primary"} className={cn(tier === "svip" && "is-svip", tier === "vip" && "is-vip")} loading={loading} disabled={disabled} onClick={(event) => { event.stopPropagation(); onBuy?.(); }}>{action}</Button>
+        </article>
     );
 }
 

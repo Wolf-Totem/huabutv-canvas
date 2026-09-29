@@ -15,7 +15,7 @@ func TestRedeemBatchCanBeReviewedAndRecordsAuditIP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.MembershipProduct{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.StorageGrant{}, &model.MembershipProduct{}); err != nil {
 		t.Fatal(err)
 	}
 	admin := &model.User{ID: "admin-1", Username: "admin", DisplayName: "管理员", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
@@ -58,7 +58,7 @@ func TestRedeemMembershipPermanentDoesNotWriteLedger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.MembershipProduct{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.StorageGrant{}, &model.MembershipProduct{}); err != nil {
 		t.Fatal(err)
 	}
 	admin := &model.User{ID: "admin-1", Username: "admin", DisplayName: "管理员", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
@@ -101,7 +101,7 @@ func TestRedeemMembershipUsesProductQuotaNotHardcodedSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.MembershipProduct{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.StorageGrant{}, &model.MembershipProduct{}); err != nil {
 		t.Fatal(err)
 	}
 	admin := &model.User{ID: "admin-1", Username: "admin", DisplayName: "管理员", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
@@ -144,7 +144,7 @@ func TestRedeemStorageAddsBonusWithoutCredits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.MembershipProduct{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.StorageGrant{}, &model.MembershipProduct{}); err != nil {
 		t.Fatal(err)
 	}
 	admin := &model.User{ID: "admin-1", Username: "admin", DisplayName: "管理员", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
@@ -183,5 +183,12 @@ func TestRedeemStorageAddsBonusWithoutCredits(t *testing.T) {
 	}
 	if ledgerCount != 0 {
 		t.Fatalf("ledger count = %d", ledgerCount)
+	}
+	var grant model.StorageGrant
+	if err := db.Where("user_id = ?", user.ID).First(&grant).Error; err != nil {
+		t.Fatal(err)
+	}
+	if grant.Bytes != 1<<30 || grant.DurationDays != model.DefaultStorageGrantDays || grant.EndsAt == nil {
+		t.Fatalf("grant = %#v", grant)
 	}
 }

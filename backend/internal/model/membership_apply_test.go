@@ -34,6 +34,24 @@ func TestApplyMembershipSnapshotPaymentCoversYearToMonth(t *testing.T) {
 	}
 }
 
+func TestNormalizeStorageGrantDays(t *testing.T) {
+	if got := NormalizeStorageGrantDays(0); got != DefaultStorageGrantDays {
+		t.Fatalf("zero = %d", got)
+	}
+	if got := NormalizeStorageGrantDays(-3); got != DefaultStorageGrantDays {
+		t.Fatalf("negative = %d", got)
+	}
+	if got := NormalizeStorageGrantDays(10); got != 10 {
+		t.Fatalf("custom = %d", got)
+	}
+	if got := NormalizeStorageGrantDays(MaxStorageGrantDays + 1); got != MaxStorageGrantDays {
+		t.Fatalf("clamp = %d", got)
+	}
+	if end := StorageGrantEndsAt(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), 0); end != nil {
+		t.Fatalf("permanent end = %v", end)
+	}
+}
+
 func TestMembershipPurchaseBlockSvipCannotBuyVip(t *testing.T) {
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	expires := now.Add(10 * 24 * time.Hour)

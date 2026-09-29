@@ -7,17 +7,18 @@ import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
-import { ADMIN_MEMBERSHIP_SKUS, formatMembershipStorage } from "@/lib/membership";
+import { ADMIN_MEMBERSHIP_SKUS, formatMembershipStorage, formatStorageDuration } from "@/lib/membership";
 import { createAdminRedeemBatch, disableAdminRedeemBatch, disableAdminRedeemCode, listAdminRedeemBatchCodes, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 
 type RedeemKind = "credits" | "membership" | "storage";
-type RedeemFormValues = { kind?: RedeemKind; planSku?: string; amount?: number | null; storageGiB?: number | null; count?: number | null; note?: string; expiresAt?: string };
+type RedeemFormValues = { kind?: RedeemKind; planSku?: string; amount?: number | null; storageGiB?: number | null; durationDays?: number | null; count?: number | null; note?: string; expiresAt?: string };
 type PendingRedeemBatch = {
     kind: RedeemKind;
     planSku?: string;
     amountMicrocredits: number;
     storageQuotaBytes?: number;
+    durationDays?: number;
     count: number;
     totalMicrocredits: number;
     note?: string;
@@ -29,7 +30,7 @@ type DetailStatus = "all" | "available" | "redeemed" | "expired" | "disabled";
 const MICRO_CREDITS_PER_CREDIT = 1_000_000;
 const GIB = 1024 ** 3;
 const MAX_STORAGE_GIB = 3 * 1024;
-const DEFAULT_CREATE_VALUES: RedeemFormValues = { kind: "credits", amount: 10, storageGiB: 1, count: 10 };
+const DEFAULT_CREATE_VALUES: RedeemFormValues = { kind: "credits", amount: 10, storageGiB: 1, durationDays: 365, count: 10 };
 const GENERATED_PREVIEW_LIMIT = 200;
 const DETAIL_STATUS_LABELS: Record<DetailStatus, string> = {
     all: "全部状态",
@@ -154,7 +155,12 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             }
             expiresAt = timestamp.toISOString();
         }
-        setPendingCreate({ kind, planSku: values.planSku, amountMicrocredits, storageQuotaBytes: storageQuotaBytes || undefined, count, totalMicrocredits, note: values.note?.trim() || undefined, expiresAt });
+        const durationDays = kind === "storage" ? Math.round(Number(values.durationDays || 365)) : undefined;
+        if (kind === "storage" && (!Number.isInteger(durationDays) || (durationDays || 0) < 1 || (durationDays || 0) > 3650)) {
+            message.error("容量有效天数需为 1–3650");
+            return;
+        }
+        setPendingCreate({ kind, planSku: values.planSku, amountMicrocredits, storageQuotaBytes: storageQuotaBytes || undefined, durationDays, count, totalMicrocredits, note: values.note?.trim() || undefined, expiresAt });
     };
 
     const createBatch = async () => {
@@ -167,6 +173,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 planSku: pendingCreate.planSku,
                 amountMicrocredits: pendingCreate.amountMicrocredits,
                 storageQuotaBytes: pendingCreate.storageQuotaBytes,
+                durationDays: pendingCreate.durationDays,
                 count: pendingCreate.count,
                 note: pendingCreate.note,
                 expiresAt: pendingCreate.expiresAt,
@@ -237,6 +244,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         },
         { title: "类型", dataIndex: "kind", width: 120, align: "center", render: (value, batch) => value === "membership" ? (batch.planSku || "订阅") : value === "storage" ? "容量" : "积分" },
         { title: "面额", dataIndex: "amountMicrocredits", width: 140, align: "center", render: (value, batch) => <span className="font-medium tabular-nums">{batch.kind === "storage" ? formatMembershipStorage(batch.storageQuotaBytes || 0) : formatCredits(value)}</span> },
+        { title: "容量有效期", dataIndex: "durationDays", width: 120, align: "center", render: (value, batch) => batch.kind === "storage" ? formatStorageDuration(value || 365) : "—" },
         { title: "总数", dataIndex: "count", width: 80, align: "center", render: (value) => <span className="tabular-nums">{value}</span> },
         { title: "状态分布", width: 300, align: "center", render: (_, batch) => <BatchStatusDistribution batch={batch} /> },
         { title: "过期时间", dataIndex: "expiresAt", width: 180, align: "center", render: (value) => (value ? formatTime(value) : <AdminStatusBadge label="永久有效" tone="info" />) },
@@ -483,6 +491,7 @@ function CreateRedeemBatchDrawer({
                                     <Select options={ADMIN_MEMBERSHIP_SKUS} />
                                 </Form.Item>
                             ) : watchedKind === "storage" ? (
+                                <>
                                 <Form.Item
                                     name="storageGiB"
                                     label="每个兑换码增加的容量"
@@ -499,6 +508,23 @@ function CreateRedeemBatchDrawer({
                                 >
                                     <InputNumber className="w-full" min={1} max={MAX_STORAGE_GIB} precision={0} addonAfter="GiB" placeholder="例如 5" />
                                 </Form.Item>
+                                <Form.Item
+                                    name="durationDays"
+                                    label="容量有效天数"
+                                    extra="默认 365 天。到期后该笔授予从配额拿掉，不删文件。"
+                                    rules={[
+                                        { required: true, message: "请填写有效天数" },
+                                        {
+                                            validator: (_, value) => {
+                                                const numberValue = Number(value);
+                                                return Number.isInteger(numberValue) && numberValue >= 1 && numberValue <= 3650 ? Promise.resolve() : Promise.reject(new Error("请输入 1–3650 的整数"));
+                                            },
+                                        },
+                                    ]}
+                                >
+                                    <InputNumber className="w-full" min={1} max={3650} precision={0} addonAfter="天" placeholder="365" />
+                                </Form.Item>
+                                </>
                             ) : (
                             <Form.Item
                                 name="amount"
@@ -595,6 +621,12 @@ function CreateRedeemBatchDrawer({
                                 <dt>{pending.kind === "storage" ? "单码容量" : "单码积分"}</dt>
                                 <dd>{pending.kind === "storage" ? formatMembershipStorage(pending.storageQuotaBytes || 0) : formatCredits(pending.amountMicrocredits)}</dd>
                             </div>
+                            {pending.kind === "storage" ? (
+                                <div>
+                                    <dt>容量有效期</dt>
+                                    <dd>{formatStorageDuration(pending.durationDays || 365)}</dd>
+                                </div>
+                            ) : null}
                             <div>
                                 <dt>生成数量</dt>
                                 <dd>{pending.count} 个</dd>

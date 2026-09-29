@@ -298,13 +298,22 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 			}
 		}
 		if kind == model.ProductKindStorageTopup {
-			if _, err := lockUserMembership(tx, order.UserID); err != nil {
-				return err
+			days := order.StorageDurationDays
+			if days <= 0 {
+				days = model.DefaultStorageGrantDays
 			}
-			if err := tx.Model(&model.UserMembership{}).Where("user_id = ?", order.UserID).Updates(map[string]any{
-				"storage_bonus_bytes": gorm.Expr("storage_bonus_bytes + ?", order.StorageQuotaBytes),
-				"updated_at":          now,
-			}).Error; err != nil {
+			orderID := order.ID
+			if err := r.ApplyStorageGrant(tx, model.StorageGrant{
+				UserID:         order.UserID,
+				Bytes:          order.StorageQuotaBytes,
+				Source:         model.StorageGrantSourcePayment,
+				PaymentOrderID: &orderID,
+				ProductID:      order.ProductID,
+				DurationDays:   days,
+				StartsAt:       now,
+				EndsAt:         model.StorageGrantEndsAt(now, days),
+				Note:           order.ProductName,
+			}); err != nil {
 				return err
 			}
 		}

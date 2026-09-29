@@ -126,6 +126,13 @@ func TestCompletePaymentOrderStorageTopupAddsBonus(t *testing.T) {
 	if err != nil || row.StorageBonusBytes != 20<<30 {
 		t.Fatalf("bonus = %#v err=%v", row, err)
 	}
+	var grant model.StorageGrant
+	if err := db.First(&grant, "payment_order_id = ?", order.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if grant.Bytes != 20<<30 || grant.EndsAt == nil {
+		t.Fatalf("grant = %#v", grant)
+	}
 	var ledgerCount int64
 	if err := db.Model(&model.CreditLedgerEntry{}).Count(&ledgerCount).Error; err != nil {
 		t.Fatal(err)

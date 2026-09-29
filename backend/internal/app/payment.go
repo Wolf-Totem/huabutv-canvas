@@ -64,6 +64,7 @@ type TopupProductRequest struct {
 	Kind                string `json:"kind"`
 	StorageBytes        int64  `json:"storageBytes"`
 	Badge               string `json:"badge"`
+	DurationDays        int    `json:"durationDays"`
 	Enabled             bool   `json:"enabled"`
 	SortOrder           int    `json:"sortOrder"`
 }
@@ -95,6 +96,7 @@ type PaymentOrderView struct {
 	ProductKind         string                   `json:"productKind,omitempty"`
 	PlanSKU             string                   `json:"planSku,omitempty"`
 	StorageQuotaBytes   int64                    `json:"storageQuotaBytes,omitempty"`
+	StorageDurationDays int                      `json:"storageDurationDays,omitempty"`
 	Status              model.PaymentOrderStatus `json:"status"`
 	ProviderStatus      string                   `json:"providerStatus,omitempty"`
 	ProviderTradeNo     string                   `json:"providerTradeNo,omitempty"`
@@ -515,6 +517,7 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 	kind := model.NormalizeTopupKind(request.Kind)
 	credits := request.CreditsMicrocredits
 	storageBytes := request.StorageBytes
+	durationDays := 0
 	if kind == model.ProductKindStorageTopup {
 		if storageBytes <= 0 || storageBytes > model.MaxMembershipStorageB {
 			return nil, BadAuthRequest("容量商品需为 1 字节至 3TiB")
@@ -522,6 +525,7 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 		if credits < 0 || credits > maxTopupCreditsMicrocredits {
 			return nil, BadAuthRequest("容量商品附赠积分必须为 0 至 10 亿积分")
 		}
+		durationDays = model.NormalizeStorageGrantDays(request.DurationDays)
 	} else {
 		if credits <= 0 || credits > maxTopupCreditsMicrocredits {
 			return nil, BadAuthRequest("充值积分必须为 0.000001 至 10 亿积分")
@@ -531,7 +535,7 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 	return &model.TopupProduct{
 		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500),
 		AmountFen: request.AmountFen, CreditsMicrocredits: credits, Kind: kind, StorageBytes: storageBytes,
-		Badge: truncateRunes(strings.TrimSpace(request.Badge), 40),
+		Badge: truncateRunes(strings.TrimSpace(request.Badge), 40), DurationDays: durationDays,
 		Enabled: request.Enabled, SortOrder: request.SortOrder, CreatedBy: actorID, UpdatedBy: actorID,
 	}, nil
 }
@@ -582,12 +586,17 @@ func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model
 	}
 	now := time.Now()
 	kind := model.NormalizeTopupKind(product.Kind)
+	storageDurationDays := 0
+	if kind == model.ProductKindStorageTopup {
+		storageDurationDays = model.NormalizeStorageGrantDays(product.DurationDays)
+	}
 	order := &model.PaymentOrder{
 		ID: newID(), UserID: actor.ID, IdempotencyKey: idempotencyKey, MerchantOrderNo: newID(),
 		ProductID: product.ID, ProductName: product.Name, ProviderID: provider.Descriptor().ID,
 		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
 		AmountFen: product.AmountFen, Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
-		ProductKind: kind, StorageQuotaBytes: product.StorageBytes, Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
+		ProductKind: kind, StorageQuotaBytes: product.StorageBytes, StorageDurationDays: storageDurationDays,
+		Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
 	}
 	order, created, err := s.repo.CreatePaymentOrder(order)
@@ -971,7 +980,7 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 		ID: order.ID, UserID: order.UserID, MerchantOrderNo: order.MerchantOrderNo, ProductID: order.ProductID, ProductName: order.ProductName,
 		ProviderID: order.ProviderID, AmountFen: order.AmountFen, Currency: order.Currency,
 		CreditsMicrocredits: order.CreditsMicrocredits, ProductKind: model.NormalizeProductKind(order.ProductKind), PlanSKU: order.PlanSKU,
-		StorageQuotaBytes: order.StorageQuotaBytes,
+		StorageQuotaBytes: order.StorageQuotaBytes, StorageDurationDays: order.StorageDurationDays,
 		Status: order.Status, ProviderStatus: order.ProviderStatus,
 		ProviderTradeNo: providerTradeNo, Checkout: checkout, ExpiresAt: order.ExpiresAt,
 		ProviderPaidAt: order.ProviderPaidAt, CreditedAt: order.CreditedAt, ClosedAt: order.ClosedAt,

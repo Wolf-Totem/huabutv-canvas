@@ -188,6 +188,7 @@ func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUse
 	}
 	fallback := gigabytes(policy.Resource.StoredFileGB)
 	now := time.Now()
+	liveBonus, _ := s.repo.ActiveStorageBonusByUsers(userIDs, now)
 	result := make([]AdminUser, 0, len(users))
 	for _, user := range users {
 		account := accountByUserID[user.ID]
@@ -198,14 +199,18 @@ func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUse
 				item.AdvancedPlanSKU = row.AdvancedPlanSKU
 				item.AdvancedExpiresAt = row.AdvancedExpiresAt
 			}
+			bonus := row.StorageBonusBytes
+			if live, found := liveBonus[user.ID]; found {
+				bonus = live
+			}
 			if row.StorageOverrideBytes != nil {
-				item.EffectiveStoredFileBytes = applyStorageBonus(*row.StorageOverrideBytes, row.StorageBonusBytes)
+				item.EffectiveStoredFileBytes = applyStorageBonus(*row.StorageOverrideBytes, bonus)
 				item.QuotaSource = model.QuotaSourceOverride
 			} else if row.AdvancedExpiresAt != nil && row.AdvancedExpiresAt.After(now) && row.PlanStorageQuotaBytes > 0 {
-				item.EffectiveStoredFileBytes = applyStorageBonus(row.PlanStorageQuotaBytes, row.StorageBonusBytes)
+				item.EffectiveStoredFileBytes = applyStorageBonus(row.PlanStorageQuotaBytes, bonus)
 				item.QuotaSource = model.QuotaSourcePlan
 			} else {
-				item.EffectiveStoredFileBytes = applyStorageBonus(fallback, row.StorageBonusBytes)
+				item.EffectiveStoredFileBytes = applyStorageBonus(fallback, bonus)
 			}
 		}
 		result = append(result, item)
