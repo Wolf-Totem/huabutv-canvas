@@ -57,6 +57,14 @@ describe("wallet scan checkout", () => {
         expect(css).toMatch(/\.workspace-wallet-scan-channels button\.is-selected\s*\{[^}]*color:\s*#16161a/s);
         expect(css).toMatch(/\.workspace-wallet-brand-picker-actions button\s*\{[^}]*color:\s*#16161a/s);
     });
+
+    test("keeps the QR brand mark small so it cannot cover WeChat/Alipay chips", () => {
+        const css = readFileSync(resolve(import.meta.dir, "../src/components/payment-checkout-code.css"), "utf8");
+        expect(css).not.toMatch(/\.payment-checkout-code svg\s*\{/);
+        expect(css).toMatch(/\.payment-checkout-code-mark\s*\{[^}]*width:\s*32px/s);
+        expect(css).toMatch(/\.payment-checkout-code-mark\s*\{[^}]*pointer-events:\s*none/s);
+        expect(css).toMatch(/\.payment-checkout-code-mark svg\s*\{[^}]*width:\s*20px/s);
+    });
 });
 
 describe("wallet subscription center", () => {

@@ -939,11 +939,18 @@ func (s *Service) abandonUncreatedPaymentOrder(id string, cause error) {
 }
 
 func paymentCloseError(err error) error {
-	var providerErr *payment.ProviderError
-	if errors.As(err, &providerErr) && providerErr.Code == "20000001" {
+	if isHuifuOneMinuteClose(err) {
 		return WrapAppError(http.StatusBadGateway, "原订单刚创建，请稍后再换支付方式", err)
 	}
 	return WrapAppError(http.StatusBadGateway, "支付渠道关单失败，请稍后重试", err)
+}
+
+func isHuifuOneMinuteClose(err error) bool {
+	var providerErr *payment.ProviderError
+	if errors.As(err, &providerErr) && (providerErr.Code == "20000001" || strings.Contains(providerErr.Message, "一分钟以内")) {
+		return true
+	}
+	return err != nil && strings.Contains(err.Error(), "一分钟以内")
 }
 
 func (s *Service) applyPaymentResult(providerID string, result payment.Result) (*model.PaymentOrder, error) {

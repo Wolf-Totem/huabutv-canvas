@@ -28,3 +28,14 @@ func TestPaymentCloseErrorKeepsGenericCloseFailure(t *testing.T) {
 		t.Fatalf("message = %q", appErr.Message)
 	}
 }
+
+func TestPaymentCloseErrorMapsOneMinuteRuleByMessage(t *testing.T) {
+	err := paymentCloseError(&payment.ProviderError{Code: "provider_error", Message: "不允许关闭一分钟以内的订单"})
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("error = %v, want AppError", err)
+	}
+	if appErr.Message != "原订单刚创建，请稍后再换支付方式" {
+		t.Fatalf("message = %q", appErr.Message)
+	}
+}

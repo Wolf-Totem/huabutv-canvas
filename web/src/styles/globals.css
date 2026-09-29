@@ -18110,6 +18110,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 }
 
 .workspace-wallet-scan-channels {
+    position: relative;
+    z-index: 2;
     display: inline-flex;
     margin-top: 8px;
     padding: 4px;
