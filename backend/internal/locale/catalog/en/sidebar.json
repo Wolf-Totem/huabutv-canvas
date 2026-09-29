@@ -11,6 +11,7 @@
   "storage.recharge": "Top up",
   "nav.settings": "Settings",
   "storage.used": "Used {{value}}",
+  "storage.personal": "Personal storage",
   "storage.remaining": "{{value}} left",
   "storage.total": "Total {{value}}",
   "storage.full": "Storage full",

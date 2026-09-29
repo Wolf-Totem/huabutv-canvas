@@ -14,6 +14,7 @@ export type AccountStorageMeter = {
     percentLabel: string;
     tone: AccountStorageTone;
     full: boolean;
+    personal: boolean;
 };
 
 export function formatStorageBytes(value: number) {
@@ -22,6 +23,20 @@ export function formatStorageBytes(value: number) {
 
 export function accountStorageMeter(usage?: AccountFileStorageUsage | null): AccountStorageMeter {
     const usedBytes = usage && Number.isFinite(usage.usedBytes) ? Math.max(0, usage.usedBytes) : 0;
+    const personal = usage?.storageDisplay === "personal";
+    if (personal) {
+        return {
+            percent: 0,
+            remainingBytes: 0,
+            usedLabel: formatStorageBytes(usedBytes),
+            totalLabel: "",
+            remainingLabel: "",
+            percentLabel: "",
+            tone: "ok",
+            full: false,
+            personal: true,
+        };
+    }
     const totalBytes = usage && Number.isFinite(usage.totalBytes) ? Math.max(0, usage.totalBytes) : 0;
     const remainingBytes = Math.max(0, totalBytes - usedBytes);
     const percent = totalBytes > 0 ? Math.min(100, (usedBytes / totalBytes) * 100) : 0;
@@ -37,5 +52,6 @@ export function accountStorageMeter(usage?: AccountFileStorageUsage | null): Acc
         percentLabel: usedBytes && percent < 0.1 ? "<0.1%" : `${Math.round(percent * 10) / 10}%`,
         tone,
         full,
+        personal: false,
     };
 }

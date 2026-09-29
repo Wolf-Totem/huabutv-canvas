@@ -96,6 +96,49 @@ func TestRedeemMembershipPermanentDoesNotWriteLedger(t *testing.T) {
 	}
 }
 
+func TestRedeemMembershipUsesProductQuotaNotHardcodedSpec(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.User{}, &model.CreditAccount{}, &model.CreditLedgerEntry{}, &model.RedeemBatch{}, &model.RedeemCode{}, &model.AdminAuditEvent{}, &model.UserMembership{}, &model.MembershipGrant{}, &model.MembershipProduct{}); err != nil {
+		t.Fatal(err)
+	}
+	admin := &model.User{ID: "admin-1", Username: "admin", DisplayName: "管理员", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
+	user := &model.User{ID: "user-1", Username: "alice", DisplayName: "Alice", Role: model.UserRoleUser, Status: model.UserStatusActive}
+	if err := db.Create(admin).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(user).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.MembershipProduct{
+		ID: "membership-vip-month", SKU: model.MembershipSKUVipMonth, Name: "VIP 月卡",
+		CreditsMicrocredits: 2888 * model.CreditScale, StorageQuotaBytes: 30 << 30, DurationDays: 30, Tier: model.MembershipTierVip, Enabled: true,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{repo: repository.New(db), dataDir: t.TempDir()}
+	created, err := svc.AdminCreateRedeemBatch(admin, CreateRedeemBatchRequest{Kind: model.RedeemKindMembership, PlanSKU: model.MembershipSKUVipMonth, Count: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := svc.Redeem(user, created.Codes[0], "203.0.113.8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Membership == nil || outcome.Membership.AdvancedPlanSKU != model.MembershipSKUVipMonth {
+		t.Fatalf("membership = %#v", outcome.Membership)
+	}
+	row, err := svc.repo.UserMembership(user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.PlanStorageQuotaBytes != 30<<30 {
+		t.Fatalf("quota = %d", row.PlanStorageQuotaBytes)
+	}
+}
+
 func TestRedeemStorageAddsBonusWithoutCredits(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {

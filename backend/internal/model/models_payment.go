@@ -40,6 +40,9 @@ type TopupProduct struct {
 	Description         string    `json:"description,omitempty" gorm:"size:500"`
 	AmountFen           int64     `json:"amountFen" gorm:"index"`
 	CreditsMicrocredits int64     `json:"creditsMicrocredits"`
+	Kind                string    `json:"kind" gorm:"size:24;index"`
+	StorageBytes        int64     `json:"storageBytes"`
+	Badge               string    `json:"badge,omitempty" gorm:"size:40"`
 	Enabled             bool      `json:"enabled" gorm:"index"`
 	SortOrder           int       `json:"sortOrder" gorm:"index"`
 	CreatedBy           string    `json:"createdBy" gorm:"index;size:36"`

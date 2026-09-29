@@ -4,6 +4,7 @@ import { Eye, Pencil, Power } from "lucide-react";
 import { formatCredits } from "@/constant/credits";
 import { IdentityProviderBadge } from "@/components/layout/identity-provider-badge";
 import { AdminRowActions, AdminStatusBadge } from "../components/admin-ui";
+import { membershipSKUTier } from "@/lib/membership";
 import { roleLabel } from "@/lib/user-role";
 import type { AdminUser } from "@/services/api/auth";
 
@@ -59,7 +60,13 @@ export function createUserColumns({
             title: "订阅",
             width: 140,
             align: "center",
-            render: (_, user) => <span>{user.permanentActive ? "永久" : user.advancedPlanSku || "未订阅"}</span>,
+            render: (_, user) => {
+                const tier = membershipSKUTier(user.advancedPlanSku);
+                if (tier === "svip") return <span>SVIP</span>;
+                if (tier === "vip") return <span>VIP</span>;
+                if (user.permanentActive) return <span>永久会员</span>;
+                return <span>未开通</span>;
+            },
         },
         { key: "role", title: "角色", dataIndex: "role", width: 110, align: "center", render: (role) => <AdminStatusBadge label={roleLabel(role)} tone={role === "admin" ? "info" : role === "agent" ? "warning" : "neutral"} /> },
         { key: "status", title: "状态", dataIndex: "status", width: 110, align: "center", render: (status) => <AdminStatusBadge label={status === "active" ? "已启用" : "已停用"} tone={status === "active" ? "success" : "neutral"} /> },

@@ -1261,7 +1261,29 @@ func (r *Repository) RedeemCodeWithHooks(userID string, codeHash string, redeeme
 			return err
 		}
 		if model.NormalizeRedeemKind(code.Kind) == model.RedeemKindMembership {
-			_, storage, days, _ := model.MembershipSKUSpec(code.PlanSKU)
+			storage := code.StorageQuotaBytes
+			days := model.MembershipSKUDurationDays(code.PlanSKU)
+			if storage == 0 || days == 0 {
+				var product model.MembershipProduct
+				if err := tx.Where("sku = ?", code.PlanSKU).First(&product).Error; err == nil {
+					if storage == 0 {
+						storage = product.StorageQuotaBytes
+					}
+					if days == 0 {
+						days = product.DurationDays
+					}
+				} else {
+					_, specStorage, specDays, ok := model.MembershipSKUSpec(code.PlanSKU)
+					if ok {
+						if storage == 0 {
+							storage = specStorage
+						}
+						if days == 0 {
+							days = specDays
+						}
+					}
+				}
+			}
 			if err := r.ApplyMembershipGrant(tx, userID, model.MembershipGrantSnapshot{
 				ProductID: code.BatchID, PlanSKU: code.PlanSKU, CreditsMicrocredits: code.AmountMicrocredits,
 				StorageQuotaBytes: storage, DurationDays: days,

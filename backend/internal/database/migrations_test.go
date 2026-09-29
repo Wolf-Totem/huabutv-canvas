@@ -188,6 +188,47 @@ func TestMigrateSchemaV19AddsPaymentPluginVersion(t *testing.T) {
 	}
 }
 
+func TestMigrateSchemaV46SeedsCommerceCatalog(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-commerce-v46?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	var products []model.MembershipProduct
+	if err := db.Find(&products).Error; err != nil {
+		t.Fatal(err)
+	}
+	catalog := 0
+	for _, product := range products {
+		switch product.SKU {
+		case model.MembershipSKUVipMonth, model.MembershipSKUVipQuarter, model.MembershipSKUVipYear, model.MembershipSKUSvipMonth, model.MembershipSKUSvipQuarter, model.MembershipSKUSvipYear:
+			catalog++
+			if !product.Enabled {
+				t.Fatalf("catalog sku disabled: %s", product.SKU)
+			}
+			if product.CreditsMicrocredits <= 0 || product.StorageQuotaBytes <= 0 {
+				t.Fatalf("catalog sku missing gift/quota: %#v", product)
+			}
+		case model.MembershipSKUPermanent, model.MembershipSKUAdvancedMonth, model.MembershipSKUAdvancedQuarter, model.MembershipSKUAdvancedYear:
+			if product.Enabled {
+				t.Fatalf("legacy sku still listed: %s", product.SKU)
+			}
+		}
+	}
+	if catalog != 6 {
+		t.Fatalf("catalog size = %d", catalog)
+	}
+	var storage []model.TopupProduct
+	if err := db.Where("kind = ?", model.ProductKindStorageTopup).Find(&storage).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(storage) != 4 {
+		t.Fatalf("storage packs = %d", len(storage))
+	}
+}
+
 func TestMigrateSchemaV8AllowsReusingArchivedLogicalModelCode(t *testing.T) {
 	db, err := Open(Config{Driver: "sqlite", DSN: "file:migration-logical-model-active-code?mode=memory&cache=shared"})
 	if err != nil {

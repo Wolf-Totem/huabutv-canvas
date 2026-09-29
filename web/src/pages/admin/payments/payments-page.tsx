@@ -29,6 +29,7 @@ import {
     type PaymentReconciliationRun,
     type TopupProduct,
 } from "@/services/api/payments";
+import { membershipSKUTier } from "@/lib/membership";
 import { getAdminCommerceMethods, listAdminMembershipProducts, updateAdminCommerceMethods, updateAdminMembershipProduct, type CommerceMethods, type MembershipProduct } from "@/services/api/membership";
 
 import { AdminPageFrame } from "../components/admin-shell";
@@ -47,6 +48,22 @@ type ProductFormValues = {
     description?: string;
     amountYuan: number;
     credits: number;
+    kind: "credit_topup" | "storage_topup";
+    storageGiB: number;
+    badge?: string;
+    enabled: boolean;
+    sortOrder: number;
+};
+
+type MembershipFormValues = {
+    name: string;
+    description?: string;
+    amountYuan: number;
+    originalAmountYuan?: number;
+    credits: number;
+    storageGiB: number;
+    badge?: string;
+    highlighted: boolean;
     enabled: boolean;
     sortOrder: number;
 };
@@ -86,9 +103,10 @@ export default function AdminPaymentsPage() {
     const [productDrawer, setProductDrawer] = useState<TopupProduct | null | undefined>();
     const [productSaving, setProductSaving] = useState(false);
     const [productForm] = Form.useForm<ProductFormValues>();
+    const productKind = Form.useWatch("kind", productForm) || "credit_topup";
     const [membershipDrawer, setMembershipDrawer] = useState<MembershipProduct | null>(null);
     const [membershipSaving, setMembershipSaving] = useState(false);
-    const [membershipForm] = Form.useForm<{ name: string; description?: string; amountYuan: number; enabled: boolean; sortOrder: number }>();
+    const [membershipForm] = Form.useForm<MembershipFormValues>();
 
     const [orders, setOrders] = useState<AdminPaymentOrder[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -204,8 +222,9 @@ export default function AdminPaymentsPage() {
         }
     };
 
-    const openProduct = (product?: TopupProduct) => {
+    const openProduct = (product?: TopupProduct, kind: "credit_topup" | "storage_topup" = "credit_topup") => {
         productForm.resetFields();
+        const nextKind = (product?.kind === "storage_topup" ? "storage_topup" : kind) as ProductFormValues["kind"];
         productForm.setFieldsValue(
             product
                 ? {
@@ -213,10 +232,13 @@ export default function AdminPaymentsPage() {
                       description: product.description,
                       amountYuan: product.amountFen / 100,
                       credits: product.creditsMicrocredits / 1_000_000,
+                      kind: nextKind,
+                      storageGiB: product.storageBytes ? Math.round(product.storageBytes / 1024 ** 3) : 20,
+                      badge: product.badge,
                       enabled: product.enabled,
                       sortOrder: product.sortOrder,
                   }
-                : { enabled: true, sortOrder: products.length * 10, amountYuan: 10, credits: 10 },
+                : { enabled: true, sortOrder: products.length * 10, amountYuan: 10, credits: nextKind === "credit_topup" ? 10 : 0, kind: nextKind, storageGiB: 20 },
         );
         setProductDrawer(product || null);
     };
@@ -224,11 +246,15 @@ export default function AdminPaymentsPage() {
     const saveProduct = async () => {
         if (productDrawer === undefined) return;
         const values = await productForm.validateFields();
+        const kind = values.kind || "credit_topup";
         const input = {
             name: values.name.trim(),
             description: values.description?.trim(),
             amountFen: Math.round(values.amountYuan * 100),
-            creditsMicrocredits: Math.round(values.credits * 1_000_000),
+            creditsMicrocredits: Math.round((values.credits || 0) * 1_000_000),
+            kind,
+            storageBytes: kind === "storage_topup" ? Math.round((values.storageGiB || 0) * 1024 ** 3) : 0,
+            badge: values.badge?.trim(),
             enabled: values.enabled,
             sortOrder: values.sortOrder || 0,
         };
@@ -363,7 +389,10 @@ export default function AdminPaymentsPage() {
         },
     ];
 
-    const productColumns: ColumnsType<TopupProduct> = [
+    const creditProducts = products.filter((item) => item.kind !== "storage_topup");
+    const storageTopupProducts = products.filter((item) => item.kind === "storage_topup");
+
+    const productColumns = (kind: "credit_topup" | "storage_topup"): ColumnsType<TopupProduct> => [
         {
             title: "商品",
             key: "name",
@@ -375,7 +404,9 @@ export default function AdminPaymentsPage() {
             ),
         },
         { title: "售价", dataIndex: "amountFen", width: 130, align: "right", render: (value) => <span className="font-medium tabular-nums">¥ {(value / 100).toFixed(2)}</span> },
-        { title: "到账积分", dataIndex: "creditsMicrocredits", width: 150, align: "right", render: (value) => <span className="tabular-nums">{formatCredits(value)}</span> },
+        kind === "storage_topup"
+            ? { title: "加购容量", dataIndex: "storageBytes", width: 150, align: "right", render: (value: number) => <span className="tabular-nums">{value ? `${Math.round(value / 1024 ** 3)} GiB` : "--"}</span> }
+            : { title: "到账积分", dataIndex: "creditsMicrocredits", width: 150, align: "right", render: (value) => <span className="tabular-nums">{formatCredits(value)}</span> },
         { title: "排序", dataIndex: "sortOrder", width: 90, align: "center" },
         { title: "状态", dataIndex: "enabled", width: 100, align: "center", render: (value) => <AdminStatusBadge label={value ? "销售中" : "已停用"} tone={value ? "success" : "neutral"} /> },
         {
@@ -384,7 +415,7 @@ export default function AdminPaymentsPage() {
             width: 90,
             align: "center",
             render: (_, product) => (
-                <Button size="small" onClick={() => openProduct(product)}>
+                <Button size="small" onClick={() => openProduct(product, kind)}>
                     编辑
                 </Button>
             ),
@@ -558,14 +589,28 @@ export default function AdminPaymentsPage() {
                                         pagination: false,
                                         dataSource: membershipProducts,
                                         columns: [
-                                            { title: "SKU", dataIndex: "sku", width: 160 },
+                                            { title: "SKU", dataIndex: "sku", width: 140 },
+                                            { title: "档位", dataIndex: "tier", width: 80, render: (_: string, product: MembershipProduct) => (membershipSKUTier(product.tier || product.sku) || "--").toUpperCase() },
                                             { title: "名称", dataIndex: "name" },
-                                            { title: "售价", dataIndex: "amountFen", width: 120, render: (value: number) => value > 0 ? `¥ ${(value / 100).toFixed(2)}` : "未定价" },
-                                            { title: "状态", dataIndex: "enabled", width: 100, render: (value: boolean) => <AdminStatusBadge label={value ? "销售中" : "未上架"} tone={value ? "success" : "neutral"} /> },
+                                            { title: "售价", dataIndex: "amountFen", width: 110, render: (value: number) => value > 0 ? `¥ ${(value / 100).toFixed(2)}` : "未定价" },
+                                            { title: "赠送积分", dataIndex: "creditsMicrocredits", width: 110, render: (value: number) => formatCredits(value, 0) },
+                                            { title: "套餐容量", dataIndex: "storageQuotaBytes", width: 110, render: (value: number) => value ? `${Math.round(value / 1024 ** 3)} GiB` : "默认" },
+                                            { title: "状态", dataIndex: "enabled", width: 90, render: (value: boolean) => <AdminStatusBadge label={value ? "销售中" : "未上架"} tone={value ? "success" : "neutral"} /> },
                                             { title: "操作", key: "actions", width: 90, render: (_: unknown, product: MembershipProduct) => (
                                                 <Button size="small" onClick={() => {
                                                     setMembershipDrawer(product);
-                                                    membershipForm.setFieldsValue({ name: product.name, description: product.description, amountYuan: product.amountFen / 100, enabled: product.enabled, sortOrder: product.sortOrder });
+                                                    membershipForm.setFieldsValue({
+                                                        name: product.name,
+                                                        description: product.description,
+                                                        amountYuan: product.amountFen / 100,
+                                                        originalAmountYuan: (product.originalAmountFen || 0) / 100,
+                                                        credits: product.creditsMicrocredits / 1_000_000,
+                                                        storageGiB: product.storageQuotaBytes ? Math.round(product.storageQuotaBytes / 1024 ** 3) : 0,
+                                                        badge: product.badge,
+                                                        highlighted: Boolean(product.highlighted),
+                                                        enabled: product.enabled,
+                                                        sortOrder: product.sortOrder,
+                                                    });
                                                 }}>编辑</Button>
                                             ) },
                                         ],
@@ -577,17 +622,33 @@ export default function AdminPaymentsPage() {
                     },
                     {
                         key: "products",
-                        label: "充值商品",
+                        label: "积分商品",
                         children: (
                             <AdminDataTable
                                 toolbar={<span />}
                                 trailing={
-                                    <Button type="primary" className="admin-toolbar-primary-action" icon={<Plus className="size-4" />} onClick={() => openProduct()}>
-                                        新增商品
+                                    <Button type="primary" className="admin-toolbar-primary-action" icon={<Plus className="size-4" />} onClick={() => openProduct(undefined, "credit_topup")}>
+                                        新增积分商品
                                     </Button>
                                 }
-                                table={{ rowKey: "id", loading, columns: productColumns, dataSource: products, pagination: false, scroll: { x: 820 } }}
-                                empty={<AdminTableEmpty title="还没有充值商品" />}
+                                table={{ rowKey: "id", loading, columns: productColumns("credit_topup"), dataSource: creditProducts, pagination: false, scroll: { x: 820 } }}
+                                empty={<AdminTableEmpty title="还没有积分商品" />}
+                            />
+                        ),
+                    },
+                    {
+                        key: "storage",
+                        label: "容量商品",
+                        children: (
+                            <AdminDataTable
+                                toolbar={<span />}
+                                trailing={
+                                    <Button type="primary" className="admin-toolbar-primary-action" icon={<Plus className="size-4" />} onClick={() => openProduct(undefined, "storage_topup")}>
+                                        新增容量商品
+                                    </Button>
+                                }
+                                table={{ rowKey: "id", loading, columns: productColumns("storage_topup"), dataSource: storageTopupProducts, pagination: false, scroll: { x: 820 } }}
+                                empty={<AdminTableEmpty title="还没有容量商品" />}
                             />
                         ),
                     },
@@ -743,6 +804,11 @@ export default function AdminPaymentsPage() {
                                 name: values.name,
                                 description: values.description,
                                 amountFen: Math.round(Number(values.amountYuan) * 100),
+                                originalAmountFen: Math.round(Number(values.originalAmountYuan || 0) * 100),
+                                creditsMicrocredits: Math.round(Number(values.credits || 0) * 1_000_000),
+                                storageQuotaBytes: Math.round(Number(values.storageGiB || 0) * 1024 ** 3),
+                                badge: values.badge,
+                                highlighted: values.highlighted,
                                 enabled: values.enabled,
                                 sortOrder: values.sortOrder,
                             }).then((result) => {
@@ -758,6 +824,9 @@ export default function AdminPaymentsPage() {
                     </Button>
                 }
             >
+                <Callout className="mb-4" tone="info" title="只影响之后的新订单">
+                    改价、赠送积分和套餐容量写入新订单快照。已支付订单仍按当时快照入账。SKU、档位和时长不可改。权益清单只读：全部平台功能。
+                </Callout>
                 <Form form={membershipForm} layout="vertical">
                     <Form.Item name="name" label="名称" rules={[{ required: true, max: 120 }]}>
                         <Input />
@@ -765,11 +834,30 @@ export default function AdminPaymentsPage() {
                     <Form.Item name="description" label="说明" rules={[{ max: 500 }]}>
                         <Input.TextArea rows={3} />
                     </Form.Item>
-                    <Form.Item name="amountYuan" label="售价（元，0 表示未定价）" rules={[{ required: true, type: "number", min: 0 }]}>
-                        <InputNumber min={0} precision={2} className="w-full" />
+                    <div className="grid grid-cols-2 gap-3">
+                        <Form.Item name="amountYuan" label="售价（元，0 表示未定价）" rules={[{ required: true, type: "number", min: 0 }]}>
+                            <InputNumber min={0} precision={2} className="w-full" />
+                        </Form.Item>
+                        <Form.Item name="originalAmountYuan" label="划线价（元，可选）" rules={[{ type: "number", min: 0 }]}>
+                            <InputNumber min={0} precision={2} className="w-full" />
+                        </Form.Item>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Form.Item name="credits" label="开通赠送积分" rules={[{ required: true, type: "number", min: 0 }]}>
+                            <InputNumber min={0} precision={0} className="w-full" />
+                        </Form.Item>
+                        <Form.Item name="storageGiB" label="套餐容量（GiB）" rules={[{ required: true, type: "number", min: 0, max: 3072 }]}>
+                            <InputNumber min={0} max={3072} precision={0} className="w-full" />
+                        </Form.Item>
+                    </div>
+                    <Form.Item name="badge" label="角标" rules={[{ max: 40 }]}>
+                        <Input placeholder="例如：最受欢迎" />
                     </Form.Item>
                     <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
                         <InputNumber precision={0} className="w-full" />
+                    </Form.Item>
+                    <Form.Item name="highlighted" label="强调展示" valuePropName="checked">
+                        <Switch />
                     </Form.Item>
                     <Form.Item name="enabled" label="上架销售" valuePropName="checked">
                         <Switch />
@@ -778,7 +866,7 @@ export default function AdminPaymentsPage() {
             </Drawer>
 
             <Drawer
-                title={productDrawer ? "编辑充值商品" : "新增充值商品"}
+                title={productDrawer ? "编辑商品" : "新增商品"}
                 width={520}
                 open={productDrawer !== undefined}
                 destroyOnHidden
@@ -790,8 +878,11 @@ export default function AdminPaymentsPage() {
                 }
             >
                 <Form form={productForm} layout="vertical" requiredMark="optional">
+                    <Form.Item name="kind" hidden>
+                        <Input />
+                    </Form.Item>
                     <Form.Item name="name" label="商品名称" rules={[{ required: true, max: 120 }]}>
-                        <Input placeholder="例如：100 积分" />
+                        <Input placeholder={productKind === "storage_topup" ? "例如：+50 GB 容量" : "例如：100 积分"} />
                     </Form.Item>
                     <Form.Item name="description" label="商品说明" rules={[{ max: 500 }]}>
                         <Input.TextArea rows={3} />
@@ -800,23 +891,32 @@ export default function AdminPaymentsPage() {
                         <Form.Item name="amountYuan" label="售价（元）" rules={[{ required: true }, { type: "number", min: 0.01, max: 1_000_000 }]}>
                             <InputNumber min={0.01} max={1_000_000} precision={2} className="w-full" />
                         </Form.Item>
-                        <Form.Item
-                            name="credits"
-                            label="到账积分"
-                            rules={[
-                                { required: true },
-                                {
-                                    validator: (_, value) => {
-                                        const credits = Number(value);
-                                        const microcredits = Math.round(credits * 1_000_000);
-                                        return Number.isFinite(credits) && credits > 0 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits) ? Promise.resolve() : Promise.reject(new Error("请输入 0.000001 至 10 亿之间且可安全处理的积分"));
+                        {productKind === "storage_topup" ? (
+                            <Form.Item name="storageGiB" label="加购容量（GiB）" rules={[{ required: true }, { type: "number", min: 1, max: 3072 }]}>
+                                <InputNumber min={1} max={3072} precision={0} className="w-full" />
+                            </Form.Item>
+                        ) : (
+                            <Form.Item
+                                name="credits"
+                                label="到账积分"
+                                rules={[
+                                    { required: true },
+                                    {
+                                        validator: (_, value) => {
+                                            const credits = Number(value);
+                                            const microcredits = Math.round(credits * 1_000_000);
+                                            return Number.isFinite(credits) && credits > 0 && credits <= 1_000_000_000 && Number.isSafeInteger(microcredits) ? Promise.resolve() : Promise.reject(new Error("请输入 0.000001 至 10 亿之间且可安全处理的积分"));
+                                        },
                                     },
-                                },
-                            ]}
-                        >
-                            <InputNumber min={0.000001} max={1_000_000_000} precision={6} className="w-full" />
-                        </Form.Item>
+                                ]}
+                            >
+                                <InputNumber min={0.000001} max={1_000_000_000} precision={6} className="w-full" />
+                            </Form.Item>
+                        )}
                     </div>
+                    <Form.Item name="badge" label="角标" rules={[{ max: 40 }]}>
+                        <Input placeholder="可选" />
+                    </Form.Item>
                     <Form.Item name="sortOrder" label="排序" rules={[{ required: true }]}>
                         <InputNumber precision={0} className="w-full" />
                     </Form.Item>

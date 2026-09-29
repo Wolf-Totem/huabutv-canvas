@@ -25,7 +25,21 @@ export function listAdminMembershipProducts() {
     return http.get<{ products: MembershipProduct[] }>("/admin/membership/products");
 }
 
-export function updateAdminMembershipProduct(id: string, input: { name: string; description?: string; amountFen: number; enabled: boolean; sortOrder: number }) {
+export function updateAdminMembershipProduct(
+    id: string,
+    input: {
+        name: string;
+        description?: string;
+        amountFen: number;
+        enabled: boolean;
+        sortOrder: number;
+        originalAmountFen?: number;
+        creditsMicrocredits?: number;
+        storageQuotaBytes?: number;
+        badge?: string;
+        highlighted?: boolean;
+    },
+) {
     return http.patch<{ product: MembershipProduct }>(`/admin/membership/products/${encodeURIComponent(id)}`, input);
 }
 

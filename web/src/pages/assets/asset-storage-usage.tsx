@@ -11,16 +11,17 @@ export function AssetStorageUsage() {
     const meter = accountStorageMeter(usage);
 
     return (
-        <section className={`assets-storage-usage${meter.full ? " is-full" : ""}${usage?.usedBytes ? " has-usage" : ""}`} aria-label="账号文件容量" aria-busy={query.isPending} title="包含素材文件和 Agent 会话附件">
+        <section className={`assets-storage-usage${meter.full ? " is-full" : ""}${usage?.usedBytes ? " has-usage" : ""}`} aria-label={meter.personal ? "个人存储" : "账号文件容量"} aria-busy={query.isPending} title={meter.personal ? "当前统计个人存储已用，不再展示云配额" : "包含素材文件和 Agent 会话附件"}>
             <span className="assets-storage-usage-icon" aria-hidden="true">
                 <HardDrive />
             </span>
-            <span className="assets-storage-usage-title">账号容量</span>
+            <span className="assets-storage-usage-title">{meter.personal ? "个人存储" : "账号容量"}</span>
             {usage ? (
                 <>
                     <span className="assets-storage-usage-value">
-                        {formatStorageBytes(usage.usedBytes)} / {formatStorageBytes(usage.totalBytes)}
+                        {meter.personal ? formatStorageBytes(usage.usedBytes) : `${formatStorageBytes(usage.usedBytes)} / ${formatStorageBytes(usage.totalBytes)}`}
                     </span>
+                    {meter.personal ? null : (
                     <span
                         className="assets-storage-usage-track"
                         role="progressbar"
@@ -32,7 +33,8 @@ export function AssetStorageUsage() {
                     >
                         <span style={{ width: `${meter.percent}%` }} />
                     </span>
-                    <span className="assets-storage-usage-percent">{meter.percentLabel}</span>
+                    )}
+                    {meter.personal ? null : <span className="assets-storage-usage-percent">{meter.percentLabel}</span>}
                 </>
             ) : query.isError ? (
                 <span className="assets-storage-usage-status">

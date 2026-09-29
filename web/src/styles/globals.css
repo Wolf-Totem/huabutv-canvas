@@ -17530,6 +17530,133 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     color: var(--user-accent);
 }
 
+.workspace-wallet-plan-scroller {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 2px 2px 8px;
+    scroll-snap-type: x proximity;
+}
+
+.workspace-wallet-plan-card {
+    display: grid;
+    flex: 0 0 min(340px, 86%);
+    gap: 10px;
+    border: 1px solid var(--user-border);
+    border-radius: 18px;
+    background: var(--user-surface);
+    padding: 18px 18px 16px;
+    scroll-snap-align: start;
+}
+
+.workspace-wallet-plan-card.is-highlighted {
+    border-color: rgba(107, 94, 231, .4);
+    box-shadow: 0 16px 32px -24px rgba(41, 32, 125, .5);
+}
+
+.workspace-wallet-plan-card.is-current {
+    background: var(--user-accent-soft);
+}
+
+.workspace-wallet-plan-card header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.workspace-wallet-plan-card header strong {
+    font-size: 18px;
+    font-weight: 720;
+    letter-spacing: -.03em;
+}
+
+.workspace-wallet-plan-card header em {
+    border-radius: 999px;
+    background: rgba(107, 94, 231, .12);
+    color: var(--user-accent);
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 650;
+    padding: 3px 8px;
+}
+
+.workspace-wallet-plan-periods {
+    display: flex;
+    gap: 6px;
+}
+
+.workspace-wallet-plan-periods button {
+    flex: 1;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.workspace-wallet-plan-periods button.is-selected {
+    background: var(--user-ink);
+    color: var(--user-page-bg, #fff);
+}
+
+.workspace-wallet-plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0;
+}
+
+.workspace-wallet-plan-price b {
+    font-size: 28px;
+    font-weight: 740;
+    letter-spacing: -.04em;
+}
+
+.workspace-wallet-plan-price s {
+    color: var(--user-ink-muted);
+    font-size: 13px;
+}
+
+.workspace-wallet-plan-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.workspace-wallet-plan-card small {
+    color: #b23d47;
+    font-size: 11px;
+}
+
+.workspace-wallet-feature-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+}
+
+.workspace-wallet-feature-list li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.workspace-wallet-feature-list span {
+    color: #b23d47;
+    font-weight: 700;
+}
+
 .workspace-wallet-products {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -17828,6 +17955,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     .workspace-wallet-tabs { margin: 8px 14px 0; }
     .workspace-wallet-content { margin: 14px 14px 18px; padding: 0; }
     .workspace-wallet-products { grid-template-columns: 1fr; }
+    .workspace-wallet-plan-card { flex-basis: 88%; }
+    .workspace-wallet-feature-list { grid-template-columns: 1fr; }
     .workspace-wallet-provider-row,
     .workspace-wallet-redeem-row { align-items: stretch; flex-direction: column; }
     .workspace-wallet-provider-row > .ant-btn,

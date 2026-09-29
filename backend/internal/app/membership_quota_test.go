@@ -179,3 +179,125 @@ func TestPlatformStoredBytesExcludePersonalOSS(t *testing.T) {
 		t.Fatalf("platform bytes = %d", used)
 	}
 }
+
+func TestAssertCanPurchaseSvipBlocksVipEvenInWindow(t *testing.T) {
+	svc := newResourceTestService(t)
+	if err := svc.repo.AdminGrantMembership("svip-user", model.MembershipGrantSnapshot{
+		PlanSKU: model.MembershipSKUSvipMonth, DurationDays: 20, StorageQuotaBytes: 80 << 30,
+		Source: model.MembershipGrantSourceAdmin, AdminIdempotencyKey: "svip",
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.AssertCanPurchaseMembership("svip-user", model.MembershipSKUVipMonth, 0); err == nil || !strings.Contains(err.Error(), "SVIP") {
+		t.Fatalf("expected svip lock, got %v", err)
+	}
+	if err := svc.AssertCanPurchaseMembership("svip-user", model.MembershipSKUSvipYear, 0); err != nil {
+		t.Fatalf("svip renew should be allowed: %v", err)
+	}
+}
+
+func TestPersonalStorageAllowedForVip(t *testing.T) {
+	svc := newResourceTestService(t)
+	systemJSON, _ := json.Marshal(ossSettingValue{AllowUserS3: true})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(systemJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	allowed, err := svc.PersonalStorageAllowed("user-none", false)
+	if err != nil || allowed {
+		t.Fatalf("unsubscribed allowed=%v err=%v", allowed, err)
+	}
+	if err := svc.repo.AdminGrantMembership("user-vip", model.MembershipGrantSnapshot{
+		PlanSKU: model.MembershipSKUVipMonth, DurationDays: 30, StorageQuotaBytes: 30 << 30,
+		Source: model.MembershipGrantSourceAdmin, AdminIdempotencyKey: "vip-oss",
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	allowed, err = svc.PersonalStorageAllowed("user-vip", false)
+	if err != nil || !allowed {
+		t.Fatalf("vip allowed=%v err=%v", allowed, err)
+	}
+}
+
+func TestAccountFileStorageUsagePersonalDisplay(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+	svc := newResourceTestService(t)
+	if err := svc.repo.AdminGrantMembership("user-1", model.MembershipGrantSnapshot{
+		PlanSKU: model.MembershipSKUVipMonth, DurationDays: 30, StorageQuotaBytes: 30 << 30,
+		Source: model.MembershipGrantSourceAdmin, AdminIdempotencyKey: "vip-display",
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	systemJSON, _ := json.Marshal(ossSettingValue{Enabled: true, Provider: "aliyun", Endpoint: server.URL, Bucket: "platform", AccessKeyID: "id", AccessKeySecret: "secret", AllowUserS3: true})
+	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ossSettingKey, ValueJSON: string(systemJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	userJSON, _ := json.Marshal(ossSettingValue{Enabled: true, Provider: "aliyun", Endpoint: server.URL, Bucket: "personal", AccessKeyID: "id", AccessKeySecret: "secret"})
+	if err := svc.repo.CreateUserOSSSetting(&model.UserOSSSetting{ID: "user-oss-display", UserID: "user-1", Enabled: true, ValueJSON: string(userJSON)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.Create(&model.Resource{ID: "platform", UserID: "user-1", Status: model.ResourceStatusReady, Provider: "local", ObjectKey: "a.png", Size: 11}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.Create(&model.Resource{ID: "personal", UserID: "user-1", Status: model.ResourceStatusReady, Provider: "s3", ObjectKey: "b.png", Size: 99, StorageSettingID: "user-oss-display"}); err != nil {
+		t.Fatal(err)
+	}
+	usage, err := svc.AccountFileStorageUsage("user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usage.StorageDisplay != model.StorageDisplayPersonal || usage.UsedBytes != 99 || usage.TotalBytes != 0 || !usage.PersonalBucketEnabled {
+		t.Fatalf("personal display = %#v", usage)
+	}
+}
+
+func TestPublicMembershipProductsOnlyCatalogSKUs(t *testing.T) {
+	svc := newResourceTestService(t)
+	for _, product := range []model.MembershipProduct{
+		{ID: "membership-permanent", SKU: model.MembershipSKUPermanent, Name: "永久订阅", Enabled: true, SortOrder: 10},
+		{ID: "membership-advanced-month", SKU: model.MembershipSKUAdvancedMonth, Name: "旧月卡", Enabled: true, SortOrder: 20},
+		{ID: "membership-vip-month", SKU: model.MembershipSKUVipMonth, Name: "VIP 月卡", Enabled: true, SortOrder: 100, Tier: model.MembershipTierVip},
+		{ID: "membership-svip-month", SKU: model.MembershipSKUSvipMonth, Name: "SVIP 月卡", Enabled: true, SortOrder: 200, Tier: model.MembershipTierSvip},
+	} {
+		item := product
+		if err := svc.repo.Create(&item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	views, err := svc.PublicMembershipProducts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 2 {
+		t.Fatalf("catalog size = %d", len(views))
+	}
+	for _, view := range views {
+		if !model.IsCatalogMembershipSKU(view.SKU) {
+			t.Fatalf("legacy sku leaked: %#v", view)
+		}
+	}
+}
+
+func TestUpdateMembershipProductCreditsAndStorage(t *testing.T) {
+	svc := newResourceTestService(t)
+	admin := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
+	if err := svc.repo.Create(admin); err != nil {
+		t.Fatal(err)
+	}
+	product := &model.MembershipProduct{ID: "membership-vip-month", SKU: model.MembershipSKUVipMonth, Name: "VIP 月卡", DurationDays: 30, Tier: model.MembershipTierVip, AmountFen: 3000, CreditsMicrocredits: 100, StorageQuotaBytes: 1 << 30, Enabled: true}
+	if err := svc.repo.Create(product); err != nil {
+		t.Fatal(err)
+	}
+	credits := int64(2888 * model.CreditScale)
+	storage := int64(30 << 30)
+	updated, err := svc.UpdateMembershipProduct(admin, product.ID, UpdateMembershipProductRequest{
+		Name: "VIP 月卡", AmountFen: 3000, Enabled: true, SortOrder: 10, CreditsMicrocredits: &credits, StorageQuotaBytes: &storage,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.CreditsMicrocredits != credits || updated.StorageQuotaBytes != storage {
+		t.Fatalf("updated = %#v", updated)
+	}
+}

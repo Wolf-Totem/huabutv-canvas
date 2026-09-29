@@ -53,7 +53,8 @@ func (r *Repository) CreateTopupProduct(product *model.TopupProduct) error {
 func (r *Repository) UpdateTopupProduct(product *model.TopupProduct) error {
 	return r.db.Model(&model.TopupProduct{}).Where("id = ?", product.ID).Updates(map[string]any{
 		"name": product.Name, "description": product.Description, "amount_fen": product.AmountFen,
-		"credits_microcredits": product.CreditsMicrocredits, "enabled": product.Enabled,
+		"credits_microcredits": product.CreditsMicrocredits, "kind": product.Kind, "storage_bytes": product.StorageBytes,
+		"badge": product.Badge, "enabled": product.Enabled,
 		"sort_order": product.SortOrder, "updated_by": product.UpdatedBy, "updated_at": time.Now(),
 	}).Error
 }
@@ -221,8 +222,16 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		if order.AmountFen <= 0 {
 			return ErrPaymentOrderStateConflict
 		}
-		if kind != model.ProductKindMembership && order.CreditsMicrocredits <= 0 {
-			return ErrPaymentOrderStateConflict
+		switch kind {
+		case model.ProductKindMembership:
+		case model.ProductKindStorageTopup:
+			if order.StorageQuotaBytes <= 0 {
+				return ErrPaymentOrderStateConflict
+			}
+		default:
+			if order.CreditsMicrocredits <= 0 {
+				return ErrPaymentOrderStateConflict
+			}
 		}
 		if order.Status == model.PaymentOrderCredited {
 			if order.ProviderTradeNo == nil || strings.TrimSpace(*order.ProviderTradeNo) != strings.TrimSpace(evidence.ProviderTradeNo) {
@@ -285,6 +294,17 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 				StorageQuotaBytes: order.StorageQuotaBytes, DurationDays: order.MembershipDurationDays,
 				Source: model.MembershipGrantSourcePayment, PaymentOrderID: order.ID, Note: order.ProductName,
 			}); err != nil {
+				return err
+			}
+		}
+		if kind == model.ProductKindStorageTopup {
+			if _, err := lockUserMembership(tx, order.UserID); err != nil {
+				return err
+			}
+			if err := tx.Model(&model.UserMembership{}).Where("user_id = ?", order.UserID).Updates(map[string]any{
+				"storage_bonus_bytes": gorm.Expr("storage_bonus_bytes + ?", order.StorageQuotaBytes),
+				"updated_at":          now,
+			}).Error; err != nil {
 				return err
 			}
 		}

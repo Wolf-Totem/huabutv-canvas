@@ -7,7 +7,7 @@ import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
-import { formatMembershipStorage } from "@/lib/membership";
+import { ADMIN_MEMBERSHIP_SKUS, formatMembershipStorage } from "@/lib/membership";
 import { createAdminRedeemBatch, disableAdminRedeemBatch, disableAdminRedeemCode, listAdminRedeemBatchCodes, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 
@@ -480,7 +480,7 @@ function CreateRedeemBatchDrawer({
                             </Form.Item>
                             {watchedKind === "membership" ? (
                                 <Form.Item name="planSku" label="订阅套餐" rules={[{ required: true, message: "请选择套餐" }]}>
-                                    <Select options={[{ value: "permanent", label: "永久订阅" }, { value: "advanced_month", label: "月卡" }, { value: "advanced_quarter", label: "季卡" }, { value: "advanced_year", label: "年卡" }]} />
+                                    <Select options={ADMIN_MEMBERSHIP_SKUS} />
                                 </Form.Item>
                             ) : watchedKind === "storage" ? (
                                 <Form.Item

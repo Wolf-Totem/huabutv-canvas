@@ -62,6 +62,8 @@ export type AccountFileStorageUsage = {
     quotaSource?: string;
     effectiveStoredFileBytes?: number;
     personalStoredFileBytes?: number;
+    storageDisplay?: "personal" | "platform" | string;
+    personalBucketEnabled?: boolean;
 };
 
 export type ArkPrivateAssetSync = {

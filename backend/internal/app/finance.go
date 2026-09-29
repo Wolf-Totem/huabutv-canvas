@@ -225,7 +225,7 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 			return nil, BadAuthRequest("未知订阅套餐")
 		}
 		amount = product.CreditsMicrocredits
-		storageBytes = 0
+		storageBytes = product.StorageQuotaBytes
 	} else if kind == model.RedeemKindStorage {
 		if storageBytes <= 0 || storageBytes > model.MaxMembershipStorageB {
 			return nil, BadAuthRequest("容量兑换码需为 1 字节至 3TiB")

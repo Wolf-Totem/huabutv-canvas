@@ -38,7 +38,7 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		products, err := svc.TopupProducts(user)
+		products, err := svc.TopupProducts(user, c.Query("kind"))
 		if err != nil {
 			failService(c, err)
 			return

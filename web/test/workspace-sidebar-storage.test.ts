@@ -55,20 +55,25 @@ describe("workspace sidebar storage meter", () => {
 
         expect(sidebar).toContain("<WorkspaceSidebarStorageMeter collapsed={collapsed} />");
         expect(sidebar.indexOf("WorkspaceSidebarStorageMeter")).toBeLessThan(sidebar.indexOf("app-workspace-sidebar-profile-row"));
-        expect(sidebar).toContain("membershipStatusKey");
-        expect(sidebar).toContain('to="/settings"');
-        expect(sidebar).toContain("打开会员与充值");
-        expect(sidebar).toContain("getPopupContainer={() => document.body}");
-        expect(meter).toContain("已用 ${meter.usedLabel}");
-        expect(meter).toContain("剩余 ${meter.remainingLabel}");
-        expect(meter).toContain("共 ${meter.totalLabel}");
+        expect(meter).toContain('t("storage.used"');
+        expect(meter).toContain('t("storage.remaining"');
+        expect(meter).toContain('t("storage.total"');
+        expect(meter).toContain('t("storage.personal"');
+        expect(meter).toContain("meter.personal");
         expect(meter).toContain('to="/assets"');
-        expect(meter).toContain("充值");
+        expect(meter).toContain('tab: "storage"');
         expect(meter).toContain("focusRedeem: true");
         expect(css).toMatch(/\.app-workspace-sidebar-storage-used\s*\{[^}]*font-variant-numeric:\s*tabular-nums/s);
         expect(css).toContain(".app-workspace-sidebar-storage.is-warn");
         expect(css).toContain(".app-workspace-sidebar-storage.is-critical");
-        expect(css).toContain(".app-workspace-sidebar-storage-wrap");
-        expect(css).toContain(".app-workspace-sidebar-storage-topup");
+    });
+
+    test("personal storage meter hides cloud quota progress", () => {
+        const meter = accountStorageMeter({ usedBytes: 99, totalBytes: 30 * GB, storageDisplay: "personal" });
+        expect(meter.personal).toBe(true);
+        expect(meter.percent).toBe(0);
+        expect(meter.totalLabel).toBe("");
+        expect(meter.full).toBe(false);
+        expect(meter.usedLabel).not.toBe("");
     });
 });

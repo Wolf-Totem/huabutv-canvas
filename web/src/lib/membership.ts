@@ -1,16 +1,23 @@
 export const MEMBERSHIP_RENEWAL_BLOCK_SECONDS = 30 * 24 * 3600;
 
+export type MembershipTier = "vip" | "svip" | "";
+
 export type MembershipStatus = {
     permanentActive: boolean;
     advancedPlanSku: string;
     advancedExpiresAt?: string;
     advancedRemainingSeconds: number;
+    tier?: MembershipTier | string;
     canPurchaseAdvanced: boolean;
     canPurchasePermanent: boolean;
+    canPurchaseVip?: boolean;
+    canPurchaseSvip?: boolean;
     minPurchasableAdvancedSku?: string;
     hasOpenMembershipOrder: boolean;
     openMembershipOrderId?: string;
     personalStorageAllowed: boolean;
+    personalBucketEnabled?: boolean;
+    storageDisplay?: "personal" | "platform" | string;
     effectiveStoredFileBytes: number;
     quotaSource: string;
     storageOverrideBytes?: number | null;
@@ -20,6 +27,7 @@ export type MembershipStatus = {
     supportQq?: string;
     redeemEnabled?: boolean;
     onlinePaymentEnabled?: boolean;
+    featureShowcase?: { key: string; included: boolean }[];
 };
 
 export const defaultMembership: MembershipStatus = {
@@ -28,8 +36,12 @@ export const defaultMembership: MembershipStatus = {
     advancedRemainingSeconds: 0,
     canPurchaseAdvanced: true,
     canPurchasePermanent: true,
+    canPurchaseVip: true,
+    canPurchaseSvip: true,
     hasOpenMembershipOrder: false,
     personalStorageAllowed: false,
+    personalBucketEnabled: false,
+    storageDisplay: "platform",
     effectiveStoredFileBytes: 0,
     quotaSource: "global_default",
     redeemEnabled: true,
@@ -42,22 +54,75 @@ export type MembershipProduct = {
     name: string;
     description?: string;
     amountFen: number;
+    originalAmountFen?: number;
     creditsMicrocredits: number;
     storageQuotaBytes: number;
     durationDays: number;
+    tier?: string;
+    badge?: string;
+    highlighted?: boolean;
     enabled: boolean;
     sortOrder: number;
+    featureLines?: { key: string; included: boolean }[];
 };
+
+export const CATALOG_MEMBERSHIP_SKUS = [
+    { value: "vip_month", label: "VIP 月卡", tier: "vip" as const },
+    { value: "vip_quarter", label: "VIP 季卡", tier: "vip" as const },
+    { value: "vip_year", label: "VIP 年卡", tier: "vip" as const },
+    { value: "svip_month", label: "SVIP 月卡", tier: "svip" as const },
+    { value: "svip_quarter", label: "SVIP 季卡", tier: "svip" as const },
+    { value: "svip_year", label: "SVIP 年卡", tier: "svip" as const },
+];
+
+export const ADMIN_MEMBERSHIP_SKUS = [
+    ...CATALOG_MEMBERSHIP_SKUS,
+    { value: "permanent", label: "永久订阅", tier: "" as const },
+    { value: "advanced_month", label: "旧月卡", tier: "vip" as const },
+    { value: "advanced_quarter", label: "旧季卡", tier: "vip" as const },
+    { value: "advanced_year", label: "旧年卡", tier: "vip" as const },
+];
+
+export const MEMBERSHIP_ADVANCED_FEATURE_KEYS = [
+    "storyboard",
+    "director",
+    "timeline",
+    "short_drama",
+    "custom_skills",
+    "plugins",
+    "cloud_agent",
+    "personal_channels",
+    "personal_oss",
+    "plaza_publish",
+] as const;
+
+export function membershipSKUTier(sku: string | null | undefined): MembershipTier {
+    const value = (sku || "").trim().toLowerCase();
+    if (value === "svip" || value.startsWith("svip_")) return "svip";
+    if (value === "vip" || value.startsWith("vip_") || value.startsWith("advanced_")) return "vip";
+    return "";
+}
+
+export function membershipSKULabel(sku: string | null | undefined) {
+    const value = (sku || "").trim();
+    return ADMIN_MEMBERSHIP_SKUS.find((item) => item.value === value)?.label || value;
+}
+
+export function isCatalogMembershipSKU(sku: string | null | undefined) {
+    return CATALOG_MEMBERSHIP_SKUS.some((item) => item.value === (sku || "").trim());
+}
 
 export function membershipPurchaseBlocked(status: MembershipStatus | null | undefined, sku: string) {
     if (!status) return { disabled: true, reason: "", reasonKey: "" };
     if (status.hasOpenMembershipOrder) return { disabled: true, reason: "你有一笔未完成的订阅订单", reasonKey: "wallet.block.openOrder" };
-    if (sku === "permanent") {
-        if (status.permanentActive) return { disabled: true, reason: "已拥有永久订阅", reasonKey: "wallet.block.permanentOwned" };
-        return { disabled: false, reason: "", reasonKey: "" };
-    }
+    if (sku === "permanent" && status.permanentActive) return { disabled: true, reason: "已拥有永久订阅", reasonKey: "wallet.block.permanentOwned" };
     if (status.advancedRemainingSeconds > MEMBERSHIP_RENEWAL_BLOCK_SECONDS) {
-        return { disabled: true, reason: "当前订阅剩余超过 30 天，暂不可新购", reasonKey: "wallet.block.renewalWindow" };
+        return { disabled: true, reason: "当前订阅剩余超过 30 天，暂不可购买其他会员", reasonKey: "wallet.block.renewalWindow" };
+    }
+    const currentTier = membershipSKUTier(status.tier || status.advancedPlanSku);
+    const targetTier = membershipSKUTier(sku);
+    if (currentTier === "svip" && status.advancedRemainingSeconds > 0 && targetTier === "vip") {
+        return { disabled: true, reason: "SVIP 有效期内不能改买 VIP，到期后再选", reasonKey: "wallet.block.svipToVip" };
     }
     return { disabled: false, reason: "", reasonKey: "" };
 }
@@ -78,13 +143,25 @@ export function formatMembershipStorage(bytes: number) {
 }
 
 export function membershipStatusKey(status: MembershipStatus | null | undefined) {
+    const activeSku = (status?.advancedRemainingSeconds || 0) > 0 ? (status?.tier || status?.advancedPlanSku) : "";
+    const tier = membershipSKUTier(activeSku);
+    if (tier === "svip") return "svip";
+    if (tier === "vip") return "vip";
     if (status?.permanentActive) return "permanent";
-    if (status?.advancedPlanSku) return "premium";
-    return "platform";
+    return "none";
 }
 
 export function membershipStatusLabel(status: MembershipStatus | null | undefined) {
-    if (status?.permanentActive) return "永久会员";
-    if (status?.advancedPlanSku) return "高级会员";
-    return "平台会员";
+    const key = membershipStatusKey(status);
+    if (key === "svip") return "SVIP";
+    if (key === "vip") return "VIP";
+    if (key === "permanent") return "永久会员";
+    return "未开通";
+}
+
+export function groupMembershipProductsByTier(products: MembershipProduct[]) {
+    const catalog = products.filter((item) => isCatalogMembershipSKU(item.sku));
+    const vip = catalog.filter((item) => membershipSKUTier(item.tier || item.sku) === "vip");
+    const svip = catalog.filter((item) => membershipSKUTier(item.tier || item.sku) === "svip");
+    return { vip, svip };
 }

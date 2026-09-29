@@ -33,37 +33,54 @@ type SupportContactSetting struct {
 }
 
 type MembershipPublicView struct {
-	PermanentActive           bool       `json:"permanentActive"`
-	AdvancedPlanSKU           string     `json:"advancedPlanSku"`
-	AdvancedExpiresAt         *time.Time `json:"advancedExpiresAt,omitempty"`
-	AdvancedRemainingSeconds  int64      `json:"advancedRemainingSeconds"`
-	CanPurchaseAdvanced       bool       `json:"canPurchaseAdvanced"`
-	CanPurchasePermanent      bool       `json:"canPurchasePermanent"`
-	HasOpenMembershipOrder    bool       `json:"hasOpenMembershipOrder"`
-	OpenMembershipOrderID     string     `json:"openMembershipOrderId,omitempty"`
-	PersonalStorageAllowed      bool       `json:"personalStorageAllowed"`
-	EffectiveStoredFileBytes    int64      `json:"effectiveStoredFileBytes"`
-	QuotaSource                 string     `json:"quotaSource"`
-	StorageOverrideBytes        *int64     `json:"storageOverrideBytes"`
-	StorageBonusBytes           int64      `json:"storageBonusBytes"`
-	StorageExpansionMessage     string     `json:"storageExpansionMessage"`
-	SupportTicketURL            string     `json:"supportTicketUrl,omitempty"`
-	SupportQQ                   string     `json:"supportQq,omitempty"`
-	MinPurchasableAdvancedSKU   string     `json:"minPurchasableAdvancedSku,omitempty"`
-	OnlinePaymentEnabled        bool       `json:"onlinePaymentEnabled"`
-	RedeemEnabled               bool       `json:"redeemEnabled"`
+	PermanentActive           bool                    `json:"permanentActive"`
+	AdvancedPlanSKU           string                  `json:"advancedPlanSku"`
+	AdvancedExpiresAt         *time.Time              `json:"advancedExpiresAt,omitempty"`
+	AdvancedRemainingSeconds  int64                   `json:"advancedRemainingSeconds"`
+	Tier                      string                  `json:"tier,omitempty"`
+	CanPurchaseAdvanced       bool                    `json:"canPurchaseAdvanced"`
+	CanPurchasePermanent      bool                    `json:"canPurchasePermanent"`
+	CanPurchaseVip            bool                    `json:"canPurchaseVip"`
+	CanPurchaseSvip           bool                    `json:"canPurchaseSvip"`
+	HasOpenMembershipOrder    bool                    `json:"hasOpenMembershipOrder"`
+	OpenMembershipOrderID     string                  `json:"openMembershipOrderId,omitempty"`
+	PersonalStorageAllowed    bool                    `json:"personalStorageAllowed"`
+	PersonalBucketEnabled     bool                    `json:"personalBucketEnabled"`
+	StorageDisplay            string                  `json:"storageDisplay,omitempty"`
+	EffectiveStoredFileBytes  int64                   `json:"effectiveStoredFileBytes"`
+	QuotaSource               string                  `json:"quotaSource"`
+	StorageOverrideBytes      *int64                  `json:"storageOverrideBytes"`
+	StorageBonusBytes         int64                   `json:"storageBonusBytes"`
+	StorageExpansionMessage   string                  `json:"storageExpansionMessage"`
+	SupportTicketURL          string                  `json:"supportTicketUrl,omitempty"`
+	SupportQQ                 string                  `json:"supportQq,omitempty"`
+	MinPurchasableAdvancedSKU string                  `json:"minPurchasableAdvancedSku,omitempty"`
+	OnlinePaymentEnabled      bool                    `json:"onlinePaymentEnabled"`
+	RedeemEnabled             bool                    `json:"redeemEnabled"`
+	FeatureShowcase           []MembershipFeatureLine `json:"featureShowcase,omitempty"`
+}
+
+type MembershipFeatureLine struct {
+	Key      string `json:"key"`
+	Included bool   `json:"included"`
 }
 
 type MembershipProductView struct {
 	model.MembershipProduct
+	FeatureLines []MembershipFeatureLine `json:"featureLines"`
 }
 
 type UpdateMembershipProductRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	AmountFen   int64  `json:"amountFen"`
-	Enabled     bool   `json:"enabled"`
-	SortOrder   int    `json:"sortOrder"`
+	Name                string  `json:"name"`
+	Description         string  `json:"description"`
+	AmountFen           int64   `json:"amountFen"`
+	Enabled             bool    `json:"enabled"`
+	SortOrder           int     `json:"sortOrder"`
+	OriginalAmountFen   *int64  `json:"originalAmountFen"`
+	CreditsMicrocredits *int64  `json:"creditsMicrocredits"`
+	StorageQuotaBytes   *int64  `json:"storageQuotaBytes"`
+	Badge               *string `json:"badge"`
+	Highlighted         *bool   `json:"highlighted"`
 }
 
 type AdminStorageQuotaRequest struct {
@@ -99,9 +116,9 @@ type AdminMembershipGrantRequest struct {
 }
 
 type RedeemOutcome struct {
-	Account    *model.CreditAccount   `json:"account"`
-	Membership *MembershipPublicView  `json:"membership,omitempty"`
-	Granted    *RedeemGrantedView     `json:"granted,omitempty"`
+	Account    *model.CreditAccount  `json:"account"`
+	Membership *MembershipPublicView `json:"membership,omitempty"`
+	Granted    *RedeemGrantedView    `json:"granted,omitempty"`
 }
 
 type RedeemGrantedView struct {
@@ -210,8 +227,40 @@ func (s *Service) MembershipProducts(includeDisabled bool) ([]model.MembershipPr
 	return s.repo.MembershipProducts(includeDisabled)
 }
 
-func (s *Service) PublicMembershipProducts() ([]model.MembershipProduct, error) {
-	return s.repo.MembershipProducts(false)
+func (s *Service) PublicMembershipProducts() ([]MembershipProductView, error) {
+	products, err := s.repo.MembershipProducts(false)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]MembershipProductView, 0, len(products))
+	for _, product := range products {
+		if !model.IsCatalogMembershipSKU(product.SKU) {
+			continue
+		}
+		item := product
+		if strings.TrimSpace(item.Tier) == "" {
+			item.Tier = model.MembershipSKUTier(item.SKU)
+		}
+		views = append(views, MembershipProductView{MembershipProduct: item, FeatureLines: membershipFeatureLines(true)})
+	}
+	return views, nil
+}
+
+func membershipFeatureLines(included bool) []MembershipFeatureLine {
+	keys := []string{"all_platform", "plan_storage", "gift_credits", "personal_oss"}
+	lines := make([]MembershipFeatureLine, 0, len(keys))
+	for _, key := range keys {
+		lines = append(lines, MembershipFeatureLine{Key: key, Included: included})
+	}
+	return lines
+}
+
+func membershipShowcaseFeatures(hasMembership bool) []MembershipFeatureLine {
+	lines := []MembershipFeatureLine{{Key: "basic", Included: true}}
+	for _, key := range []string{"storyboard", "director", "timeline", "short_drama", "custom_skills", "plugins", "cloud_agent", "personal_channels", "personal_oss", "plaza_publish"} {
+		lines = append(lines, MembershipFeatureLine{Key: key, Included: hasMembership})
+	}
+	return lines
 }
 
 func (s *Service) AdminMembershipProducts(actor *model.User) ([]model.MembershipProduct, error) {
@@ -241,12 +290,42 @@ func (s *Service) UpdateMembershipProduct(actor *model.User, id string, req Upda
 	product.AmountFen = req.AmountFen
 	product.Enabled = req.Enabled
 	product.SortOrder = req.SortOrder
+	if req.OriginalAmountFen != nil {
+		if *req.OriginalAmountFen < 0 {
+			return nil, BadAuthRequest("划线价不能为负数")
+		}
+		product.OriginalAmountFen = *req.OriginalAmountFen
+	}
+	if req.CreditsMicrocredits != nil {
+		if *req.CreditsMicrocredits < 0 || *req.CreditsMicrocredits > maxTopupCreditsMicrocredits {
+			return nil, BadAuthRequest("赠送积分必须为 0 至 10 亿积分")
+		}
+		product.CreditsMicrocredits = *req.CreditsMicrocredits
+	}
+	if req.StorageQuotaBytes != nil {
+		if *req.StorageQuotaBytes < 0 || *req.StorageQuotaBytes > model.MaxMembershipStorageB {
+			return nil, BadAuthRequest("套餐容量需为 0 至 3TiB")
+		}
+		product.StorageQuotaBytes = *req.StorageQuotaBytes
+	}
+	if req.Badge != nil {
+		product.Badge = truncateRunes(strings.TrimSpace(*req.Badge), 40)
+	}
+	if req.Highlighted != nil {
+		product.Highlighted = *req.Highlighted
+	}
+	if strings.TrimSpace(product.Tier) == "" {
+		product.Tier = model.MembershipSKUTier(product.SKU)
+	}
 	product.UpdatedBy = actor.ID
 	product.UpdatedAt = time.Now()
 	if err := s.repo.SaveMembershipProduct(product); err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "membership_product.update", "membership_product", product.ID, "更新订阅商品", map[string]any{"sku": product.SKU, "amountFen": product.AmountFen, "enabled": product.Enabled}); err != nil {
+	if err := s.appendAdminAudit(actor, "membership_product.update", "membership_product", product.ID, "更新订阅商品", map[string]any{
+		"sku": product.SKU, "amountFen": product.AmountFen, "creditsMicrocredits": product.CreditsMicrocredits,
+		"storageQuotaBytes": product.StorageQuotaBytes, "enabled": product.Enabled,
+	}); err != nil {
 		return nil, err
 	}
 	return product, nil
@@ -283,11 +362,17 @@ func (s *Service) PublicMembership(userID string) (*MembershipPublicView, error)
 			view.OpenMembershipOrderID = order.ID
 		}
 	}
-	view.CanPurchasePermanent = !row.PermanentActive && !view.HasOpenMembershipOrder
-	view.CanPurchaseAdvanced = !view.HasOpenMembershipOrder && (view.AdvancedRemainingSeconds <= 30*24*3600)
-	if view.CanPurchaseAdvanced {
-		view.MinPurchasableAdvancedSKU = model.MembershipSKUAdvancedMonth
+	view.Tier = model.ActiveMembershipTier(*row, now)
+	view.CanPurchasePermanent = model.MembershipPurchaseBlockReason(*row, model.MembershipSKUPermanent, occupied, now) == ""
+	view.CanPurchaseVip = model.MembershipPurchaseBlockReason(*row, model.MembershipSKUVipMonth, occupied, now) == ""
+	view.CanPurchaseSvip = model.MembershipPurchaseBlockReason(*row, model.MembershipSKUSvipMonth, occupied, now) == ""
+	view.CanPurchaseAdvanced = view.CanPurchaseVip
+	if view.CanPurchaseVip {
+		view.MinPurchasableAdvancedSKU = model.MembershipSKUVipMonth
+	} else if view.CanPurchaseSvip {
+		view.MinPurchasableAdvancedSKU = model.MembershipSKUSvipMonth
 	}
+	view.FeatureShowcase = membershipShowcaseFeatures(view.Tier != "" || row.PermanentActive)
 	resolved, err := s.ResolveEffectiveStoredFileBytes(userID)
 	if err != nil {
 		return nil, err
@@ -303,6 +388,16 @@ func (s *Service) PublicMembership(userID string) (*MembershipPublicView, error)
 		return nil, allowErr
 	}
 	view.PersonalStorageAllowed = allowed
+	personalEnabled, personalErr := s.usingPersonalResourceOSS(userID)
+	if personalErr != nil {
+		return nil, personalErr
+	}
+	view.PersonalBucketEnabled = personalEnabled
+	if personalEnabled {
+		view.StorageDisplay = model.StorageDisplayPersonal
+	} else {
+		view.StorageDisplay = model.StorageDisplayPlatform
+	}
 	methods, _ := s.CommerceMethods()
 	view.OnlinePaymentEnabled = methods.OnlinePaymentEnabled
 	view.RedeemEnabled = methods.RedeemEnabled
@@ -381,7 +476,10 @@ func (s *Service) PersonalStorageAllowed(userID string, isAdmin bool) (bool, err
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, err
 	}
-	return row != nil && row.PermanentActive, nil
+	if row == nil {
+		return false, nil
+	}
+	return model.PersonalMembershipEligible(*row, time.Now()), nil
 }
 
 func (s *Service) readOSSSettingValue() (ossSettingValue, error) {
@@ -390,12 +488,6 @@ func (s *Service) readOSSSettingValue() (ossSettingValue, error) {
 }
 
 func (s *Service) AssertCanPurchaseMembership(userID, sku string, occupied int64) error {
-	if !model.IsMembershipSKU(sku) {
-		return BadAuthRequest("未知订阅套餐")
-	}
-	if occupied > 0 {
-		return FailedPrecondition("你有一笔未完成的订阅订单")
-	}
 	row, err := s.repo.UserMembership(userID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
@@ -403,17 +495,19 @@ func (s *Service) AssertCanPurchaseMembership(userID, sku string, occupied int64
 	if row == nil {
 		row = &model.UserMembership{UserID: userID}
 	}
-	if sku == model.MembershipSKUPermanent {
-		if row.PermanentActive {
-			return FailedPrecondition("已拥有永久订阅")
-		}
+	return membershipPurchaseError(*row, sku, occupied, time.Now())
+}
+
+func membershipPurchaseError(row model.UserMembership, sku string, occupied int64, now time.Time) error {
+	reason := model.MembershipPurchaseBlockReason(row, sku, occupied, now)
+	switch reason {
+	case "":
 		return nil
+	case model.MembershipPurchaseBlockUnknownSKU:
+		return BadAuthRequest(reason)
+	default:
+		return FailedPrecondition(reason)
 	}
-	now := time.Now()
-	if row.AdvancedExpiresAt != nil && row.AdvancedExpiresAt.After(now.Add(30*24*time.Hour)) {
-		return FailedPrecondition("高级订阅剩余超过 30 天，暂不能购买新套餐")
-	}
-	return nil
 }
 
 func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest) (*PaymentOrderView, error) {
@@ -421,20 +515,31 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	if kind == model.ProductKindMembership {
 		return s.createMembershipPaymentOrder(ctx, actor, request)
 	}
-	return s.createCreditTopupPaymentOrder(ctx, actor, request)
+	return s.createTopupPaymentOrder(ctx, actor, request)
 }
 
 func (s *Service) createCreditTopupPaymentOrder(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest) (*PaymentOrderView, error) {
+	return s.createTopupPaymentOrder(ctx, actor, request)
+}
+
+func (s *Service) createTopupPaymentOrder(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest) (*PaymentOrderView, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
-	if err := s.RequireFeature(FeatureCredits); err != nil {
-		return nil, err
+	product, err := s.repo.TopupProduct(strings.TrimSpace(request.ProductID))
+	if err != nil || !product.Enabled {
+		return nil, BadAuthRequest("充值商品不存在或已停用")
+	}
+	kind := model.NormalizeTopupKind(product.Kind)
+	if kind == model.ProductKindCreditTopup {
+		if err := s.RequireFeature(FeatureCredits); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.requireOnlinePayment(); err != nil {
 		return nil, err
 	}
-	return s.createPaymentOrderForProduct(ctx, actor, request, nil)
+	return s.createPaymentOrderForProduct(ctx, actor, request, product)
 }
 
 func (s *Service) createMembershipPaymentOrder(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest) (*PaymentOrderView, error) {
@@ -528,20 +633,11 @@ func (s *Service) createMembershipPaymentOrder(ctx context.Context, actor *model
 }
 
 func (s *Service) assertCanPurchaseMembershipTx(tx *gorm.DB, userID, sku string, occupied int64) error {
-	if occupied > 0 {
-		return FailedPrecondition("你有一笔未完成的订阅订单")
-	}
 	row, err := repository.UserMembershipInTx(tx, userID)
 	if err != nil {
 		return err
 	}
-	if sku == model.MembershipSKUPermanent && row.PermanentActive {
-		return FailedPrecondition("已拥有永久订阅")
-	}
-	if model.IsAdvancedMembershipSKU(sku) && row.AdvancedExpiresAt != nil && row.AdvancedExpiresAt.After(time.Now().Add(30*24*time.Hour)) {
-		return FailedPrecondition("高级订阅剩余超过 30 天，暂不能购买新套餐")
-	}
-	return nil
+	return membershipPurchaseError(*row, sku, occupied, time.Now())
 }
 
 func (s *Service) UpdateUserStorageQuota(actor *model.User, userID string, override *int64) error {
@@ -603,5 +699,3 @@ func (s *Service) AssertUploadFitsAccountQuota(userID string, size int64) error 
 	}
 	return nil
 }
-
-

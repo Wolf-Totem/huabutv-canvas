@@ -11,6 +11,7 @@
   "storage.recharge": "充值",
   "nav.settings": "设置",
   "storage.used": "已用 {{value}}",
+  "storage.personal": "个人存储",
   "storage.remaining": "剩余 {{value}}",
   "storage.total": "共 {{value}}",
   "storage.full": "容量已满",

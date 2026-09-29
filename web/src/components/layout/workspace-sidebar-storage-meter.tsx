@@ -12,9 +12,9 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
     const { t } = useTranslation("sidebar");
     const query = useAccountFileStorageUsage();
     const meter = accountStorageMeter(query.data);
-    const usedText = query.data ? t("storage.used", { value: meter.usedLabel }) : query.isError ? t("storage.unavailable") : t("storage.loading");
-    const remainingText = query.data ? (meter.full ? t("storage.full") : t("storage.remaining", { value: meter.remainingLabel })) : "";
-    const totalText = query.data ? t("storage.total", { value: meter.totalLabel }) : "";
+    const usedText = query.data ? (meter.personal ? `${t("storage.personal")} ${meter.usedLabel}` : t("storage.used", { value: meter.usedLabel })) : query.isError ? t("storage.unavailable") : t("storage.loading");
+    const remainingText = query.data && !meter.personal ? (meter.full ? t("storage.full") : t("storage.remaining", { value: meter.remainingLabel })) : "";
+    const totalText = query.data && !meter.personal && meter.totalLabel ? t("storage.total", { value: meter.totalLabel }) : "";
     const summary = query.data ? `${usedText}，${remainingText}，${totalText}` : usedText;
 
     if (query.isError && !query.data) {
@@ -41,13 +41,14 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
             className={cn(
                 "app-workspace-sidebar-storage",
                 collapsed && "is-collapsed",
+                meter.personal && "is-personal",
                 meter.tone === "warn" && "is-warn",
                 meter.tone === "critical" && "is-critical",
                 query.data?.usedBytes ? "has-usage" : null,
                 query.isPending && !query.data && "is-pending",
             )}
-            title={`${summary}。包含素材文件和 Agent 会话附件`}
-            aria-label={`账号容量，${summary}`}
+            title={`${summary}。${meter.personal ? "当前统计个人存储已用" : "包含素材文件和 Agent 会话附件"}`}
+            aria-label={`${meter.personal ? "个人存储" : "账号容量"}，${summary}`}
             aria-busy={query.isPending && !query.data}
             onFocus={() => preloadWorkspaceRoute("/assets")}
             onPointerEnter={() => preloadWorkspaceRoute("/assets")}
@@ -61,6 +62,7 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
                     {remainingText ? <span className="app-workspace-sidebar-storage-remain">{remainingText}</span> : null}
                 </span>
             )}
+            {meter.personal ? null : (
             <span
                 className="app-workspace-sidebar-storage-track"
                 role="progressbar"
@@ -72,13 +74,14 @@ export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean
             >
                 <span style={{ width: `${meter.percent}%` }} />
             </span>
+            )}
         </Link>
         <button
             type="button"
             className={cn("app-workspace-sidebar-storage-topup", collapsed && "is-collapsed")}
             title="用兑换码充值容量"
             aria-label="用兑换码充值容量"
-            onClick={() => openWorkspaceWallet({ focusRedeem: true })}
+            onClick={() => openWorkspaceWallet({ tab: "storage", focusRedeem: true })}
         >
             {collapsed ? <TicketPlus className="size-3.5" /> : t("storage.recharge")}
         </button>

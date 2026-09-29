@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 45
+const CurrentSchemaVersion int64 = 46
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -104,6 +104,7 @@ var schemaMigrations = []migration{
 	{version: 43, name: "channel_model_cost_pricing", checksum: "sha256:channel-model-cost-pricing-v43-20260925", apply: migrateSchemaV43},
 	{version: 44, name: "builtin_skill_tombstones", checksum: "sha256:builtin-skill-tombstones-v40-20260927", apply: migrateSchemaV44},
 	{version: 45, name: "resource_thumbnail", checksum: "sha256:resource-thumbnail-v41-20260927", apply: migrateSchemaV45},
+	{version: 46, name: "commerce_wallet_catalog", checksum: "sha256:commerce-wallet-catalog-v46-20260929", apply: migrateSchemaV46},
 }
 
 func acknowledgeExistingSchema(_ *gorm.DB) error {
@@ -120,6 +121,74 @@ func migrateSchemaV44(tx *gorm.DB) error {
 
 func migrateSchemaV45(tx *gorm.DB) error {
 	return tx.AutoMigrate(&model.Resource{})
+}
+
+func migrateSchemaV46(tx *gorm.DB) error {
+	if err := tx.AutoMigrate(&model.MembershipProduct{}, &model.TopupProduct{}, &model.PaymentOrder{}); err != nil {
+		return err
+	}
+	if err := tx.Exec("UPDATE topup_products SET kind = ? WHERE kind IS NULL OR kind = ''", model.ProductKindCreditTopup).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec("UPDATE membership_products SET tier = ? WHERE sku IN (?, ?, ?) AND (tier IS NULL OR tier = '')", model.MembershipTierVip, model.MembershipSKUAdvancedMonth, model.MembershipSKUAdvancedQuarter, model.MembershipSKUAdvancedYear).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec(
+		"UPDATE membership_products SET enabled = ? WHERE sku IN (?, ?, ?, ?)",
+		false,
+		model.MembershipSKUPermanent,
+		model.MembershipSKUAdvancedMonth,
+		model.MembershipSKUAdvancedQuarter,
+		model.MembershipSKUAdvancedYear,
+	).Error; err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	creditScale := model.CreditScale
+	gib := int64(1 << 30)
+	membershipSeeds := []model.MembershipProduct{
+		{ID: "membership-vip-month", SKU: model.MembershipSKUVipMonth, Name: "VIP 月卡", Description: "含全部平台功能。开通赠送积分，并覆盖平台云存储容量。", AmountFen: 3000, CreditsMicrocredits: 2888 * creditScale, StorageQuotaBytes: 30 * gib, DurationDays: 30, Tier: model.MembershipTierVip, Enabled: true, SortOrder: 100, CreatedAt: now, UpdatedAt: now},
+		{ID: "membership-vip-quarter", SKU: model.MembershipSKUVipQuarter, Name: "VIP 季卡", Description: "含全部平台功能。开通赠送积分，并覆盖平台云存储容量。", AmountFen: 8000, CreditsMicrocredits: 8888 * creditScale, StorageQuotaBytes: 30 * gib, DurationDays: 90, Tier: model.MembershipTierVip, Enabled: true, SortOrder: 110, CreatedAt: now, UpdatedAt: now},
+		{ID: "membership-vip-year", SKU: model.MembershipSKUVipYear, Name: "VIP 年卡", Description: "含全部平台功能。开通赠送积分，并覆盖平台云存储容量。", AmountFen: 28800, CreditsMicrocredits: 34888 * creditScale, StorageQuotaBytes: 30 * gib, DurationDays: 365, Tier: model.MembershipTierVip, Enabled: true, SortOrder: 120, CreatedAt: now, UpdatedAt: now},
+		{ID: "membership-svip-month", SKU: model.MembershipSKUSvipMonth, Name: "SVIP 月卡", Description: "含全部平台功能。开通赠送积分，并覆盖平台云存储容量。", AmountFen: 6800, CreditsMicrocredits: 6888 * creditScale, StorageQuotaBytes: 80 * gib, DurationDays: 30, Tier: model.MembershipTierSvip, Badge: "最受欢迎", Highlighted: true, Enabled: true, SortOrder: 200, CreatedAt: now, UpdatedAt: now},
+		{ID: "membership-svip-quarter", SKU: model.MembershipSKUSvipQuarter, Name: "SVIP 季卡", Description: "含全部平台功能。开通赠送积分，并覆盖平台云存储容量。", AmountFen: 18000, CreditsMicrocredits: 20888 * creditScale, StorageQuotaBytes: 80 * gib, DurationDays: 90, Tier: model.MembershipTierSvip, Highlighted: true, Enabled: true, SortOrder: 210, CreatedAt: now, UpdatedAt: now},
+		{ID: "membership-svip-year", SKU: model.MembershipSKUSvipYear, Name: "SVIP 年卡", Description: "含全部平台功能。开通赠送积分，并覆盖平台云存储容量。", AmountFen: 68000, CreditsMicrocredits: 82888 * creditScale, StorageQuotaBytes: 80 * gib, DurationDays: 365, Tier: model.MembershipTierSvip, Badge: "超值", Highlighted: true, Enabled: true, SortOrder: 220, CreatedAt: now, UpdatedAt: now},
+	}
+	for _, seed := range membershipSeeds {
+		item := seed
+		var existing model.MembershipProduct
+		err := tx.Where("sku = ?", item.SKU).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err := tx.Create(&item).Error; err != nil {
+			return err
+		}
+	}
+	storageSeeds := []model.TopupProduct{
+		{ID: "topup-storage-20gb", Name: "+20 GB 容量", Description: "加购平台云存储，不过期，不改变会员档位。", AmountFen: 1900, Kind: model.ProductKindStorageTopup, StorageBytes: 20 * gib, Enabled: true, SortOrder: 100, CreatedAt: now, UpdatedAt: now},
+		{ID: "topup-storage-50gb", Name: "+50 GB 容量", Description: "加购平台云存储，不过期，不改变会员档位。", AmountFen: 3900, Kind: model.ProductKindStorageTopup, StorageBytes: 50 * gib, Enabled: true, SortOrder: 110, CreatedAt: now, UpdatedAt: now},
+		{ID: "topup-storage-100gb", Name: "+100 GB 容量", Description: "加购平台云存储，不过期，不改变会员档位。", AmountFen: 6800, Kind: model.ProductKindStorageTopup, StorageBytes: 100 * gib, Enabled: true, SortOrder: 120, CreatedAt: now, UpdatedAt: now},
+		{ID: "topup-storage-200gb", Name: "+200 GB 容量", Description: "加购平台云存储，不过期，不改变会员档位。", AmountFen: 11800, Kind: model.ProductKindStorageTopup, StorageBytes: 200 * gib, Enabled: true, SortOrder: 130, CreatedAt: now, UpdatedAt: now},
+	}
+	for _, seed := range storageSeeds {
+		item := seed
+		var existing model.TopupProduct
+		err := tx.Where("id = ?", item.ID).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err := tx.Create(&item).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func migrateSchemaV43(tx *gorm.DB) error {

@@ -61,6 +61,9 @@ type TopupProductRequest struct {
 	Description         string `json:"description"`
 	AmountFen           int64  `json:"amountFen"`
 	CreditsMicrocredits int64  `json:"creditsMicrocredits"`
+	Kind                string `json:"kind"`
+	StorageBytes        int64  `json:"storageBytes"`
+	Badge               string `json:"badge"`
 	Enabled             bool   `json:"enabled"`
 	SortOrder           int    `json:"sortOrder"`
 }
@@ -91,6 +94,7 @@ type PaymentOrderView struct {
 	CreditsMicrocredits int64                    `json:"creditsMicrocredits"`
 	ProductKind         string                   `json:"productKind,omitempty"`
 	PlanSKU             string                   `json:"planSku,omitempty"`
+	StorageQuotaBytes   int64                    `json:"storageQuotaBytes,omitempty"`
 	Status              model.PaymentOrderStatus `json:"status"`
 	ProviderStatus      string                   `json:"providerStatus,omitempty"`
 	ProviderTradeNo     string                   `json:"providerTradeNo,omitempty"`
@@ -423,14 +427,37 @@ func validatePaymentPublicBaseURL(value string) error {
 	return nil
 }
 
-func (s *Service) TopupProducts(actor *model.User) ([]model.TopupProduct, error) {
+func (s *Service) TopupProducts(actor *model.User, kind string) ([]model.TopupProduct, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
-	if err := s.RequireFeature(FeatureCredits); err != nil {
+	products, err := s.repo.TopupProducts(false)
+	if err != nil {
 		return nil, err
 	}
-	return s.repo.TopupProducts(false)
+	if strings.TrimSpace(kind) == "" {
+		if err := s.RequireFeature(FeatureCredits); err != nil {
+			return filterTopupProducts(products, model.ProductKindStorageTopup), nil
+		}
+		return products, nil
+	}
+	normalized := model.NormalizeTopupKind(kind)
+	if normalized == model.ProductKindCreditTopup {
+		if err := s.RequireFeature(FeatureCredits); err != nil {
+			return nil, err
+		}
+	}
+	return filterTopupProducts(products, normalized), nil
+}
+
+func filterTopupProducts(products []model.TopupProduct, kind string) []model.TopupProduct {
+	filtered := make([]model.TopupProduct, 0, len(products))
+	for _, product := range products {
+		if model.NormalizeTopupKind(product.Kind) == kind {
+			filtered = append(filtered, product)
+		}
+	}
+	return filtered
 }
 
 func (s *Service) AdminTopupProducts(actor *model.User) ([]model.TopupProduct, error) {
@@ -451,7 +478,7 @@ func (s *Service) CreateTopupProduct(actor *model.User, request TopupProductRequ
 	if err := s.repo.CreateTopupProduct(product); err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "topup_product.create", "topup_product", product.ID, "创建积分充值商品", map[string]any{"amountFen": product.AmountFen, "creditsMicrocredits": product.CreditsMicrocredits}); err != nil {
+	if err := s.appendAdminAudit(actor, "topup_product.create", "topup_product", product.ID, "创建充值商品", map[string]any{"kind": product.Kind, "amountFen": product.AmountFen, "creditsMicrocredits": product.CreditsMicrocredits, "storageBytes": product.StorageBytes}); err != nil {
 		return nil, err
 	}
 	return product, nil
@@ -485,17 +512,31 @@ func topupProductFromRequest(id, actorID string, request TopupProductRequest) (*
 	if request.AmountFen <= 0 || request.AmountFen > 100_000_000 {
 		return nil, BadAuthRequest("充值金额必须为 1 分至 100 万元")
 	}
-	if request.CreditsMicrocredits <= 0 || request.CreditsMicrocredits > maxTopupCreditsMicrocredits {
-		return nil, BadAuthRequest("充值积分必须为 0.000001 至 10 亿积分")
+	kind := model.NormalizeTopupKind(request.Kind)
+	credits := request.CreditsMicrocredits
+	storageBytes := request.StorageBytes
+	if kind == model.ProductKindStorageTopup {
+		if storageBytes <= 0 || storageBytes > model.MaxMembershipStorageB {
+			return nil, BadAuthRequest("容量商品需为 1 字节至 3TiB")
+		}
+		if credits < 0 || credits > maxTopupCreditsMicrocredits {
+			return nil, BadAuthRequest("容量商品附赠积分必须为 0 至 10 亿积分")
+		}
+	} else {
+		if credits <= 0 || credits > maxTopupCreditsMicrocredits {
+			return nil, BadAuthRequest("充值积分必须为 0.000001 至 10 亿积分")
+		}
+		storageBytes = 0
 	}
 	return &model.TopupProduct{
 		ID: id, Name: name, Description: truncateRunes(strings.TrimSpace(request.Description), 500),
-		AmountFen: request.AmountFen, CreditsMicrocredits: request.CreditsMicrocredits,
+		AmountFen: request.AmountFen, CreditsMicrocredits: credits, Kind: kind, StorageBytes: storageBytes,
+		Badge: truncateRunes(strings.TrimSpace(request.Badge), 40),
 		Enabled: request.Enabled, SortOrder: request.SortOrder, CreatedBy: actorID, UpdatedBy: actorID,
 	}, nil
 }
 
-func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest, _ *model.MembershipProduct) (*PaymentOrderView, error) {
+func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model.User, request CreatePaymentOrderRequest, product *model.TopupProduct) (*PaymentOrderView, error) {
 	idempotencyKey := strings.TrimSpace(request.IdempotencyKey)
 	if idempotencyKey == "" {
 		return nil, BadAuthRequest("支付幂等标识不能为空")
@@ -514,9 +555,12 @@ func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
-	product, err := s.repo.TopupProduct(productID)
-	if err != nil || !product.Enabled {
-		return nil, BadAuthRequest("充值商品不存在或已停用")
+	if product == nil {
+		loaded, err := s.repo.TopupProduct(productID)
+		if err != nil || !loaded.Enabled {
+			return nil, BadAuthRequest("充值商品不存在或已停用")
+		}
+		product = loaded
 	}
 	provider, ok := s.paymentRegistry.Get(providerID)
 	if !ok {
@@ -537,12 +581,13 @@ func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model
 		return nil, NewAppError(http.StatusConflict, "未支付订单过多，请先完成或关闭已有订单")
 	}
 	now := time.Now()
+	kind := model.NormalizeTopupKind(product.Kind)
 	order := &model.PaymentOrder{
 		ID: newID(), UserID: actor.ID, IdempotencyKey: idempotencyKey, MerchantOrderNo: newID(),
 		ProductID: product.ID, ProductName: product.Name, ProviderID: provider.Descriptor().ID,
 		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
 		AmountFen: product.AmountFen, Currency: "CNY", CreditsMicrocredits: product.CreditsMicrocredits,
-		ProductKind: model.ProductKindCreditTopup, Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
+		ProductKind: kind, StorageQuotaBytes: product.StorageBytes, Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
 	}
 	order, created, err := s.repo.CreatePaymentOrder(order)
@@ -926,6 +971,7 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 		ID: order.ID, UserID: order.UserID, MerchantOrderNo: order.MerchantOrderNo, ProductID: order.ProductID, ProductName: order.ProductName,
 		ProviderID: order.ProviderID, AmountFen: order.AmountFen, Currency: order.Currency,
 		CreditsMicrocredits: order.CreditsMicrocredits, ProductKind: model.NormalizeProductKind(order.ProductKind), PlanSKU: order.PlanSKU,
+		StorageQuotaBytes: order.StorageQuotaBytes,
 		Status: order.Status, ProviderStatus: order.ProviderStatus,
 		ProviderTradeNo: providerTradeNo, Checkout: checkout, ExpiresAt: order.ExpiresAt,
 		ProviderPaidAt: order.ProviderPaidAt, CreditedAt: order.CreditedAt, ClosedAt: order.ClosedAt,

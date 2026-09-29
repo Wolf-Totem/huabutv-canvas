@@ -99,3 +99,38 @@ func TestCreateMembershipPaymentOrderSameKeyReturnsExisting(t *testing.T) {
 		t.Fatalf("expected same order %s got %s", first.ID, second.ID)
 	}
 }
+
+func TestCompletePaymentOrderStorageTopupAddsBonus(t *testing.T) {
+	db := openPaymentTestDB(t)
+	repo := New(db)
+	order := model.PaymentOrder{
+		ID: "storage-order-1", UserID: "user-1", IdempotencyKey: "storage-1", MerchantOrderNo: "merchant-storage-1",
+		ProductID: "topup-storage-20gb", ProductName: "+20 GB 容量", ProviderID: "wechat-native", PluginID: "plugin-1",
+		ProviderConfigID: "config-1", ProviderConfigVersion: 1, AmountFen: 1900, Currency: "CNY",
+		CreditsMicrocredits: 0, ProductKind: model.ProductKindStorageTopup, StorageQuotaBytes: 20 << 30,
+		Status: model.PaymentOrderPending, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatal(err)
+	}
+	completed, granted, err := repo.CompletePaymentOrder("wechat-native", "merchant-storage-1", PaymentEvidence{
+		ProviderTradeNo: "wechat-storage-1", ProviderStatus: "SUCCESS", AmountFen: 1900, Currency: "CNY", PaidAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !granted || completed.Status != model.PaymentOrderCredited {
+		t.Fatalf("completion = %#v granted=%v", completed, granted)
+	}
+	row, err := repo.UserMembership("user-1")
+	if err != nil || row.StorageBonusBytes != 20<<30 {
+		t.Fatalf("bonus = %#v err=%v", row, err)
+	}
+	var ledgerCount int64
+	if err := db.Model(&model.CreditLedgerEntry{}).Count(&ledgerCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ledgerCount != 0 {
+		t.Fatalf("ledger count = %d", ledgerCount)
+	}
+}

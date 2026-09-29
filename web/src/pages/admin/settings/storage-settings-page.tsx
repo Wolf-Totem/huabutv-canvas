@@ -585,8 +585,8 @@ export default function StorageSettingsPage() {
                                 </>
                             )}
                             <div className="admin-storage-form-section">
-                                <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="用户自有存储" description="打开后，永久订阅用户可以配置自己的对象存储桶（含 R2）。关闭后一律回退到平台存储。" />
-                                <Form.Item name="allowUserS3" label="允许个人使用自己的对象存储桶" valuePropName="checked" extra="生产上线个人存储时请打开此开关。未开通永久订阅的用户即使打开也无法使用。">
+                                <FormSectionTitle icon={<ShieldCheck className="size-4" />} title="用户自有存储" description="打开后，VIP / SVIP（含历史永久订阅）用户可以配置自己的对象存储桶。关闭后一律回退到平台存储。" />
+                                <Form.Item name="allowUserS3" label="允许个人使用自己的对象存储桶" valuePropName="checked" extra="生产上线个人存储时请打开此开关。未开通 VIP / SVIP 的用户即使打开也无法使用。">
                                     <Switch checkedChildren="允许" unCheckedChildren="不允许" />
                                 </Form.Item>
                             </div>

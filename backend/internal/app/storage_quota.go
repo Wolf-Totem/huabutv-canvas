@@ -14,6 +14,8 @@ type AccountFileStorageUsage struct {
 	QuotaSource              string `json:"quotaSource"`
 	EffectiveStoredFileBytes int64  `json:"effectiveStoredFileBytes"`
 	PersonalStoredFileBytes  int64  `json:"personalStoredFileBytes,omitempty"`
+	StorageDisplay           string `json:"storageDisplay,omitempty"`
+	PersonalBucketEnabled    bool   `json:"personalBucketEnabled,omitempty"`
 }
 
 func (s *Service) AccountFileStorageUsage(userID string) (*AccountFileStorageUsage, error) {
@@ -33,13 +35,25 @@ func (s *Service) AccountFileStorageUsage(userID string) (*AccountFileStorageUsa
 	if personal < 0 {
 		personal = 0
 	}
-	return &AccountFileStorageUsage{
+	personalEnabled, personalErr := s.usingPersonalResourceOSS(userID)
+	if personalErr != nil {
+		return nil, personalErr
+	}
+	usage := &AccountFileStorageUsage{
 		UsedBytes:                usedBytes,
 		TotalBytes:               resolved.Bytes,
 		QuotaSource:              resolved.Source,
 		EffectiveStoredFileBytes: resolved.Bytes,
 		PersonalStoredFileBytes:  personal,
-	}, nil
+		StorageDisplay:           model.StorageDisplayPlatform,
+		PersonalBucketEnabled:    personalEnabled,
+	}
+	if personalEnabled {
+		usage.UsedBytes = personal
+		usage.TotalBytes = 0
+		usage.StorageDisplay = model.StorageDisplayPersonal
+	}
+	return usage, nil
 }
 
 func structuredBytes(usage repository.UserStorageUsage) int64 {

@@ -67,7 +67,7 @@ export function UserOSSSettingsForm() {
 
     const save = async () => {
         const values = await form.validateFields();
-        if (values.enabled && !setting?.personalStorageAllowed) return message.error(setting?.disabledReason === "personal_bucket_disabled" ? "平台管理员尚未允许个人使用自己的对象存储桶" : "开通永久订阅后才能使用个人存储");
+        if (values.enabled && !setting?.personalStorageAllowed) return message.error(setting?.disabledReason === "personal_bucket_disabled" ? "平台管理员尚未允许个人使用自己的对象存储桶" : "开通 VIP 或 SVIP 后才能使用个人存储");
         if (values.enabled && values.provider === "s3" && !setting?.allowUserS3) return message.error("平台管理员尚未允许个人 S3 兼容存储");
         setSaving(true);
         try {
@@ -121,7 +121,7 @@ export function UserOSSSettingsForm() {
                         <Cloud className="size-4" />
                         我的对象存储
                     </div>
-                    <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">{setting?.personalStorageAllowed ? "启用后，新上传和新生成的媒体优先写入你的存储桶；停用时回退到平台存储。" : setting?.disabledReason === "personal_bucket_disabled" ? "管理员尚未允许个人对象存储桶。永久订阅用户在开关打开后可配置。" : "开通永久订阅后才能启用个人对象存储。已保存的配置在未解锁前不会作为上传目标。"}</p>
+                    <p className="mt-1 max-w-3xl text-xs leading-5 text-foreground/55">{setting?.personalStorageAllowed ? "启用后新文件只进个人桶，工作台容量条改为个人已用；停用时回退到平台存储并重新按云配额计算。" : setting?.disabledReason === "personal_bucket_disabled" ? "管理员尚未允许个人对象存储桶。VIP / SVIP 用户在开关打开后可配置。" : "开通 VIP 或 SVIP 后可启用个人存储。已保存的配置在过期后会保留，但新上传会回到平台桶。"}</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
                     <StatusBadge tone={setting?.enabled ? "success" : "neutral"} label={setting?.enabled ? "已启用" : "未启用"} />

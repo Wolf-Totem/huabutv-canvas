@@ -18,6 +18,9 @@ export type TopupProduct = {
     description?: string;
     amountFen: number;
     creditsMicrocredits: number;
+    kind?: "credit_topup" | "storage_topup" | string;
+    storageBytes?: number;
+    badge?: string;
     enabled: boolean;
     sortOrder: number;
     createdBy: string;
@@ -38,8 +41,9 @@ export type PaymentOrder = {
     amountFen: number;
     currency: "CNY" | string;
     creditsMicrocredits: number;
-    productKind?: "credit_topup" | "membership" | string;
+    productKind?: "credit_topup" | "membership" | "storage_topup" | string;
     planSku?: string;
+    storageQuotaBytes?: number;
     status: PaymentOrderStatus;
     providerStatus?: string;
     providerTradeNo?: string;
@@ -81,11 +85,11 @@ export function listPaymentProviders() {
     return http.get<{ providers: PaymentProvider[] }>("/payments/providers");
 }
 
-export function listTopupProducts() {
-    return http.get<{ products: TopupProduct[] }>("/payments/products");
+export function listTopupProducts(kind?: "credit_topup" | "storage_topup" | string) {
+    return http.get<{ products: TopupProduct[] }>("/payments/products", { params: kind ? { kind } : undefined });
 }
 
-export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string; productKind?: "credit_topup" | "membership" }) {
+export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string; productKind?: "credit_topup" | "membership" | "storage_topup" }) {
     return http.post<{ order: PaymentOrder }>("/payments/orders", input);
 }
 
@@ -117,7 +121,12 @@ export function listAdminTopupProducts() {
     return http.get<{ products: TopupProduct[] }>("/admin/payments/products");
 }
 
-export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder"> & { description?: string };
+export type TopupProductInput = Pick<TopupProduct, "name" | "amountFen" | "creditsMicrocredits" | "enabled" | "sortOrder"> & {
+    description?: string;
+    kind?: "credit_topup" | "storage_topup" | string;
+    storageBytes?: number;
+    badge?: string;
+};
 
 export function createAdminTopupProduct(input: TopupProductInput) {
     return http.post<{ product: TopupProduct }>("/admin/payments/products", input);

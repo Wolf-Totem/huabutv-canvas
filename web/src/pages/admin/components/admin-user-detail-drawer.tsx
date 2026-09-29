@@ -8,13 +8,13 @@ import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
 import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
 import { grantAdminMembership, updateAdminUserStorageQuota } from "@/services/api/membership";
-import { formatMembershipStorage } from "@/lib/membership";
+import { ADMIN_MEMBERSHIP_SKUS, formatMembershipStorage, membershipSKULabel, membershipStatusLabel } from "@/lib/membership";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
 export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
     const { message } = App.useApp();
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
-    const [grantSku, setGrantSku] = useState("permanent");
+    const [grantSku, setGrantSku] = useState("vip_month");
     const [grantNote, setGrantNote] = useState("");
     const [granting, setGranting] = useState(false);
     const [overrideGiB, setOverrideGiB] = useState<number | null>(null);
@@ -135,14 +135,14 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                             { key: "reserved", label: "冻结积分", children: formatCredits(detail.account.reservedMicrocredits) },
                                             { key: "created", label: "注册时间", children: formatTime(detail.user.createdAt) },
                                             { key: "login", label: "最后登录", children: formatTime(detail.user.lastLoginAt) },
-                                            { key: "membership", label: "订阅", children: detail.membership?.permanentActive ? "永久订阅" : detail.membership?.advancedPlanSku || "未订阅" },
+                                            { key: "membership", label: "订阅", children: membershipStatusLabel(detail.membership) + (detail.membership?.advancedPlanSku ? ` · ${membershipSKULabel(detail.membership.advancedPlanSku)}` : "") },
                                             { key: "quotaSource", label: "容量来源", children: detail.quotaSource || detail.membership?.quotaSource || "global_default" },
                                         ]}
                                     />
                                     <div className="rounded-md border border-border p-3">
                                         <div className="mb-2 text-sm font-medium">赠送订阅 / 单人容量覆盖</div>
                                         <div className="flex flex-wrap items-end gap-2">
-                                            <Select value={grantSku} onChange={setGrantSku} options={[{ value: "permanent", label: "永久订阅" }, { value: "advanced_month", label: "月卡" }, { value: "advanced_quarter", label: "季卡" }, { value: "advanced_year", label: "年卡" }]} className="w-36" />
+                                            <Select value={grantSku} onChange={setGrantSku} options={ADMIN_MEMBERSHIP_SKUS} className="w-40" />
                                             <Input value={grantNote} onChange={(event) => setGrantNote(event.target.value)} placeholder="备注（可选）" className="w-48" />
                                             <Button loading={granting} onClick={() => {
                                                 if (!userId) return;
