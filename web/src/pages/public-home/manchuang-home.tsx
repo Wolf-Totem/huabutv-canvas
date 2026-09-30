@@ -4,7 +4,7 @@ import { useNavigate } from "react-router";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { LANDING_NAV, mergeManchuangLanding, type LandingHeroShowcase, type LandingRailCard } from "@/lib/manchuang-landing";
 import { listPlazaWorks } from "@/services/api/plaza";
-import { ossProcessedImage } from "@/lib/oss-image";
+import { ossProcessedImage, rewriteLegacyCdnHost } from "@/lib/oss-image";
 
 import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
@@ -19,12 +19,12 @@ import "./manchuang-home.css";
 const SECTION_IDS = ["product", "solutions", "enterprise", "resources", "pricing"] as const;
 
 function versionedHeroMediaUrl(url: string) {
-    const source = url.trim();
+    const source = rewriteLegacyCdnHost(url.trim());
     if (!source || source.startsWith("blob:") || source.startsWith("data:")) return source;
     const version = String(import.meta.env.VITE_APP_VERSION || "").trim().replace(/^v/, "");
     if (!version) return source;
     try {
-        const parsed = new URL(source, "https://canvas.j11.net");
+        const parsed = new URL(source, "https://www.huabutv.com");
         if (parsed.searchParams.has("v")) return source;
     } catch {
         return source;
@@ -235,7 +235,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
         <div className="mc-gate" ref={gateRef}>
             <section className="mc-hero" id="top">
                 <div className="mc-hero-media" aria-hidden="true">
-                    <video ref={heroVideoRef} key={heroVideoSrc} className="mc-hero-video" src={heroVideoSrc} autoPlay muted loop playsInline preload="auto" poster={landing.heroPosterUrl || undefined} />
+                    <video ref={heroVideoRef} key={heroVideoSrc} className="mc-hero-video" src={heroVideoSrc} autoPlay muted loop playsInline preload="auto" poster={rewriteLegacyCdnHost(landing.heroPosterUrl || "") || undefined} />
                     <span className="mc-hero-media-scrim" />
                 </div>
                 <header className={solidNav ? "mc-nav is-solid" : "mc-nav"}>
@@ -314,7 +314,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                         <a href="#enterprise" onClick={(event) => { event.preventDefault(); go("#enterprise"); }}>{landing.productMoreLabel} <span aria-hidden>→</span></a>
                     </div>
                     <div className="mc-canvas-stage">
-                        <img src={landing.productStageUrl} alt={`${brand}无限画布产品界面`} />
+                        <img src={ossProcessedImage(landing.productStageUrl) || landing.productStageUrl} alt={`${brand}无限画布产品界面`} />
                     </div>
                     <div className="mc-capability-list">
                         {landing.capabilities.map((item, index) => (
@@ -348,7 +348,7 @@ export default function ManchuangHomePage({ heroVideoUrl, heroPosterUrl }: { her
                                 <ul className="mc-flow-tags">{step.tags.map((tag) => <li key={tag}>{tag}</li>)}</ul>
                             </div>
                             <div className="mc-flow-node" aria-hidden="true"><span>{step.step}</span></div>
-                            <div className="mc-flow-media"><img src={step.imageUrl} alt="" /></div>
+                            <div className="mc-flow-media"><img src={ossProcessedImage(step.imageUrl) || step.imageUrl} alt="" /></div>
                         </article>
                     ))}
                 </div>
@@ -449,7 +449,7 @@ function BannerCard({ item, className, onOpen }: { item: { title: string; imageU
             }}
         >
             <img src={heroImageSrc(item.imageUrl, className.includes("is-main") ? 1400 : 800)} alt={item.title} />
-            {item.previewUrl ? <video ref={videoRef} className="mc-hero-preview" src={item.previewUrl} muted loop playsInline preload="none" /> : null}
+            {item.previewUrl ? <video ref={videoRef} className="mc-hero-preview" src={rewriteLegacyCdnHost(item.previewUrl)} muted loop playsInline preload="none" /> : null}
             <span className="mc-hero-side-shade" aria-hidden="true" />
             {className.includes("is-main") && item.title ? <span className="mc-hero-banner-title">{item.title}</span> : null}
         </button>
@@ -597,7 +597,7 @@ function HoverMediaButton({
                 node.currentTime = 0;
             }}
         >
-            {previewUrl ? <video ref={videoRef} className="mc-hero-preview" src={previewUrl} muted loop playsInline preload="none" /> : null}
+            {previewUrl ? <video ref={videoRef} className="mc-hero-preview" src={rewriteLegacyCdnHost(previewUrl)} muted loop playsInline preload="none" /> : null}
             {children}
         </button>
     );
@@ -741,7 +741,7 @@ function HeroRail({ items, onOpen }: { items: LandingRailCard[]; onOpen?: (id: s
         <div className="mc-hero-rail" aria-hidden="true">
             <div className="mc-hero-rail-track" ref={track}>
                 {looped.map((item) => (
-                    <div key={item.key} className="mc-hero-card" data-preview={item.previewUrl || undefined} title={item.label || undefined} role="button" tabIndex={0} onClick={() => onOpen?.(item.id)}>
+                    <div key={item.key} className="mc-hero-card" data-preview={item.previewUrl ? rewriteLegacyCdnHost(item.previewUrl) : undefined} title={item.label || undefined} role="button" tabIndex={0} onClick={() => onOpen?.(item.id)}>
                         <img src={ossProcessedImage(item.imageUrl, 480)} alt="" loading="lazy" draggable={false} />
                     </div>
                 ))}

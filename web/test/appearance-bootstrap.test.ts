@@ -10,7 +10,7 @@ test("initial HTML stays brand neutral until the public appearance is resolved",
     expect(html).toContain("/favicon.png");
     expect(html).toContain("<title>画布TV</title>");
     expect(html).toContain('property="og:title" content="画布TV"');
-    expect(html).toContain('property="og:image" content="https://canvas.j11.net/og-image.png?v=1.5.50"');
+    expect(html).toContain('property="og:image" content="https://www.huabutv.com/og-image.png?v=1.5.72"');
     expect(mainSource).toContain("restoreCachedAppearance()");
     expect(mainSource.indexOf("restoreCachedAppearance()")).toBeLessThan(mainSource.indexOf("bootstrapAppearance()"));
     expect(mainSource.indexOf("bootstrapAppearance()")).toBeLessThan(mainSource.indexOf('import("./application")'));
@@ -121,7 +121,8 @@ test("auth scene consumes resolved appearance instead of hardcoded media constan
 
     expect(source).toContain("appearance.authVideoUrl");
     expect(source).toContain("appearance.authVideoAutoplay");
-    expect(source).toContain("appearance.authVideoPosterUrl || undefined");
+    expect(source).toContain("appearance.authVideoPosterUrl");
+    expect(source).toContain("rewriteLegacyCdnHost");
     expect(source).toContain("appearance.brandName");
     expect(source).toContain("appearance.authHeroTitle");
     expect(source).toContain("appearance.authHeroDescription");

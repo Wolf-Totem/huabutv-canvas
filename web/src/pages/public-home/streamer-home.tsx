@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 
+import { ossProcessedImage, rewriteLegacyCdnHost } from "@/lib/oss-image";
 import type { PublicSiteSkin } from "@/services/api/streamer";
 
 export default function StreamerHomePage({ skin }: { skin: PublicSiteSkin }) {
@@ -12,13 +13,13 @@ export default function StreamerHomePage({ skin }: { skin: PublicSiteSkin }) {
     return (
         <main className="min-h-dvh bg-[#07080c] text-white">
         <div className="mx-auto flex min-h-dvh max-w-4xl flex-col gap-10 px-6 py-16">
-            {skin.logoUrl ? <img src={skin.logoUrl} alt="" className="h-12 w-auto object-contain" /> : null}
+            {skin.logoUrl ? <img src={rewriteLegacyCdnHost(skin.logoUrl)} alt="" className="h-12 w-auto object-contain" /> : null}
             <header>
                 {skin.displayName ? <p className="text-xs uppercase tracking-[0.24em] text-white/45">{skin.displayName}</p> : null}
                 <h1 className="mt-2 text-4xl font-semibold">{title}</h1>
                 {subtitle ? <p className="mt-3 max-w-2xl text-base text-white/70">{subtitle}</p> : null}
             </header>
-            {home?.hero?.imageUrl ? <img src={home.hero.imageUrl} alt="" className="max-h-80 w-full rounded-3xl object-cover" /> : null}
+            {home?.hero?.imageUrl ? <img src={ossProcessedImage(home.hero.imageUrl, 1280) || home.hero.imageUrl} alt="" className="max-h-80 w-full rounded-3xl object-cover" /> : null}
             {home?.features?.length ? (
                 <section className="grid gap-4 sm:grid-cols-2">
                     {home.features.map((feature) => (

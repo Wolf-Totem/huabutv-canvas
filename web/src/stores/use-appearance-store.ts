@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import { rewriteLegacyCdnHost } from "@/lib/oss-image";
 import { CINEMATIC_SKINS } from "@/lib/cinematic-skins";
 import { DEFAULT_HOME_CTA_HREF, DEFAULT_HOME_CTA_LABEL, DEFAULT_HOME_NAV_ITEMS, normalizeHomeNavItems } from "@/lib/home-navigation";
 import { DEFAULT_MANCHUANG_LANDING, mergeManchuangLanding } from "@/lib/manchuang-landing";
@@ -182,7 +183,8 @@ function setMeta(targetDocument: Document, attribute: "name" | "property", key: 
 
 export function appearanceLogoURL(appearance: PublicAppearance, theme: "light" | "dark") {
     const url = theme === "dark" ? appearance.darkLogoUrl || appearance.logoUrl : appearance.logoUrl || appearance.darkLogoUrl;
-    return url === "/logo.svg" ? "/logo.png" : url;
+    const source = url === "/logo.svg" ? "/logo.png" : url;
+    return rewriteLegacyCdnHost(source);
 }
 
 export function brandStudioLabel(appearance: PublicAppearance) {

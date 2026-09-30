@@ -1,6 +1,8 @@
 import { App, Button, Form, Input, InputNumber, Modal, Select, Switch, Table } from "antd";
 import { useEffect, useState } from "react";
 
+import { publicParentDomain } from "@/lib/public-hosts";
+import { listAdminUsers } from "@/services/api/auth";
 import {
     createAdminStreamer,
     disableAdminStreamer,
@@ -17,7 +19,6 @@ import {
     type StreamerAdmin,
     type StreamerSkin,
 } from "@/services/api/streamer";
-import { listAdminUsers } from "@/services/api/auth";
 
 const capabilityLabel: Record<string, string> = { text: "文本", image: "图片", video: "视频", audio: "音频" };
 
@@ -124,7 +125,7 @@ export default function StreamersPanel() {
                 columns={[
                     { title: "序号", dataIndex: "serialNo", width: 80 },
                     { title: "名字", dataIndex: "displayName" },
-                    { title: "域名", dataIndex: "slug", render: (value: string) => `${value}.j11.net` },
+                    { title: "域名", dataIndex: "slug", render: (value: string) => `${value}.${publicParentDomain()}` },
                     { title: "邀请码", dataIndex: "inviteCode" },
                     { title: "文本/图/视频", render: (_, row) => `${((row.textRebateBps ?? row.rebateRateBps) / 100).toFixed(1)}% / ${((row.imageRebateBps ?? row.rebateRateBps) / 100).toFixed(1)}% / ${((row.videoRebateBps ?? row.rebateRateBps) / 100).toFixed(1)}%` },
                     { title: "自定义渠道", dataIndex: "customChannelsEnabled", render: (value: boolean) => (value ? "开" : "关") },
@@ -247,7 +248,7 @@ export default function StreamersPanel() {
                 >
                     <Form.Item name="displayName" label="名字" rules={[{ required: true }]}><Input /></Form.Item>
                     <Form.Item name="serialNo" label="代理序号" rules={[{ required: true }]}><InputNumber min={1} className="w-full" /></Form.Item>
-                    <Form.Item name="slug" label="代理域名" extra="保存后落地页为 {slug}.j11.net"><Input /></Form.Item>
+                    <Form.Item name="slug" label="代理域名" extra={`保存后落地页为 {slug}.${publicParentDomain()}`}><Input /></Form.Item>
                     <Form.Item name="inviteCode" label="邀请码"><Input /></Form.Item>
                     <Form.Item name="note" label="备注"><Input.TextArea rows={3} maxLength={500} /></Form.Item>
                     <div className="grid grid-cols-3 gap-3">
@@ -282,7 +283,7 @@ export default function StreamersPanel() {
                     }}
                 >
                     <h3>代理 {skinTarget.displayName} 的首页背景</h3>
-                    <p className="mb-4 text-sm opacity-70">落地页 {`https://${skinTarget.slug}.j11.net/`} 与官网同一套。这里只换背景视频，留空则用官方视频。</p>
+                    <p className="mb-4 text-sm opacity-70">落地页 {`https://${skinTarget.slug}.${publicParentDomain()}/`} 与官网同一套。这里只换背景视频，留空则用官方视频。</p>
                     <Form.Item name="heroVideoUrl" label="背景视频 URL（https，mp4/webm）">
                         <Input placeholder="留空则使用官网首页视频" />
                     </Form.Item>

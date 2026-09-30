@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/Wolf-Totem/huabutv-canvas">GitHub</a> ·
-  <a href="https://canvas.j11.net">官网</a> ·
+  <a href="https://www.huabutv.com">官网</a> ·
   <a href="docs/content/docs/overview/features.mdx">功能</a> ·
   <a href="docs/content/docs/overview/quick-start.mdx">文档</a>
 </p>
@@ -19,7 +19,7 @@
 
 > 项目仍在快速迭代。生产环境请按部署文档配置存储、渠道和访问控制后再对外开放。
 
-官网：[https://canvas.j11.net](https://canvas.j11.net)
+官网：[https://www.huabutv.com](https://www.huabutv.com)
 
 ## 核心能力
 

@@ -348,7 +348,11 @@ func aliyunStyleCDN(raw string) bool {
 		return false
 	}
 	host := strings.ToLower(parsed.Hostname())
-	return strings.Contains(host, "aliyuncs.com") || strings.HasSuffix(host, "cdn.j11.net") || strings.Contains(host, "oss-cn-") || strings.HasSuffix(host, "j11.net")
+	switch host {
+	case "cdn.huabutv.com", "oss.huabutv.com", "cdn.j11.net", "oss.j11.net":
+		return true
+	}
+	return strings.Contains(host, "aliyuncs.com") || strings.Contains(host, "oss-cn-")
 }
 
 func appendOSSImageProcess(raw string, width int) string {

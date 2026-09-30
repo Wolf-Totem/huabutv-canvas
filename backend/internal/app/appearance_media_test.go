@@ -136,3 +136,32 @@ func TestQuantizeAppearanceMediaWidth(t *testing.T) {
 		t.Fatalf("1900 -> %d", got)
 	}
 }
+
+func TestAliyunStyleCDNExactHosts(t *testing.T) {
+	allow := []string{
+		"https://cdn.huabutv.com",
+		"https://oss.huabutv.com/path",
+		"https://cdn.j11.net",
+		"https://oss.j11.net",
+		"https://bucket.oss-cn-qingdao.aliyuncs.com",
+		"https://example.aliyuncs.com",
+	}
+	for _, raw := range allow {
+		if !aliyunStyleCDN(raw) {
+			t.Fatalf("expected aliyun-style CDN: %s", raw)
+		}
+	}
+	deny := []string{
+		"https://www.huabutv.com",
+		"https://canvas.huabutv.com",
+		"https://agent.j11.net",
+		"https://www.j11.net",
+		"https://cdn.example.com",
+		"",
+	}
+	for _, raw := range deny {
+		if aliyunStyleCDN(raw) {
+			t.Fatalf("did not expect aliyun-style CDN: %s", raw)
+		}
+	}
+}

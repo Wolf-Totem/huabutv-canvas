@@ -7,6 +7,7 @@ import { Outlet, useLocation, useNavigate } from "react-router";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { LocaleSwitcher } from "@/components/i18n/locale-switcher";
 import { SiteComplianceFooter } from "@/components/layout/site-compliance-footer";
+import { rewriteLegacyCdnHost } from "@/lib/oss-image";
 import { PUBLIC_HOME_HREF, handlePublicHomeClick } from "@/lib/public-home";
 import { getPublicSiteSkin, type PublicSiteSkin } from "@/services/api/streamer";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -50,6 +51,8 @@ export function AuthScene() {
         { key: "register", label: t("auth.register") },
     ];
     const automaticVideoActive = appearance.authVideoAutoplay && !reducedMotion;
+    const authVideoUrl = rewriteLegacyCdnHost(appearance.authVideoUrl);
+    const authVideoPosterUrl = rewriteLegacyCdnHost(appearance.authVideoPosterUrl);
     const videoActive = Boolean(appearance.authVideoUrl && (automaticVideoActive || manualVideoActive));
 
     useEffect(() => {
@@ -80,12 +83,12 @@ export function AuthScene() {
         <main className="auth-scene h-dvh min-h-0 overflow-y-auto text-white lg:overflow-hidden">
             <div className="grid min-h-full lg:h-full lg:grid-cols-[minmax(0,1.32fr)_minmax(520px,1fr)]">
                 <section className="relative min-h-[250px] overflow-hidden sm:min-h-[320px] lg:min-h-0" aria-label={`${appearance.brandName}品牌影片`}>
-                    {videoActive && appearance.authVideoUrl ? <video ref={videoRef} className="absolute inset-0 size-full object-cover" src={appearance.authVideoUrl} poster={appearance.authVideoPosterUrl || undefined} autoPlay muted loop playsInline preload="metadata" onPlay={() => setVideoPlaying(true)} onPause={() => setVideoPlaying(false)} /> : appearance.authVideoPosterUrl && failedPosterURL !== appearance.authVideoPosterUrl ? <img className="absolute inset-0 size-full object-cover" src={appearance.authVideoPosterUrl} alt="" decoding="async" onError={() => setFailedPosterURL(appearance.authVideoPosterUrl)} /> : null}
+                    {videoActive && appearance.authVideoUrl ? <video ref={videoRef} className="absolute inset-0 size-full object-cover" src={authVideoUrl} poster={authVideoPosterUrl || undefined} autoPlay muted loop playsInline preload="metadata" onPlay={() => setVideoPlaying(true)} onPause={() => setVideoPlaying(false)} /> : authVideoPosterUrl && failedPosterURL !== authVideoPosterUrl ? <img className="absolute inset-0 size-full object-cover" src={authVideoPosterUrl} alt="" decoding="async" onError={() => setFailedPosterURL(authVideoPosterUrl)} /> : null}
                     <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,5,8,.58),transparent_42%,rgba(4,5,8,.74))]" />
                     <div aria-hidden className="auth-scene-video-blend absolute inset-y-0 right-0 hidden w-[clamp(120px,14vw,240px)] lg:block" />
                     <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-4 p-5 sm:p-7 lg:p-9">
                         <a href={PUBLIC_HOME_HREF} onClick={(event) => handlePublicHomeClick(event, appearance.publicHomepage)} className="inline-flex items-center gap-2.5 text-sm font-semibold text-white drop-shadow-sm transition-opacity hover:opacity-80">
-                            {siteSkin?.logoUrl ? <img src={siteSkin.logoUrl} alt="" className="size-10 object-contain" /> : <BrandLogo theme="dark" className="size-10" alt="" fallback={<img src="/logo.png" alt="" className="size-10 object-contain" />} />}
+                            {siteSkin?.logoUrl ? <img src={rewriteLegacyCdnHost(siteSkin.logoUrl)} alt="" className="size-10 object-contain" /> : <BrandLogo theme="dark" className="size-10" alt="" fallback={<img src="/logo.png" alt="" className="size-10 object-contain" />} />}
                             {siteSkin?.title || appearance.brandName}
                         </a>
                         <button type="button" className="inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/20 px-3 py-1.5 text-[var(--fs-label)] text-white/76 backdrop-blur-xl transition hover:bg-black/35 disabled:cursor-default" onClick={playVideo} disabled={videoPlaying || !appearance.authVideoUrl} aria-pressed={videoPlaying}>
