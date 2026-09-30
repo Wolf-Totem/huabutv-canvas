@@ -133,7 +133,7 @@ tiles:   [{ id, title, subtitle, badge?, href, icon? }]
 
 ## 6. README / About
 
-**写上：** 画布TV 基于 [ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)（影策）二次开发；官网 canvas.j11.net。
+**写上：** 画布TV 基于 [ddcat-ai/open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)（影策）二次开发；官网 www.huabutv.com。
 
 **保留：** `NOTICE`、`LICENSE`、Infinite Canvas 声明、赞助商表、贡献者表。
 
