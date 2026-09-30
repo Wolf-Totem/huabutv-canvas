@@ -35,8 +35,8 @@ test("login back-home and root dispatcher never bounce guests to /login", async 
 
 test("j11.net host helpers bind agent portal and streamer landing", async () => {
     const { isAgentHost, isStreamerMarketingHost, publicAgentHost, publicCanvasHost } = await import("../src/lib/public-hosts");
-    expect(publicAgentHost()).toBe("agent.j11.net");
-    expect(publicCanvasHost()).toBe("canvas.j11.net");
+    expect(publicAgentHost()).toBe("agent.huabutv.com");
+    expect(publicCanvasHost()).toBe("www.huabutv.com");
     expect(isAgentHost("agent.j11.net")).toBe(true);
     expect(isAgentHost("a.j11.net")).toBe(false);
     expect(isStreamerMarketingHost("a.j11.net")).toBe(true);

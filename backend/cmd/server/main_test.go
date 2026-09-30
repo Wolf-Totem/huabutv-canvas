@@ -108,6 +108,33 @@ func TestAllowedOriginConfiguredListDoesNotFallbackToArbitraryLocalhost(t *testi
 	}
 }
 
+func TestAllowedOriginHuabutvCutoverList(t *testing.T) {
+	t.Setenv("CANVAS_CORS_ORIGINS", "https://www.huabutv.com,https://huabutv.com,https://canvas.j11.net")
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest("GET", "http://backend/api/health", nil)
+	allow := []string{
+		"https://zhangsan.huabutv.com",
+		"https://agent.huabutv.com",
+		"https://a.j11.net",
+		"https://www.huabutv.com",
+		"https://huabutv.com",
+	}
+	for _, origin := range allow {
+		if !allowedOrigin(context, origin) {
+			t.Fatalf("cutover CORS list should allow %s", origin)
+		}
+	}
+	deny := []string{
+		"https://evil.example",
+		"https://evil.zhangsan.huabutv.com",
+	}
+	for _, origin := range deny {
+		if allowedOrigin(context, origin) {
+			t.Fatalf("cutover CORS list should deny %s", origin)
+		}
+	}
+}
+
 func TestRedactCanvasSharePath(t *testing.T) {
 	got := redactCanvasSharePath("/api/public/canvas-shares/private-token/resources/resource-1/file")
 	if got != "/api/public/canvas-shares/:token/resources/resource-1/file" {

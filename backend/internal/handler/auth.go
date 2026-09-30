@@ -1260,17 +1260,30 @@ func writeSessionCookie(c *gin.Context, domain string, maxAge int, value ...stri
 	http.SetCookie(c.Writer, cookie)
 }
 
-func sessionCookieDomain(c *gin.Context) string {
-	if value := strings.TrimSpace(os.Getenv("CANVAS_COOKIE_DOMAIN")); value != "" {
-		return value
+func normalizeRequestHost(c *gin.Context) string {
+	host := strings.ToLower(strings.TrimSpace(requestHost(c)))
+	if host == "" {
+		return ""
 	}
-	parent := service.PublicParentDomain()
-	host := strings.ToLower(requestHost(c))
 	if h, _, err := splitHostPort(host); err == nil {
-		host = h
+		host = strings.ToLower(h)
 	}
-	if parent != "" && (host == parent || strings.HasSuffix(host, "."+parent)) {
+	return strings.TrimSuffix(host, ".")
+}
+
+func sessionCookieDomain(c *gin.Context) string {
+	host := normalizeRequestHost(c)
+	if parent := service.MatchingKnownParent(host); parent != "" {
 		return "." + parent
+	}
+	if env := strings.TrimSpace(os.Getenv("CANVAS_COOKIE_DOMAIN")); env != "" {
+		parent := strings.TrimPrefix(strings.ToLower(env), ".")
+		if host == parent || strings.HasSuffix(host, "."+parent) {
+			if strings.HasPrefix(env, ".") {
+				return env
+			}
+			return "." + parent
+		}
 	}
 	return ""
 }

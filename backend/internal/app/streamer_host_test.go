@@ -56,12 +56,52 @@ func TestReservedSlug(t *testing.T) {
 	if err := ValidateStreamerSlug("agent"); err == nil {
 		t.Fatal("agent is reserved for the streamer console host")
 	}
+	for _, slug := range []string{"oss", "smtp", "track", "mx", "ns", "email"} {
+		if !IsReservedStreamerSlug(slug) {
+			t.Fatalf("expected reserved slug %q", slug)
+		}
+		if err := ValidateStreamerSlug(slug); err == nil {
+			t.Fatalf("ValidateStreamerSlug(%q) should fail", slug)
+		}
+	}
 }
 
-func TestPublicHostsDefaultToJ11(t *testing.T) {
+func TestPublicHostsDefaultToHuabutv(t *testing.T) {
 	t.Setenv("CANVAS_PUBLIC_PARENT_DOMAIN", "")
 	t.Setenv("CANVAS_PUBLIC_AGENT_HOST", "")
 	t.Setenv("CANVAS_PUBLIC_CANVAS_HOST", "")
+	t.Setenv("CANVAS_PUBLIC_BACKUP_PARENT_DOMAIN", "")
+	if PublicParentDomain() != "huabutv.com" {
+		t.Fatalf("parent = %s", PublicParentDomain())
+	}
+	if PublicAgentHost() != "agent.huabutv.com" {
+		t.Fatalf("agent = %s", PublicAgentHost())
+	}
+	if PublicCanvasHost() != "www.huabutv.com" {
+		t.Fatalf("canvas = %s", PublicCanvasHost())
+	}
+	if StreamerLandingHost("a") != "a.huabutv.com" {
+		t.Fatalf("landing = %s", StreamerLandingHost("a"))
+	}
+	if CanvasHostForParent("huabutv.com") != "www.huabutv.com" {
+		t.Fatalf("canvas parent = %s", CanvasHostForParent("huabutv.com"))
+	}
+	if CanvasHostForParent("j11.net") != "canvas.j11.net" {
+		t.Fatalf("j11 canvas = %s", CanvasHostForParent("j11.net"))
+	}
+	if AgentHostForParent("huabutv.com") != "agent.huabutv.com" {
+		t.Fatalf("agent parent = %s", AgentHostForParent("huabutv.com"))
+	}
+	if AgentHostForParent("j11.net") != "agent.j11.net" {
+		t.Fatalf("j11 agent = %s", AgentHostForParent("j11.net"))
+	}
+}
+
+func TestPublicHostsFollowEnvOverrideToJ11(t *testing.T) {
+	t.Setenv("CANVAS_PUBLIC_PARENT_DOMAIN", "j11.net")
+	t.Setenv("CANVAS_PUBLIC_AGENT_HOST", "agent.j11.net")
+	t.Setenv("CANVAS_PUBLIC_CANVAS_HOST", "canvas.j11.net")
+	t.Setenv("CANVAS_PUBLIC_BACKUP_PARENT_DOMAIN", "")
 	if PublicParentDomain() != "j11.net" {
 		t.Fatalf("parent = %s", PublicParentDomain())
 	}
@@ -74,6 +114,78 @@ func TestPublicHostsDefaultToJ11(t *testing.T) {
 	if StreamerLandingHost("a") != "a.j11.net" {
 		t.Fatalf("landing = %s", StreamerLandingHost("a"))
 	}
+	if matchingKnownParent("www.huabutv.com") != "huabutv.com" {
+		t.Fatalf("www still maps to brand parent, got %q", matchingKnownParent("www.huabutv.com"))
+	}
+	if CanvasHostForParent("huabutv.com") != "www.huabutv.com" {
+		t.Fatalf("huabutv canvas under j11 env = %s", CanvasHostForParent("huabutv.com"))
+	}
+	if CanvasHostForParent("j11.net") != "canvas.j11.net" {
+		t.Fatalf("j11 canvas = %s", CanvasHostForParent("j11.net"))
+	}
+}
+
+func TestKnownParentDomainsKeepJ11WhenBackupEmpty(t *testing.T) {
+	t.Setenv("CANVAS_PUBLIC_PARENT_DOMAIN", "huabutv.com")
+	t.Setenv("CANVAS_PUBLIC_BACKUP_PARENT_DOMAIN", "")
+	parents := knownParentDomains()
+	if !containsParent(parents, "huabutv.com") || !containsParent(parents, "j11.net") {
+		t.Fatalf("known parents = %v", parents)
+	}
+	if matchingKnownParent("canvas.j11.net") != "j11.net" {
+		t.Fatalf("j11 host = %q", matchingKnownParent("canvas.j11.net"))
+	}
+	if matchingKnownParent("www.huabutv.com:443") != "huabutv.com" {
+		t.Fatalf("huabutv host = %q", matchingKnownParent("www.huabutv.com:443"))
+	}
+	if matchingKnownParent("localhost") != "" {
+		t.Fatalf("localhost should not match a brand parent")
+	}
+}
+
+func TestPublicSiteSkinFollowsRequestParent(t *testing.T) {
+	t.Setenv("CANVAS_PUBLIC_PARENT_DOMAIN", "j11.net")
+	t.Setenv("CANVAS_PUBLIC_AGENT_HOST", "agent.j11.net")
+	t.Setenv("CANVAS_PUBLIC_CANVAS_HOST", "canvas.j11.net")
+	svc := newStreamerTestService(t)
+	admin := seedStreamerAdmin(t, svc)
+	user := seedStreamerUser(t, svc, "user-1", "zhangsan-user")
+	if _, err := svc.AdminCreateStreamer(admin, CreateStreamerRequest{UserID: user.ID, Slug: "zhangsan", DisplayName: "张三"}); err != nil {
+		t.Fatal(err)
+	}
+
+	huabu, err := svc.PublicSiteSkin("zhangsan.huabutv.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if huabu.ParentDomain != "huabutv.com" || huabu.CanvasHost != "www.huabutv.com" || huabu.AgentHost != "agent.huabutv.com" || huabu.LandingHost != "zhangsan.huabutv.com" {
+		t.Fatalf("huabutv skin hosts = %+v", huabu)
+	}
+
+	backup, err := svc.PublicSiteSkin("zhangsan.j11.net")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if backup.ParentDomain != "j11.net" || backup.CanvasHost != "canvas.j11.net" || backup.AgentHost != "agent.j11.net" || backup.LandingHost != "zhangsan.j11.net" {
+		t.Fatalf("j11 skin hosts = %+v", backup)
+	}
+
+	me, err := svc.StreamerConsoleMe(user, "agent.huabutv.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if me.Host != "zhangsan.huabutv.com" || me.CanvasURL != "https://www.huabutv.com" || me.AgentURL != "https://agent.huabutv.com" {
+		t.Fatalf("console me = %+v", me)
+	}
+}
+
+func containsParent(parents []string, want string) bool {
+	for _, parent := range parents {
+		if parent == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestResolveStreamerByHost(t *testing.T) {

@@ -29,16 +29,19 @@ var streamerInviteCodePattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9-]{2,30}[A-Z
 
 var reservedStreamerSlugs = map[string]struct{}{
 	"www": {}, "app": {}, "api": {}, "agent": {}, "admin": {}, "static": {}, "cdn": {}, "mail": {}, "canvas": {},
+	"oss": {}, "smtp": {}, "track": {}, "mx": {}, "ns": {}, "email": {},
 }
 
-const defaultPublicParentDomain = "j11.net"
+const defaultPublicParentDomain = "huabutv.com"
+
+var brandParentDomains = []string{"huabutv.com", "j11.net"}
 
 // ReservedStreamerSlugs 子域最左 label 不可用作主播 slug。
 func ReservedStreamerSlugs() []string {
-	return []string{"www", "app", "api", "agent", "admin", "static", "cdn", "mail", "canvas"}
+	return []string{"www", "app", "api", "agent", "admin", "static", "cdn", "mail", "canvas", "oss", "smtp", "track", "mx", "ns", "email"}
 }
 
-// PublicParentDomain 主播专属页和代理后台共用的父域，默认 j11.net。
+// PublicParentDomain 主播专属页和代理后台共用的父域，默认 huabutv.com。
 func PublicParentDomain() string {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("CANVAS_PUBLIC_PARENT_DOMAIN")))
 	value = strings.TrimPrefix(value, ".")
@@ -59,7 +62,7 @@ func PublicCanvasHost() string {
 	if host := strings.ToLower(strings.TrimSpace(os.Getenv("CANVAS_PUBLIC_CANVAS_HOST"))); host != "" {
 		return host
 	}
-	return "canvas." + PublicParentDomain()
+	return "www." + PublicParentDomain()
 }
 
 func StreamerLandingHost(slug string) string {
@@ -68,6 +71,83 @@ func StreamerLandingHost(slug string) string {
 		return ""
 	}
 	return slug + "." + PublicParentDomain()
+}
+
+func knownParentDomains() []string {
+	seen := make(map[string]struct{}, 4)
+	out := make([]string, 0, 4)
+	add := func(value string) {
+		value = strings.ToLower(strings.TrimSpace(value))
+		value = strings.TrimPrefix(value, ".")
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	for _, parent := range brandParentDomains {
+		add(parent)
+	}
+	add(PublicParentDomain())
+	add(os.Getenv("CANVAS_PUBLIC_BACKUP_PARENT_DOMAIN"))
+	return out
+}
+
+func matchingKnownParent(host string) string {
+	value := strings.ToLower(strings.TrimSpace(host))
+	if value == "" {
+		return ""
+	}
+	if h, _, err := net.SplitHostPort(value); err == nil {
+		value = strings.ToLower(h)
+	}
+	value = strings.TrimSuffix(value, ".")
+	for _, parent := range knownParentDomains() {
+		if value == parent || strings.HasSuffix(value, "."+parent) {
+			return parent
+		}
+	}
+	return ""
+}
+
+func MatchingKnownParent(host string) string {
+	return matchingKnownParent(host)
+}
+
+func ParentDomainForHost(host string) string {
+	if parent := matchingKnownParent(host); parent != "" {
+		return parent
+	}
+	return PublicParentDomain()
+}
+
+func CanvasHostForParent(parent string) string {
+	parent = strings.ToLower(strings.TrimSpace(parent))
+	parent = strings.TrimPrefix(parent, ".")
+	switch parent {
+	case "j11.net":
+		return "canvas.j11.net"
+	default:
+		if parent == PublicParentDomain() {
+			return PublicCanvasHost()
+		}
+		return "www." + parent
+	}
+}
+
+func AgentHostForParent(parent string) string {
+	parent = strings.ToLower(strings.TrimSpace(parent))
+	parent = strings.TrimPrefix(parent, ".")
+	if parent == "j11.net" {
+		return "agent.j11.net"
+	}
+	if parent == PublicParentDomain() {
+		return PublicAgentHost()
+	}
+	return "agent." + parent
 }
 
 func publicHTTPS(host string) string {
@@ -689,6 +769,7 @@ func (s *Service) PublicSiteSkin(host string) (*PublicSiteSkin, error) {
 	if strings.TrimSpace(skin.ThemeJSON) != "" {
 		_ = json.Unmarshal([]byte(skin.ThemeJSON), &theme)
 	}
+	parent := ParentDomainForHost(host)
 	out := &PublicSiteSkin{
 		Slug:                streamer.Slug,
 		DisplayName:         streamer.DisplayName,
@@ -701,10 +782,10 @@ func (s *Service) PublicSiteSkin(host string) (*PublicSiteSkin, error) {
 		CustomHomeEnabled:   false,
 		Home:                nil,
 		StreamerActive:      true,
-		ParentDomain:        PublicParentDomain(),
-		AgentHost:           PublicAgentHost(),
-		CanvasHost:          PublicCanvasHost(),
-		LandingHost:         StreamerLandingHost(streamer.Slug),
+		ParentDomain:        parent,
+		AgentHost:           AgentHostForParent(parent),
+		CanvasHost:          CanvasHostForParent(parent),
+		LandingHost:         streamer.Slug + "." + parent,
 		HeroVideoURL:        resolvedStreamerHeroURL(skin, "video"),
 		HeroPosterURL:       resolvedStreamerHeroURL(skin, "poster"),
 	}
@@ -729,6 +810,7 @@ func (s *Service) officialPublicSiteSkin(host string) (*PublicSiteSkin, error) {
 			title = name
 		}
 	}
+	parent := ParentDomainForHost(host)
 	return &PublicSiteSkin{
 		Title:               title,
 		Theme:               map[string]any{},
@@ -737,9 +819,9 @@ func (s *Service) officialPublicSiteSkin(host string) (*PublicSiteSkin, error) {
 		CustomHomeEnabled:   false,
 		Home:                nil,
 		StreamerActive:      false,
-		ParentDomain:        PublicParentDomain(),
-		AgentHost:           PublicAgentHost(),
-		CanvasHost:          PublicCanvasHost(),
+		ParentDomain:        parent,
+		AgentHost:           AgentHostForParent(parent),
+		CanvasHost:          CanvasHostForParent(parent),
 	}, nil
 }
 
@@ -771,22 +853,18 @@ func (s *Service) StreamerConsoleMe(user *model.User, requestHost string) (*Stre
 	if err != nil {
 		return nil, err
 	}
-	host := StreamerLandingHost(streamer.Slug)
-	if host == "" {
-		parent := cookieParentHost(requestHost)
-		if parent != "" {
-			host = streamer.Slug + "." + parent
-		} else {
-			host = streamer.Slug
-		}
+	parent := ParentDomainForHost(requestHost)
+	host := ""
+	if slug := strings.ToLower(strings.TrimSpace(streamer.Slug)); slug != "" {
+		host = slug + "." + parent
 	}
 	return &StreamerConsoleMe{
 		Slug:                  streamer.Slug,
 		InviteCode:            streamer.InviteCode,
 		Host:                  host,
 		LandingURL:            publicHTTPS(host),
-		AgentURL:              publicHTTPS(PublicAgentHost()),
-		CanvasURL:             publicHTTPS(PublicCanvasHost()),
+		AgentURL:              publicHTTPS(AgentHostForParent(parent)),
+		CanvasURL:             publicHTTPS(CanvasHostForParent(parent)),
 		Status:                streamer.Status,
 		SerialNo:              streamer.SerialNo,
 		DisplayName:           streamer.DisplayName,
@@ -1060,22 +1138,6 @@ func maskDisplayName(name string) string {
 		return "*"
 	}
 	return string(r) + "*"
-}
-
-func cookieParentHost(host string) string {
-	slug := StreamerSlugFromHost(host)
-	value := strings.ToLower(strings.TrimSpace(host))
-	if h, _, err := net.SplitHostPort(value); err == nil {
-		value = strings.ToLower(h)
-	}
-	if slug != "" && strings.HasPrefix(value, slug+".") {
-		return strings.TrimPrefix(value, slug+".")
-	}
-	parts := strings.Split(value, ".")
-	if len(parts) >= 2 {
-		return strings.Join(parts[1:], ".")
-	}
-	return value
 }
 
 func validateThemeJSON(raw json.RawMessage) error {
