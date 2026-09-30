@@ -1,10 +1,17 @@
 import { applyCanvasConnectionPromptSync, buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences } from "./canvas-resource-references";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
+import type { CanvasResourceReference } from "./canvas-resource-references";
 
-export function connectCanvasTextMention(nodes: CanvasNodeData[], connections: CanvasConnection[], targetId: string, sourceId: string, connectionId: string) {
+export function connectCanvasResourceMention(
+    nodes: CanvasNodeData[],
+    connections: CanvasConnection[],
+    targetId: string,
+    sourceId: string,
+    connectionId: string,
+): { nodes: CanvasNodeData[]; connections: CanvasConnection[]; reference: CanvasResourceReference } {
     const target = nodes.find((node) => node.id === targetId);
-    const source = buildCanvasResourceReferences(nodes, connections).find((reference) => reference.nodeId === sourceId && reference.kind === "text");
-    if (!target || !source || sourceId === targetId || target.metadata?.locked) throw new Error("无法引用该文本节点");
+    const source = buildCanvasResourceReferences(nodes, connections).find((reference) => reference.nodeId === sourceId);
+    if (!target || !source || sourceId === targetId || target.metadata?.locked) throw new Error("无法引用该节点");
     const configId = connections.find((edge) => edge.fromNodeId === targetId && nodes.find((node) => node.id === edge.toNodeId)?.type === CanvasNodeType.Config)?.toNodeId;
     const configReferences = configId ? buildCanvasNodeMentionReferenceMap(nodes, connections).get(configId) : [];
     const receiverId = configReferences?.some((reference) => reference.nodeId !== targetId) ? configId! : targetId;
@@ -21,6 +28,12 @@ export function connectCanvasTextMention(nodes: CanvasNodeData[], connections: C
     const nextConnections = connections.some((edge) => edge.fromNodeId === sourceId && edge.toNodeId === receiverId) ? connections : [...connections, { id: connectionId, fromNodeId: sourceId, toNodeId: receiverId }];
     const nextNodes = applyCanvasConnectionPromptSync(nodes, connections, nodes, nextConnections);
     const reference = buildCanvasNodeMentionReferenceMap(nextNodes, nextConnections).get(targetId)?.find((item) => item.nodeId === sourceId);
-    if (!reference) throw new Error("文本引用未建立");
+    if (!reference) throw new Error("引用未建立");
     return { nodes: nextNodes, connections: nextConnections, reference };
+}
+
+export function connectCanvasTextMention(nodes: CanvasNodeData[], connections: CanvasConnection[], targetId: string, sourceId: string, connectionId: string) {
+    const source = buildCanvasResourceReferences(nodes, connections).find((reference) => reference.nodeId === sourceId && reference.kind === "text");
+    if (!source) throw new Error("无法引用该节点");
+    return connectCanvasResourceMention(nodes, connections, targetId, sourceId, connectionId);
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { connectCanvasTextMention } from "@/lib/canvas/canvas-text-mention";
+import { connectCanvasResourceMention, connectCanvasTextMention } from "@/lib/canvas/canvas-text-mention";
 import { buildNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
 import { canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
@@ -41,4 +41,22 @@ test("appending a text reference preserves existing mention numbering with an em
     const context = buildNodeGenerationContext("video", linked.nodes, linked.connections, "@文本1 @文本2", []);
     expect(context.prompt).toContain("原有文本");
     expect(context.prompt).toContain("清晨，人物推开木门");
+});
+
+test("unconnected image and video mentions auto-connect and reject cycles or locked targets", () => {
+    const image: CanvasNodeData = { id: "image", type: CanvasNodeType.Image, title: "参考图", position: { x: 0, y: 240 }, width: 300, height: 200, metadata: { content: "https://example.com/ref.png" } };
+    const video: CanvasNodeData = { id: "video", type: CanvasNodeType.Video, title: "镜头1", position: { x: 500, y: 0 }, width: 300, height: 200 };
+    const linkedImage = connectCanvasResourceMention([image, video], [], "video", "image", "image-edge");
+    expect(linkedImage.connections).toEqual([{ id: "image-edge", fromNodeId: "image", toNodeId: "video" }]);
+    expect(linkedImage.reference.active).toBe(true);
+    expect(linkedImage.reference.kind).toBe("image");
+
+    const sourceVideo: CanvasNodeData = { id: "clip", type: CanvasNodeType.Video, title: "素材视频", position: { x: 0, y: 480 }, width: 300, height: 200, metadata: { content: "https://example.com/clip.mp4" } };
+    const linkedVideo = connectCanvasResourceMention([sourceVideo, video], [], "video", "clip", "video-edge");
+    expect(linkedVideo.reference.kind).toBe("video");
+    expect(linkedVideo.connections[0].fromNodeId).toBe("clip");
+
+    expect(() => connectCanvasResourceMention([image, video], [{ id: "reverse", fromNodeId: "video", toNodeId: "image" }], "video", "image", "loop")).toThrow("循环");
+    expect(() => connectCanvasResourceMention([image, video], [], "video", "video", "self")).toThrow("无法引用该节点");
+    expect(() => connectCanvasResourceMention([image, { ...video, metadata: { locked: true } }], [], "video", "image", "locked")).toThrow("无法引用该节点");
 });

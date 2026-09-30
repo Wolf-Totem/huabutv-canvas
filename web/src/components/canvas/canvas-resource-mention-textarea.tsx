@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, 
 
 import { useCanvasColorTheme } from "@/lib/canvas-theme";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
+import { emptyQueryMentionCandidates, groupCanvasMentionReferences } from "@/lib/canvas/canvas-mention-groups";
 import { buildAssetMentionReferences, canvasResourceMentionToken, findCanvasResourceAutoLinkMatch, type CanvasResourceAutoLinkMatch, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { useAssetStore, type AssetCategory } from "@/stores/use-asset-store";
 import { CanvasNodeType } from "@/types/canvas";
@@ -49,10 +50,11 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
     autoLinkEnabled?: boolean;
     mentionEnabled?: boolean;
+    mentionGroupLabels?: { currentCanvas: string; allCanvases: string };
 };
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, mentionEnabled = true, ...props },
+    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, mentionEnabled = true, mentionGroupLabels = { currentCanvas: "当前画布", allCanvases: "所有画布" }, ...props },
     forwardedRef,
 ) {
     const assets = useAssetStore((state) => state.assets);
@@ -75,13 +77,18 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const rawAssetReferences = useMemo(() => includeAssetLibrary ? buildAssetMentionReferences(assets) : [], [assets, includeAssetLibrary]);
     const assetReferences = useResolvedCanvasResourceReferences(rawAssetReferences);
     const activeCanvasReferences = useMemo(() => canvasReferences.filter((item) => item.active), [canvasReferences]);
-    const availableReferences = useMemo(() => [...(onSelectReference ? canvasReferences : activeCanvasReferences), ...assetReferences], [onSelectReference, canvasReferences, activeCanvasReferences, assetReferences]);
+    const menuCanvasReferences = onSelectReference ? canvasReferences : activeCanvasReferences;
+    const availableReferences = useMemo(() => [...menuCanvasReferences, ...assetReferences], [menuCanvasReferences, assetReferences]);
+    const mentionGroups = useMemo(() => groupCanvasMentionReferences({
+        canvasReferences: menuCanvasReferences,
+        assetReferences,
+        query: mention?.query ?? "",
+    }), [assetReferences, menuCanvasReferences, mention?.query]);
     const candidates = useMemo(() => {
         if (!mention) return [];
-        const query = mention.query.trim().toLowerCase();
-        if (!query) return onSelectReference ? canvasReferences : activeCanvasReferences;
-        return availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(query));
-    }, [onSelectReference, canvasReferences, activeCanvasReferences, availableReferences, mention]);
+        if (!mention.query.trim()) return emptyQueryMentionCandidates(mentionGroups);
+        return availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(mention.query.trim().toLowerCase()));
+    }, [availableReferences, mention, mentionGroups]);
     const activeReferences = useMemo(() => {
         if (!highlightLabels) return [];
         return [...activeCanvasReferences, ...assetReferences.filter((item) => value.includes(canvasResourceMentionToken(item)))];
@@ -330,13 +337,14 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const menu = mentionEnabled && mention && availableReferences.length && menuAnchor ? (
         <MentionMenu
             anchor={menuAnchor}
-            connectedReferences={activeCanvasReferences}
+            canvasReferences={onSelectReference ? canvasReferences : activeCanvasReferences}
             assetReferences={assetReferences}
             filteredReferences={candidates}
             query={mention.query}
             cursorOffset={mention.end}
             activeReferenceId={activeIndex >= 0 ? candidates[Math.min(activeIndex, candidates.length - 1)]?.id : undefined}
             preferredWidth={mentionMenuWidth}
+            mentionGroupLabels={mentionGroupLabels}
             onQueryChange={(query) => setMention((current) => current ? { ...current, query } : current)}
             onClose={closeMention}
             onSelect={insertReference}
@@ -669,15 +677,16 @@ function syncInlineMentionPreviews(editor: HTMLElement, references: CanvasResour
     });
 }
 
-function MentionMenu({ anchor, connectedReferences, assetReferences, filteredReferences, query, cursorOffset, activeReferenceId, preferredWidth, onQueryChange, onClose, onSelect }: {
+function MentionMenu({ anchor, canvasReferences, assetReferences, filteredReferences, query, cursorOffset, activeReferenceId, preferredWidth, mentionGroupLabels, onQueryChange, onClose, onSelect }: {
     anchor: HTMLElement;
-    connectedReferences: CanvasResourceReference[];
+    canvasReferences: CanvasResourceReference[];
     assetReferences: CanvasResourceReference[];
     filteredReferences: CanvasResourceReference[];
     query: string;
     cursorOffset: number;
     activeReferenceId?: string;
     preferredWidth: number;
+    mentionGroupLabels: { currentCanvas: string; allCanvases: string };
     onQueryChange: (query: string) => void;
     onClose: () => void;
     onSelect: (reference: CanvasResourceReference) => void;
@@ -717,8 +726,9 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
     const categoryItems = Object.entries(ASSET_CATEGORY_LABELS)
         .map(([value, label]) => ({ value: value as AssetCategory, label, count: assetReferences.filter((item) => item.category === value).length }))
         .filter((item) => item.count > 0);
-    const connectedNodes = connectedReferences.filter((item) => item.kind !== "skill");
-    const skillReferences = connectedReferences.filter((item) => item.kind === "skill");
+    const mentionGroups = groupCanvasMentionReferences({ canvasReferences, assetReferences, query: "" });
+    const connectedNodes = mentionGroups.currentCanvas;
+    const skillReferences = mentionGroups.skills;
     const visibleReferences = query
         ? filteredReferences
         : category
@@ -783,8 +793,8 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
                     <>
                         {connectedNodes.length ? (
                             <section className="canvas-resource-mention-section">
-                                <h4><span>画布节点</span><small>{connectedNodes.length}</small></h4>
-                                <MentionReferenceList references={connectedNodes} activeReferenceId={activeReferenceId} onSelect={selectReference} />
+                                <h4><span>{mentionGroupLabels.currentCanvas}</span><small>{connectedNodes.length}</small></h4>
+                                <MentionReferenceList references={connectedNodes} activeReferenceId={activeReferenceId} onSelect={selectReference} inactiveHint="选择后自动连线" />
                             </section>
                         ) : null}
                         {skillReferences.length ? (
@@ -795,7 +805,7 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
                         ) : null}
                         {categoryItems.length ? (
                             <section className="canvas-resource-mention-section">
-                                <h4><span>素材库</span><small>{assetReferences.length}</small></h4>
+                                <h4><span>{mentionGroupLabels.allCanvases}</span><small>{assetReferences.length}</small></h4>
                                 {categoryItems.map((item) => (
                                     <button key={item.value} type="button" className="canvas-resource-mention-folder" onClick={() => setCategory(item.value)}>
                                         <Folder aria-hidden />
@@ -832,7 +842,7 @@ function handleMentionEscape(event: { key: string; preventDefault: () => void; s
     return true;
 }
 
-function MentionReferenceList({ references, activeReferenceId, onSelect }: { references: CanvasResourceReference[]; activeReferenceId?: string; onSelect: (reference: CanvasResourceReference) => void }) {
+function MentionReferenceList({ references, activeReferenceId, onSelect, inactiveHint }: { references: CanvasResourceReference[]; activeReferenceId?: string; onSelect: (reference: CanvasResourceReference) => void; inactiveHint?: string }) {
     if (!references.length) return <div className="canvas-resource-mention-empty">没有匹配的引用</div>;
     return references.map((reference) => (
         <button
@@ -856,6 +866,8 @@ function MentionReferenceList({ references, activeReferenceId, onSelect }: { ref
                 <span className="canvas-resource-mention-title-row"><strong title={reference.label}>{reference.label}</strong>{reference.kind === "skill" ? <em>技能</em> : null}</span>
                 {reference.kind === "skill" ? (
                     <span className="canvas-resource-mention-meta"><span>{reference.skill?.description || reference.text || "工作流技能"}</span><small>{reference.skill?.version ? `v${reference.skill.version}` : ""}{reference.skill?.fileCount ? ` · ${reference.skill.fileCount} 文件` : ""}</small></span>
+                ) : inactiveHint && !reference.active ? (
+                    <span className="canvas-resource-mention-meta"><span>{inactiveHint}</span></span>
                 ) : reference.text && reference.text !== reference.title ? <span className="canvas-resource-mention-meta"><span>{reference.text}</span></span> : null}
             </span>
         </button>

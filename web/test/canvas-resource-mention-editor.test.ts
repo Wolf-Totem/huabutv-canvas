@@ -162,4 +162,14 @@ describe("canvas resource mention editor", () => {
         expect(panel).toContain("inert={expandedPromptOpen");
         expect(panel).not.toContain("z-[var(--z-dialog-popover)]");
     });
+
+    test("groups empty mention menus as current canvas, skills, and all canvases", () => {
+        const editor = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        expect(editor).toContain("当前画布");
+        expect(editor).toContain("所有画布");
+        expect(editor).toContain("选择后自动连线");
+        expect(editor).toContain("mention != null && handleMentionEscape(event, closeMention)");
+        expect(editor).not.toContain("<span>画布节点</span>");
+        expect(editor).not.toContain("<span>素材库</span>");
+    });
 });
