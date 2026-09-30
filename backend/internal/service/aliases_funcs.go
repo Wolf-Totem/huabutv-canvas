@@ -31,9 +31,6 @@ var (
 	PublicAgentHost                            = app.PublicAgentHost
 	PublicCanvasHost                           = app.PublicCanvasHost
 	MatchingKnownParent                        = app.MatchingKnownParent
-	ParentDomainForHost                        = app.ParentDomainForHost
-	CanvasHostForParent                        = app.CanvasHostForParent
-	AgentHostForParent                         = app.AgentHostForParent
 	StreamerLandingHost                        = app.StreamerLandingHost
 	FailedPrecondition                         = app.FailedPrecondition
 	FormatModelError                           = app.FormatModelError
