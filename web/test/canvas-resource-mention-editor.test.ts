@@ -138,4 +138,28 @@ describe("canvas resource mention editor", () => {
         expect(css).toContain(".agent-composer-prompt-scroll");
         expect(css).not.toContain(".agent-tool-row:hover");
     });
+
+    test("portals expanded mention overlays into the modal lock root and stops Escape", () => {
+        const editor = source("../src/components/canvas/canvas-resource-mention-textarea.tsx");
+        const panel = source("../src/components/canvas/canvas-node-prompt-panel.tsx");
+        const css = source("../src/styles/globals.css");
+        const portalHost = editor.slice(editor.indexOf("function mentionPortalHost("), editor.indexOf("function mentionOverlayClassName("));
+        const escapeHandler = editor.slice(editor.indexOf("function handleMentionEscape("), editor.indexOf("function MentionReferenceList("));
+
+        expect(css).toContain("--z-mention-menu: 1020");
+        expect(portalHost).toContain("[role='dialog'].ant-modal");
+        expect(portalHost).toContain("document.body");
+        expect(editor).toContain("z-[var(--z-mention-menu)]");
+        expect(editor).toContain("pointer-events-auto");
+        expect(editor).toContain("z-[var(--z-tooltip)]");
+        expect(editor).toContain("mentionEnabled");
+        expect(editor).toContain("mentionPortalHost(overlayAnchor)");
+        expect(editor).toContain("mentionPortalHost(anchor)");
+        expect(escapeHandler).toContain("event.preventDefault()");
+        expect(escapeHandler).toContain("event.stopPropagation()");
+        expect(editor).toContain("mention != null && handleMentionEscape(event, closeMention)");
+        expect(panel).toContain("mentionEnabled={!expandedPromptOpen");
+        expect(panel).toContain("inert={expandedPromptOpen");
+        expect(panel).not.toContain("z-[var(--z-dialog-popover)]");
+    });
 });

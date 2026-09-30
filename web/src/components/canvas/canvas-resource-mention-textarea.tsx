@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ChevronRight, FileText, Folder, Image as ImageIcon, Music2, Pencil, Search, UserRound, Video, Workflow } from "lucide-react";
@@ -48,10 +48,11 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     activeDropReferenceId?: string | null;
     onReferenceFilesDrop?: (reference: CanvasResourceReference, files: File[]) => void;
     autoLinkEnabled?: boolean;
+    mentionEnabled?: boolean;
 };
 
 export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea(
-    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, ...props },
+    { value, references, onSelectReference, onChange, onSubmit, onKeyDown, className, containerClassName, style, highlightLabels = true, mentionMenuWidth = 320, sendOnEnter = true, onContentSizeChange, includeAssetLibrary = false, activeDropReferenceId, onReferenceFilesDrop, autoLinkEnabled = false, mentionEnabled = true, ...props },
     forwardedRef,
 ) {
     const assets = useAssetStore((state) => state.assets);
@@ -213,8 +214,18 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         setActiveIndex(-1);
     };
 
+    useEffect(() => {
+        if (mentionEnabled) return;
+        closeMention();
+        setAutoLinkCursor(null);
+    }, [mentionEnabled]);
+
     const syncMention = (nextValue: string, cursor: number) => {
         setAutoLinkCursor(cursor);
+        if (!mentionEnabled) {
+            closeMention();
+            return;
+        }
         const prefix = nextValue.slice(0, cursor);
         const match = /@([^\s@,.;:!?，。；：！？、)\]}】）]*)$/.exec(prefix);
         if (!match || !availableReferences.length) {
@@ -259,12 +270,14 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         setAutoLinkCursor(match.start + insertText.length);
     };
 
-    const autoLinkSuggestion = autoLinkMatch ? createPortal(
+    const overlayAnchor = (useRichEditor ? editorRef.current : textareaRef.current) || containerRef.current;
+    const overlayHost = mentionPortalHost(overlayAnchor);
+    const autoLinkSuggestion = mentionEnabled && autoLinkMatch ? createPortal(
         <button
             ref={autoLinkSuggestionRef}
             type="button"
             data-canvas-no-zoom
-            className="fixed z-[var(--z-tooltip)] inline-flex max-w-[min(360px,calc(100vw-24px))] items-center gap-1.5 rounded-md border border-current/15 px-2 py-1 text-[var(--fs-micro)] shadow-sm"
+            className={`${mentionOverlayClassName(overlayHost)} inline-flex max-w-[min(360px,calc(100vw-24px))] items-center gap-1.5 rounded-md border border-current/15 px-2 py-1 text-[var(--fs-micro)] shadow-sm`}
             style={{ ...autoLinkPosition, visibility: autoLinkPosition ? "visible" : "hidden", background: theme.node.panel, color: theme.node.text }}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
@@ -274,7 +287,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
             <span className="truncate">引用「{autoLinkMatch.query}」→ @{autoLinkMatch.reference.label}</span>
             <kbd className="shrink-0 rounded border border-current/20 px-1 font-mono text-[var(--fs-micro)]">Tab</kbd>
         </button>,
-        document.body,
+        overlayHost,
     ) : null;
 
     const syncEditableValue = () => {
@@ -314,7 +327,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         caretColor: style?.color || theme.node.text,
     } as CSSProperties;
     const menuAnchor = useRichEditor ? editorRef.current : textareaRef.current;
-    const menu = mention && availableReferences.length && menuAnchor ? (
+    const menu = mentionEnabled && mention && availableReferences.length && menuAnchor ? (
         <MentionMenu
             anchor={menuAnchor}
             connectedReferences={activeCanvasReferences}
@@ -416,12 +429,8 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                                 insertReference(candidates[activeIndex < 0 ? 0 : Math.min(activeIndex, candidates.length - 1)]);
                                 return;
                             }
-                            if (event.key === "Escape") {
-                                event.preventDefault();
-                                closeMention();
-                                return;
-                            }
                         }
+                        if (mention != null && handleMentionEscape(event, closeMention)) return;
                         if (event.key === "Enter") {
                             event.preventDefault();
                             const shouldSubmit = sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey;
@@ -532,12 +541,8 @@ if (event.key === "Enter" && (event.nativeEvent.isComposing || composingRef.curr
                             insertReference(candidates[activeIndex < 0 ? 0 : Math.min(activeIndex, candidates.length - 1)]);
                             return;
                         }
-                        if (event.key === "Escape") {
-                            event.preventDefault();
-                            closeMention();
-                            return;
-                        }
                     }
+                    if (mention != null && handleMentionEscape(event, closeMention)) return;
                     const shouldSubmit = event.key === "Enter" && (sendOnEnter ? !event.ctrlKey && !event.metaKey && !event.shiftKey : (event.ctrlKey || event.metaKey) && !event.shiftKey);
                     if (shouldSubmit && onSubmit) {
                         event.preventDefault();
@@ -730,11 +735,12 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
         return () => window.removeEventListener("pointerdown", closeOnOutsidePointer, true);
     }, [anchor, onClose]);
 
+    const portalHost = mentionPortalHost(anchor);
     return createPortal(
         <div
             ref={menuRef}
             data-canvas-resource-mention-menu="true"
-            className="canvas-resource-mention-menu fixed z-[var(--z-tooltip)]"
+            className={`canvas-resource-mention-menu ${mentionOverlayClassName(portalHost)}`}
             data-placement={position.showAbove ? "top" : "bottom"}
             style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight, transform: position.showAbove ? "translateY(-100%)" : undefined }}
             onPointerDown={stopCanvasInteraction}
@@ -750,12 +756,10 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
                     onChange={(event) => onQueryChange(event.target.value)}
                     onPointerDown={(event) => event.stopPropagation()}
                     onKeyDown={(event) => {
-                        if (event.key === "Escape") {
-                            event.preventDefault();
+                        if (handleMentionEscape(event, () => {
                             onClose();
                             anchor.focus();
-                            return;
-                        }
+                        })) return;
                         if (event.key === "Enter" && filteredReferences.length) {
                             event.preventDefault();
                             selectReference(filteredReferences[0]);
@@ -806,8 +810,26 @@ function MentionMenu({ anchor, connectedReferences, assetReferences, filteredRef
                 )}
             </div>
         </div>,
-        document.body,
+        portalHost,
     );
+}
+
+function mentionPortalHost(anchor: HTMLElement | null | undefined) {
+    return anchor?.closest("[role='dialog'].ant-modal") || document.body;
+}
+
+function mentionOverlayClassName(host: HTMLElement) {
+    return host === document.body
+        ? "fixed z-[var(--z-tooltip)]"
+        : "fixed z-[var(--z-mention-menu)] pointer-events-auto";
+}
+
+function handleMentionEscape(event: { key: string; preventDefault: () => void; stopPropagation: () => void }, close: () => void) {
+    if (event.key !== "Escape") return false;
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+    return true;
 }
 
 function MentionReferenceList({ references, activeReferenceId, onSelect }: { references: CanvasResourceReference[]; activeReferenceId?: string; onSelect: (reference: CanvasResourceReference) => void }) {

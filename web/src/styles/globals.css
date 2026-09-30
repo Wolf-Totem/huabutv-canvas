@@ -229,6 +229,7 @@
     --z-popover: 200;           /* L10 弹出层 */
     --z-toast: 500;             /* L11 通知 */
     --z-tooltip: 1000;          /* L12 提示 */
+    --z-mention-menu: 1020;     /* 放大编辑 dialog 内，高于关闭钮 1010；勿提到 body */
     --z-dialog-popover: 1100;   /* AntD Modal 之上的设置浮层 */
     --z-loader: 1200;           /* 全屏加载遮罩 */
     --z-max: 2000;              /* L13 最高（紧急通知）*/

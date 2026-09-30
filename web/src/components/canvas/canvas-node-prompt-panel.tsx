@@ -1,6 +1,6 @@
 import { Button, Image as AntImage, InputNumber, Modal, Popover } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ArrowLeftRight, ArrowUp, AtSign, Boxes, Camera, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, Link2, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -24,6 +24,7 @@ import { CanvasPortraitTexturePopover } from "./canvas-portrait-texture-popover"
 import { CanvasPromptOptimizerDrawer } from "./canvas-prompt-optimizer-drawer";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
 import { autoMentionCanvasResourceReferences, canvasResourceMentionToken, normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { autoExpandedEditorHeight, clampPromptHeight, estimatePromptContentHeight, expandedChromeHeight, promptEditorBounds, PROMPT_REFERENCE_SHELF_HEIGHT } from "@/lib/canvas/prompt-editor-height";
 import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
 import { createPluginHostContext } from "@/services/plugin-host";
 import { usePluginStore } from "@/stores/use-plugin-store";
@@ -53,16 +54,6 @@ type CanvasNodePromptPanelProps = {
 
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
-const PROMPT_REFERENCE_SHELF_HEIGHT = 58;
-// Keep the compact editor readable at rest: three 20px lines plus 12px vertical padding.
-const PROMPT_EDITOR_MIN_HEIGHT = 72;
-const PROMPT_EDITOR_EXPANDED_MIN_HEIGHT = 76;
-const PROMPT_EDITOR_LINE_HEIGHT = 20;
-const PROMPT_EDITOR_EXPANDED_LINE_HEIGHT = 24;
-const PROMPT_EDITOR_VERTICAL_PADDING = 12;
-const PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING = 20;
-const PROMPT_EDITOR_MAX_LINES = 8;
-
 export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onAddReference, onRemoveReference, onReorderReferences, onReplaceReference, onReplaceReferenceFiles, onClose, onNodeMouseDown, onImageSettingsOpenChange, workspaceMode = "professional" }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const theme = useCanvasColorTheme();
@@ -85,6 +76,11 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
     const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [autoLinkEnabled, setAutoLinkEnabled] = useState(true);
+    const [viewportHeight, setViewportHeight] = useState(() => typeof window === "undefined" ? 900 : window.innerHeight);
+    const [measuredChromeHeight, setMeasuredChromeHeight] = useState<number | null>(null);
+    const expandedHeaderRef = useRef<HTMLDivElement | null>(null);
+    const expandedFooterRef = useRef<HTMLDivElement | null>(null);
+    const expandedToolsRef = useRef<HTMLDivElement | null>(null);
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
     const normalizedSavedPrompt = useMemo(() => normalizeCanvasNodeMentionTokens(savedPrompt, mentionReferences), [mentionReferences, savedPrompt]);
     const activeReferences = resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill");
@@ -158,10 +154,22 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         boxShadow: theme.node.shadow,
     } as CSSProperties;
     const controlSurface = "var(--canvas-composer-control-surface)";
-    const promptBounds = promptEditorBounds(false, activeReferenceCount > 0);
-    const expandedPromptBounds = promptEditorBounds(true, activeReferenceCount > 0);
+    const chromeHeight = measuredChromeHeight ?? expandedChromeHeight({ hasVideoPromptTools });
+    const promptBounds = promptEditorBounds({ expanded: false, hasReferences: activeReferenceCount > 0 });
+    const expandedPromptBounds = promptEditorBounds({
+        expanded: true,
+        hasReferences: activeReferenceCount > 0,
+        viewportHeight,
+        chromeHeight,
+    });
     const composerHeight = clampPromptHeight(manualPromptHeight ?? promptContentHeight + (activeReferenceCount ? PROMPT_REFERENCE_SHELF_HEIGHT : 0), promptBounds);
-    const expandedComposerHeight = clampPromptHeight(manualExpandedPromptHeight ?? expandedPromptContentHeight + (activeReferenceCount ? PROMPT_REFERENCE_SHELF_HEIGHT : 0), expandedPromptBounds);
+    const expandedComposerHeight = autoExpandedEditorHeight({
+        contentHeight: expandedPromptContentHeight,
+        hasReferences: activeReferenceCount > 0,
+        viewportHeight,
+        chromeHeight,
+        manualHeight: manualExpandedPromptHeight,
+    });
     const isSubmitDisabled = !isRunning && !prompt.trim();
     const canExpandPrompt = mode === "image" || mode === "video";
     const canOptimizePrompt = Boolean(promptOptimizerProvider) && canExpandPrompt;
@@ -182,6 +190,31 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
         setManualPromptHeight(null);
         setManualExpandedPromptHeight(null);
     }, [node.id]);
+
+    useEffect(() => {
+        const syncViewport = () => setViewportHeight(window.innerHeight);
+        syncViewport();
+        window.addEventListener("resize", syncViewport);
+        return () => window.removeEventListener("resize", syncViewport);
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!expandedPromptOpen) return;
+        const measure = () => {
+            setMeasuredChromeHeight(expandedChromeHeight({
+                hasVideoPromptTools,
+                headerHeight: expandedHeaderRef.current?.getBoundingClientRect().height,
+                footerHeight: expandedFooterRef.current?.getBoundingClientRect().height,
+                toolsHeight: expandedToolsRef.current?.getBoundingClientRect().height,
+            }));
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        if (expandedHeaderRef.current) observer.observe(expandedHeaderRef.current);
+        if (expandedFooterRef.current) observer.observe(expandedFooterRef.current);
+        if (expandedToolsRef.current) observer.observe(expandedToolsRef.current);
+        return () => observer.disconnect();
+    }, [expandedPromptOpen, hasVideoPromptTools]);
 
     useEffect(() => {
         if (!creditsEnabled || !quoteRequest) {
@@ -454,6 +487,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                         references={resolvedMentionReferences}
                         onSelectReference={onAddReference ? (reference) => onAddReference(node.id, reference) : undefined}
                         includeAssetLibrary
+                        mentionEnabled={!expandedPromptOpen || expanded}
                         onChange={updatePrompt}
                         autoLinkEnabled={autoLinkEnabled}
                         onReferenceFilesDrop={onReplaceReferenceFiles ? (reference, files) => onReplaceReferenceFiles(node.id, reference, files) : undefined}
@@ -472,6 +506,7 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                     min={bounds.min}
                     max={bounds.max}
                     onResize={expanded ? setManualExpandedPromptHeight : setManualPromptHeight}
+                    onReset={() => expanded ? setManualExpandedPromptHeight(null) : setManualPromptHeight(null)}
                 />
             </>
         );
@@ -500,7 +535,9 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
             >
             {renderComposerHeader(false)}
 
-            {renderPromptEditor(false)}
+            <div inert={expandedPromptOpen || undefined} aria-hidden={expandedPromptOpen || undefined}>
+                {renderPromptEditor(false)}
+            </div>
 
             {/* B区 参数区（对应 #98 决策2：默认折叠，手风琴展开）*/}
             {hasVideoPromptTools ? (
@@ -540,19 +577,21 @@ export function CanvasNodePromptPanel({ projectId, node, isRunning, onPromptChan
                     setExpandedPromptOpen(false);
                 }}
                 styles={{
-                    container: { border: 0, borderRadius: "var(--canvas-composer-radius)", padding: 0, overflow: "hidden", background: theme.node.panel, boxShadow: theme.node.shadow },
+                    container: { border: 0, borderRadius: "var(--canvas-composer-radius)", padding: 0, overflow: "hidden", maxHeight: "calc(100dvh - 32px)", background: theme.node.panel, boxShadow: theme.node.shadow },
                     body: { minHeight: 0, padding: 0 },
                 }}
             >
-                <div className="relative flex min-h-0 flex-col gap-2.5 overflow-visible p-3" style={{ ...composerTokens, color: theme.node.text }}>
-                    <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
-                    {renderPromptEditor(true)}
+                <div className="relative flex min-h-0 flex-col gap-2.5 overflow-visible p-3" style={{ ...composerTokens, color: theme.node.text, maxHeight: "calc(100dvh - 32px)" }}>
+                    <div ref={expandedHeaderRef} className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
+                    <div className="flex min-h-0 flex-1 flex-col">
+                        {renderPromptEditor(true)}
+                    </div>
                     {hasVideoPromptTools ? (
-                        <div className="canvas-node-composer-parameters shrink-0">
+                        <div ref={expandedToolsRef} className="canvas-node-composer-parameters shrink-0">
                             <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
                         </div>
                     ) : null}
-                    <div className="shrink-0">{renderComposerControls(true)}</div>
+                    <div ref={expandedFooterRef} className="shrink-0">{renderComposerControls(true)}</div>
                 </div>
             </Modal>
 
@@ -847,7 +886,7 @@ function ReferenceThumbnail({ reference }: { reference: CanvasResourceReference 
     );
 }
 
-function PromptResizeHandle({ height, min, max, onResize }: { height: number; min: number; max: number; onResize: (height: number) => void }) {
+function PromptResizeHandle({ height, min, max, onResize, onReset }: { height: number; min: number; max: number; onResize: (height: number) => void; onReset?: () => void }) {
     const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
 
     const finishResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -905,6 +944,11 @@ function PromptResizeHandle({ height, min, max, onResize }: { height: number; mi
             }}
             onPointerUp={finishResize}
             onPointerCancel={finishResize}
+            onDoubleClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onReset?.();
+            }}
             onLostPointerCapture={(event) => {
                 if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
             }}
@@ -912,26 +956,6 @@ function PromptResizeHandle({ height, min, max, onResize }: { height: number; mi
             <span aria-hidden />
         </button>
     );
-}
-
-function promptEditorBounds(expanded: boolean, hasReferences: boolean) {
-    const shelfHeight = hasReferences ? PROMPT_REFERENCE_SHELF_HEIGHT : 0;
-    const min = (expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT) + shelfHeight;
-    const max = (expanded ? PROMPT_EDITOR_EXPANDED_LINE_HEIGHT * PROMPT_EDITOR_MAX_LINES + PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING : PROMPT_EDITOR_LINE_HEIGHT * PROMPT_EDITOR_MAX_LINES + PROMPT_EDITOR_VERTICAL_PADDING) + shelfHeight;
-    return { min, max };
-}
-
-function estimatePromptContentHeight(value: string, expanded: boolean) {
-    if (!value.trim()) return expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT;
-    const charsPerLine = expanded ? 34 : 38;
-    const lineCount = value.split("\n").reduce((total, line) => total + Math.max(1, Math.ceil(Array.from(line).length / charsPerLine)), 0);
-    const lineHeight = expanded ? PROMPT_EDITOR_EXPANDED_LINE_HEIGHT : PROMPT_EDITOR_LINE_HEIGHT;
-    const verticalPadding = expanded ? PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING : PROMPT_EDITOR_VERTICAL_PADDING;
-    return Math.max(expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT, lineCount * lineHeight + verticalPadding);
-}
-
-function clampPromptHeight(height: number, bounds: { min: number; max: number }) {
-    return Math.min(bounds.max, Math.max(bounds.min, height));
 }
 
 function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
