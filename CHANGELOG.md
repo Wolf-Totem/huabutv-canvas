@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v1.5.73
+
+- 主品牌官网改为 `https://www.huabutv.com`；`canvas.j11.net` 仍作备用入口，产品界面只展示 huabutv。
+- 登录 Cookie 按请求 Host 选择 `.huabutv.com` 或 `.j11.net`，现网 env 未切时 www 也能种主品牌 Cookie。
+- 媒体允许名单加入 `cdn.huabutv.com` / `oss.huabutv.com`，展示层把旧 `cdn.j11.net` 绝对地址改写到新 CDN。
+- 本版无数据库迁移。
+
 ## v1.5.72
 
 - 图片和视频节点的放大编辑会随窗口长高，也可以拖动手柄，上限是剩余窗口而不是 8 行；放大里的 @ 菜单叠在弹层上面，Esc 只关菜单。

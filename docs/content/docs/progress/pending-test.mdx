@@ -5,6 +5,13 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 主品牌切到 www.huabutv.com（v1.5.73）
+
+- [ ] `https://www.huabutv.com` 登录 Set-Cookie 含 `Domain=.huabutv.com`；apex 与 `canvas.huabutv.com` HTTPS 301 到 www。
+- [ ] `https://canvas.j11.net` 仍可登录，Cookie Domain 为 `.j11.net`，不 301。
+- [ ] `mail.huabutv.com` / `cdn.huabutv.com` / `oss.huabutv.com` 打到 ECS 是 444，不是 SPA。
+- [ ] 健康检查 `version` 为 v1.5.73，`schema.current` 与 `expected` 均为 47。
+
 ## 画布放大 @、托盘分组与创作拖放（v1.5.72）
 
 - [ ] 图片节点放大：短文案有舒适高度；长文案接近窗口后内部滚动；拖动手柄不能拖出窗口；缩小浏览器后再夹紧。
