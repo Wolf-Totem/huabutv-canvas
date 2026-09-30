@@ -212,7 +212,7 @@
   "plugin.item.official-payment-wechat-native.name": "微信支付 Native",
   "plugin.item.official-payment-xunhupay.name": "虎皮椒聚合支付",
   "plugin.item.official-payment-huifu-jspay.name": "斗拱支付宝正扫",
-  "plugin.item.official-payment-huifu-wechat-jspay.name": "斗拱微信正扫",
+  "plugin.item.official-payment-huifu-wechat-jspay.name": "斗拱微信小程序",
   "plugin.item.tencent-hunyuan-image.name": "腾讯混元图片",
   "plugin.item.tencent-hunyuan-video.name": "腾讯混元视频",
   "section.runninghub": "RunningHub 工作流",

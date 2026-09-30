@@ -341,7 +341,7 @@ func validatePaymentProviderContributions(manifest Manifest) error {
 			return fmt.Errorf("payment provider contribution %q requires an icon", provider.ID)
 		}
 		switch provider.CheckoutMode {
-		case "qr_code", "redirect":
+		case "qr_code", "redirect", "jsapi":
 		default:
 			return fmt.Errorf("payment provider contribution %q has unsupported checkout mode %q", provider.ID, provider.CheckoutMode)
 		}

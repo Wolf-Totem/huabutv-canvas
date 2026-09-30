@@ -5,7 +5,7 @@ export type PaymentProvider = {
     pluginId: string;
     name: string;
     icon: string;
-    checkoutMode: "qr_code" | "redirect";
+    checkoutMode: "qr_code" | "redirect" | "jsapi";
     enabled: boolean;
     pluginEnabled: boolean;
     configured: boolean;
@@ -50,7 +50,7 @@ export type PaymentOrder = {
     providerStatus?: string;
     providerTradeNo?: string;
     checkout: {
-        mode: "qr_code" | "redirect" | "";
+        mode: "qr_code" | "redirect" | "jsapi" | "";
         value?: string;
         url?: string;
         expiresAt?: string;
@@ -91,7 +91,7 @@ export function listTopupProducts(kind?: "credit_topup" | "storage_topup" | stri
     return http.get<{ products: TopupProduct[] }>("/payments/products", { params: kind ? { kind } : undefined });
 }
 
-export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string; productKind?: "credit_topup" | "membership" | "storage_topup" }) {
+export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string; productKind?: "credit_topup" | "membership" | "storage_topup"; wechatSubOpenId?: string }) {
     return http.post<{ order: PaymentOrder }>("/payments/orders", input);
 }
 

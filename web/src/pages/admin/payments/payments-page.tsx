@@ -383,7 +383,7 @@ export default function AdminPaymentsPage() {
                 </div>
             ),
         },
-        { title: "支付方式", dataIndex: "checkoutMode", width: 120, align: "center", render: (value) => (value === "qr_code" ? "扫码支付" : "网站跳转") },
+        { title: "支付方式", dataIndex: "checkoutMode", width: 120, align: "center", render: (value) => (value === "qr_code" ? "扫码支付" : value === "jsapi" ? "小程序支付" : "网站跳转") },
         {
             title: "状态",
             key: "status",

@@ -177,7 +177,7 @@ func TestHuifuWechatJspayOfficialPackageIsPaymentPlugin(t *testing.T) {
 	if len(plugin.Manifest.Contributes.PaymentProviders) != 1 || plugin.Manifest.Contributes.PaymentProviders[0].ID != "huifu-wechat-native" {
 		t.Fatalf("huifu wechat jspay contributions = %#v", plugin.Manifest.Contributes.PaymentProviders)
 	}
-	if plugin.Manifest.Contributes.PaymentProviders[0].CheckoutMode != "qr_code" {
+	if plugin.Manifest.Contributes.PaymentProviders[0].CheckoutMode != "jsapi" {
 		t.Fatalf("huifu wechat jspay checkout mode = %s", plugin.Manifest.Contributes.PaymentProviders[0].CheckoutMode)
 	}
 	registry := center.paymentRegistrySnapshot()

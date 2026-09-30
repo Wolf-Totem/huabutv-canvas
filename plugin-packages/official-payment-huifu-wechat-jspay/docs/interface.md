@@ -2,16 +2,16 @@
 
 支持 `validate_config`、`create_order`、`query_order`、`close_order`、`verify_notification` 和 `download_trade_bill`，统一返回 JSON 响应。
 
-斗拱聚合正扫微信渠道协议封装在本插件内，字段与官方接口页一致：
+斗拱聚合正扫微信小程序渠道协议封装在本插件内，字段与官方接口页一致：
 
-- 下单 `POST https://api.huifu.com/v3/trade/payment/jspay`（[聚合正扫](https://paas.huifu.com/partners/api/doc/smzf/api_jhzs.md)），`trade_type=T_NATIVE`（官方异步 `trans_type` 枚举为「微信正扫」），**不传 `wx_data` / `alipay_data` / `hosting_data`**
+- 下单 `POST https://api.huifu.com/v3/trade/payment/jspay`（[聚合正扫](https://paas.huifu.com/partners/api/doc/smzf/api_jhzs.md)，联调说明见 [微信小程序支付](https://paas.huifu.com/help/dev_guide/zf/wx/xcx.md)），`trade_type=T_MINIAPP`，必传 `wx_data` JSON 字符串 `{"sub_appid":"...","sub_openid":"..."}`，不传 `alipay_data` / `hosting_data`
 - 查询 `POST https://api.huifu.com/v3/trade/payment/scanpay/query`（[扫码交易查询](https://paas.huifu.com/partners/api/doc/smzf/api_qrpay_cx.md)）
 - 关单 `POST https://api.huifu.com/v2/trade/payment/scanpay/close`（[扫码交易关单](https://paas.huifu.com/partners/api/doc/smzf/api_qrpay_jygd.md)）
 - 异步通知按 [异步消息规范](https://paas.huifu.com/partners/start/ybxx/jiekouguifan_ybxx.md)：POST 表单、`resp_data` + `sign`、汇付公钥对 `resp_data` 原文验签、HTTP 200，正文为 `RECV_ORD_ID_` 加上 `req_seq_id`
 
-`create_order` 固定 `trade_type=T_NATIVE`。收银 `mode=qr_code`，`value` 为官方返回的 `qr_code`（微信 Native 常见 `weixin://wxpay/bizpayurl?...`，也可能是 https 支付链接；宿主编码成二维码，微信扫码拉起支付）。下单同步成功以返回非空 `qr_code` 为准，此时 `trans_stat` 通常为 `P`（处理中），不能当成已支付。金额按官方「单位元、两位小数」与宿主分互转。`req_seq_id` 使用宿主商户订单号。查询需要官方 `org_req_date`，宿主只给订单号，故按请求日与前一日各查一次。已支付订单不再关单。扫码关单返回的 `trans_stat` 是关单状态，不是支付状态，关单成功不得记为已支付。聚合正扫页未定义账单下载，`download_trade_bill` 返回 not found。
+`create_order` 固定 `trade_type=T_MINIAPP`。收银 `mode=jsapi`，`value` 为官方返回的 `pay_info`（JSON 对象或 JSON 字符串，原样交给小程序 `wx.requestPayment`）。下单同步成功以返回非空 `pay_info` 为准，此时 `trans_stat` 通常为 `P`（处理中），不能当成已支付。金额按官方「单位元、两位小数」与宿主分互转。`req_seq_id` 使用宿主商户订单号。查询需要官方 `org_req_date`，宿主只给订单号，故按请求日与前一日各查一次。已支付订单不再关单。扫码关单返回的 `trans_stat` 是关单状态，不是支付状态，关单成功不得记为已支付。聚合正扫页未定义账单下载，`download_trade_bill` 返回 not found。宿主刷新收银台不适用于 `jsapi`（openid 不落库）。
 
-配置字段：`publicBaseUrl`、`sysId`、`productId`、`huifuId`、`merchantPrivateKey`、`huifuPublicKey`、`gateway`。不需要统一收银台的 `projectId` / `projectTitle`。`gateway` 必须为 https，生产示例为 `https://api.huifu.com`。加签与官方 Go SDK `FormatSignSrcText` 一致：对 `data` 对象 JSON 做 SHA256WithRSA，响应验签使用返回报文里 `data` 字段的原始 JSON。
+配置字段：`publicBaseUrl`、`sysId`、`productId`、`huifuId`、`subAppId`、`merchantPrivateKey`、`huifuPublicKey`、`gateway`。`subAppId` 为已上线小程序 AppID，须与汇付商户支付功能管理中绑定的微信 AppID 一致。不需要统一收银台的 `projectId` / `projectTitle`。`gateway` 必须为 https，生产示例为 `https://api.huifu.com`。加签与官方 Go SDK `FormatSignSrcText` 一致：对 `data` 对象 JSON 做 SHA256WithRSA，响应验签使用返回报文里 `data` 字段的原始 JSON。
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -22,10 +22,10 @@
 {
   "apiVersion": "yingce.plugin/v1",
   "id": "official-payment-huifu-wechat-jspay",
-  "name": "斗拱微信正扫",
+  "name": "斗拱微信小程序",
   "version": "1.0.0",
   "author": "汇付斗拱",
-  "description": "斗拱聚合正扫适配器。微信正扫 T_NATIVE 返回 qr_code 支付链接，由宿主展示二维码。",
+  "description": "斗拱聚合正扫适配器。微信小程序 T_MINIAPP 上送 wx_data，返回 pay_info 给小程序调起。",
   "enabled": true,
   "installable": true,
   "runtime": {
@@ -72,6 +72,13 @@
         "required": true
       },
       {
+        "name": "subAppId",
+        "type": "string",
+        "label": "微信小程序 AppID (sub_appid)",
+        "required": true,
+        "description": "已上线小程序的 AppID，须与汇付商户支付功能管理中绑定的微信 AppID 一致。下单写入 wx_data.sub_appid。"
+      },
+      {
         "name": "merchantPrivateKey",
         "type": "textarea",
         "label": "商户 RSA 私钥",
@@ -100,9 +107,9 @@
     "paymentProviders": [
       {
         "id": "huifu-wechat-native",
-        "label": "斗拱微信正扫",
+        "label": "斗拱微信小程序",
         "icon": "assets/icon.svg",
-        "checkoutMode": "qr_code",
+        "checkoutMode": "jsapi",
         "identityFields": [
           "sysId",
           "huifuId"

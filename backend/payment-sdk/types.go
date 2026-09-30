@@ -41,6 +41,7 @@ type CreateRequest struct {
 	ExpiresAt       time.Time
 	NotifyURL       string
 	ReturnURL       string
+	WeChatSubOpenID string `json:"wechatSubOpenId,omitempty"`
 }
 
 type Checkout struct {

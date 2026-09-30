@@ -11,36 +11,39 @@ import (
 )
 
 const (
-	huifuJspayPath             = "/v3/trade/payment/jspay"
-	huifuScanpayQueryPath      = "/v3/trade/payment/scanpay/query"
-	huifuScanpayClosePath      = "/v2/trade/payment/scanpay/close"
-	huifuTradeTypeAlipayNative = "A_NATIVE"
-	huifuTradeTypeWechatNative = "T_NATIVE"
-	huifuProcessingCode        = "00000100"
-	huifuJspayDefaultExpire    = 2 * time.Hour
-	huifuJspayGoodsDescLimit   = 127
-	huifuJspaySeqLimit         = 128
+	huifuJspayPath              = "/v3/trade/payment/jspay"
+	huifuScanpayQueryPath       = "/v3/trade/payment/scanpay/query"
+	huifuScanpayClosePath       = "/v2/trade/payment/scanpay/close"
+	huifuTradeTypeAlipayNative  = "A_NATIVE"
+	huifuTradeTypeWechatMiniapp = "T_MINIAPP"
+	huifuProcessingCode         = "00000100"
+	huifuJspayDefaultExpire     = 2 * time.Hour
+	huifuJspayGoodsDescLimit    = 127
+	huifuJspaySeqLimit          = 128
 )
 
 type huifuJspayChannel struct {
-	tradeType  string
-	name       string
-	providerID string
-	pluginID   string
+	tradeType    string
+	name         string
+	providerID   string
+	pluginID     string
+	checkoutMode string
 }
 
 var (
 	huifuAlipayNativeChannel = huifuJspayChannel{
-		tradeType:  huifuTradeTypeAlipayNative,
-		name:       "斗拱支付宝正扫",
-		providerID: ProviderHuifuJspay,
-		pluginID:   PluginHuifuJspay,
+		tradeType:    huifuTradeTypeAlipayNative,
+		name:         "斗拱支付宝正扫",
+		providerID:   ProviderHuifuJspay,
+		pluginID:     PluginHuifuJspay,
+		checkoutMode: "qr_code",
 	}
-	huifuWechatNativeChannel = huifuJspayChannel{
-		tradeType:  huifuTradeTypeWechatNative,
-		name:       "斗拱微信正扫",
-		providerID: ProviderHuifuWechatJspay,
-		pluginID:   PluginHuifuWechatJspay,
+	huifuWechatMiniappChannel = huifuJspayChannel{
+		tradeType:    huifuTradeTypeWechatMiniapp,
+		name:         "斗拱微信小程序",
+		providerID:   ProviderHuifuWechatJspay,
+		pluginID:     PluginHuifuWechatJspay,
+		checkoutMode: "jsapi",
 	}
 )
 
@@ -56,7 +59,7 @@ func NewHuifuJspayProvider(client *http.Client) *HuifuJspayProvider {
 }
 
 func NewHuifuWechatJspayProvider(client *http.Client) *HuifuJspayProvider {
-	return newHuifuJspayProvider(client, huifuWechatNativeChannel)
+	return newHuifuJspayProvider(client, huifuWechatMiniappChannel)
 }
 
 func newHuifuJspayProvider(client *http.Client, channel huifuJspayChannel) *HuifuJspayProvider {
@@ -71,9 +74,13 @@ func (p *HuifuJspayProvider) Descriptor() Descriptor {
 	if channel.providerID == "" {
 		channel = huifuAlipayNativeChannel
 	}
+	checkoutMode := channel.checkoutMode
+	if checkoutMode == "" {
+		checkoutMode = "qr_code"
+	}
 	return Descriptor{
 		ID: channel.providerID, PluginID: channel.pluginID, PluginVersion: "1.0.0",
-		Name: channel.name, Icon: "assets/icon.svg", CheckoutMode: "qr_code",
+		Name: channel.name, Icon: "assets/icon.svg", CheckoutMode: checkoutMode,
 		IdentityFields: []string{"sysId", "huifuId"},
 		NotificationSuccess: NotificationResponse{
 			Status: 200, ContentType: "text/plain; charset=utf-8", Body: "RECV_ORD_ID_",
@@ -99,6 +106,9 @@ func (p *HuifuJspayProvider) ValidateConfig(config Config) error {
 	if _, err := huifuGatewayOrigin(config); err != nil {
 		return err
 	}
+	if p.tradeType() == huifuTradeTypeWechatMiniapp && strings.TrimSpace(config["subAppId"]) == "" {
+		return errors.New("斗拱微信小程序配置缺少 subAppId")
+	}
 	return nil
 }
 
@@ -112,6 +122,13 @@ func (p *HuifuJspayProvider) CreateOrder(ctx context.Context, config Config, req
 	if err := huifuValidateNotifyURL(request.NotifyURL); err != nil {
 		return Checkout{}, err
 	}
+	if p.tradeType() == huifuTradeTypeWechatMiniapp {
+		return p.createWechatMiniappOrder(ctx, config, request)
+	}
+	return p.createNativeQrOrder(ctx, config, request)
+}
+
+func (p *HuifuJspayProvider) createNativeQrOrder(ctx context.Context, config Config, request CreateRequest) (Checkout, error) {
 	now := p.now().In(huifuLocation())
 	goodsDesc := huifuTruncate(request.Description, huifuJspayGoodsDescLimit)
 	if goodsDesc == "" {
@@ -141,18 +158,64 @@ func (p *HuifuJspayProvider) CreateOrder(ctx context.Context, config Config, req
 		return Checkout{}, errors.New("斗拱聚合正扫未返回 qr_code")
 	}
 	if !p.validQrCode(qrCode) {
-		if p.tradeType() == huifuTradeTypeWechatNative {
-			return Checkout{}, errors.New("斗拱微信正扫 qr_code 不是有效支付链接")
-		}
 		return Checkout{}, errors.New("斗拱聚合正扫 qr_code 不是有效 http(s) 地址")
 	}
-	expiresAt := now.Add(huifuJspayDefaultExpire)
-	if parsed, err := time.ParseInLocation("20060102150405", strings.TrimSpace(envelope.Data.TimeExpire), huifuLocation()); err == nil {
-		expiresAt = parsed
-	} else if !request.ExpiresAt.IsZero() {
-		expiresAt = request.ExpiresAt
+	return Checkout{Mode: "qr_code", Value: qrCode, ExpiresAt: huifuJspayExpiresAt(now, envelope.Data.TimeExpire, request.ExpiresAt)}, nil
+}
+
+func (p *HuifuJspayProvider) createWechatMiniappOrder(ctx context.Context, config Config, request CreateRequest) (Checkout, error) {
+	subOpenID := strings.TrimSpace(request.WeChatSubOpenID)
+	if subOpenID == "" {
+		return Checkout{}, errors.New("斗拱微信小程序下单缺少 sub_openid")
 	}
-	return Checkout{Mode: "qr_code", Value: qrCode, ExpiresAt: expiresAt}, nil
+	wxData, err := huifuJSON(map[string]string{
+		"sub_appid":  strings.TrimSpace(config["subAppId"]),
+		"sub_openid": subOpenID,
+	})
+	if err != nil {
+		return Checkout{}, err
+	}
+	now := p.now().In(huifuLocation())
+	goodsDesc := huifuTruncate(request.Description, huifuJspayGoodsDescLimit)
+	if goodsDesc == "" {
+		goodsDesc = "钱包支付"
+	}
+	data := map[string]string{
+		"req_date":   now.Format("20060102"),
+		"req_seq_id": huifuTruncate(request.MerchantOrderNo, huifuJspaySeqLimit),
+		"huifu_id":   strings.TrimSpace(config["huifuId"]),
+		"trans_amt":  formatFen(request.AmountFen),
+		"goods_desc": goodsDesc,
+		"trade_type": huifuTradeTypeWechatMiniapp,
+		"wx_data":    string(wxData),
+		"notify_url": request.NotifyURL,
+	}
+	if !request.ExpiresAt.IsZero() {
+		data["time_expire"] = request.ExpiresAt.In(huifuLocation()).Format("20060102150405")
+	}
+	var envelope huifuEnvelope
+	if err := p.call(ctx, config, huifuJspayPath, data, &envelope); err != nil {
+		return Checkout{}, err
+	}
+	if envelope.Data.RespCode != huifuSuccessCode && envelope.Data.RespCode != huifuProcessingCode {
+		return Checkout{}, huifuBusinessError(envelope.Data.RespCode, envelope.Data.RespDesc)
+	}
+	payInfo, err := huifuPayInfoValue(envelope.Data.PayInfo)
+	if err != nil {
+		return Checkout{}, err
+	}
+	return Checkout{Mode: "jsapi", Value: payInfo, ExpiresAt: huifuJspayExpiresAt(now, envelope.Data.TimeExpire, request.ExpiresAt)}, nil
+}
+
+func huifuJspayExpiresAt(now time.Time, timeExpire string, requestExpiresAt time.Time) time.Time {
+	expiresAt := now.Add(huifuJspayDefaultExpire)
+	if parsed, err := time.ParseInLocation("20060102150405", strings.TrimSpace(timeExpire), huifuLocation()); err == nil {
+		return parsed
+	}
+	if !requestExpiresAt.IsZero() {
+		return requestExpiresAt
+	}
+	return expiresAt
 }
 
 func (p *HuifuJspayProvider) QueryOrder(ctx context.Context, config Config, request QueryRequest) (Result, error) {
@@ -295,9 +358,6 @@ func (p *HuifuJspayProvider) validQrCode(value string) bool {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return false
-	}
-	if p.tradeType() == huifuTradeTypeWechatNative && strings.HasPrefix(value, "weixin://") {
-		return len(value) > len("weixin://")
 	}
 	parsed, err := url.ParseRequestURI(value)
 	if err != nil {

@@ -70,10 +70,11 @@ type TopupProductRequest struct {
 }
 
 type CreatePaymentOrderRequest struct {
-	ProductID      string `json:"productId"`
-	ProviderID     string `json:"providerId"`
-	IdempotencyKey string `json:"idempotencyKey"`
-	ProductKind    string `json:"productKind"`
+	ProductID       string `json:"productId"`
+	ProviderID      string `json:"providerId"`
+	IdempotencyKey  string `json:"idempotencyKey"`
+	ProductKind     string `json:"productKind"`
+	WeChatSubOpenID string `json:"wechatSubOpenId"`
 }
 
 type PaymentCheckoutView struct {
@@ -577,6 +578,9 @@ func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model
 	if !view.Enabled || !view.Configured || config == nil {
 		return nil, Forbidden("支付渠道未启用或尚未配置")
 	}
+	if err := requireJsapiCheckout(provider, request.WeChatSubOpenID); err != nil {
+		return nil, err
+	}
 	activeCount, err := s.repo.ActivePaymentOrderCount(actor.ID)
 	if err != nil {
 		return nil, err
@@ -615,7 +619,7 @@ func (s *Service) createPaymentOrderForProduct(ctx context.Context, actor *model
 	baseURL := strings.TrimRight(values["publicBaseUrl"], "/")
 	checkout, err := provider.CreateOrder(ctx, values, payment.CreateRequest{
 		MerchantOrderNo: order.MerchantOrderNo, Description: product.Name, AmountFen: order.AmountFen,
-		Currency: order.Currency, ExpiresAt: order.ExpiresAt,
+		Currency: order.Currency, ExpiresAt: order.ExpiresAt, WeChatSubOpenID: request.WeChatSubOpenID,
 		NotifyURL: baseURL + "/api/payments/notify/" + url.PathEscape(order.ProviderID) + "/" + url.PathEscape(config.ID),
 		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
 	})
@@ -1003,7 +1007,7 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 	}
 	checkout := PaymentCheckoutView{Mode: order.CheckoutMode, ExpiresAt: order.CheckoutExpiresAt}
 	if order.Status == model.PaymentOrderPending && order.ExpiresAt.After(time.Now()) {
-		if order.CheckoutMode == "qr_code" {
+		if order.CheckoutMode == "qr_code" || order.CheckoutMode == "jsapi" {
 			checkout.Value = order.CheckoutValue
 		} else if order.CheckoutMode == "redirect" {
 			checkout.URL = "/api/payments/orders/" + url.PathEscape(order.ID) + "/checkout"
@@ -1019,6 +1023,23 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 		ProviderPaidAt: order.ProviderPaidAt, CreditedAt: order.CreditedAt, ClosedAt: order.ClosedAt,
 		CreatedAt: order.CreatedAt, UpdatedAt: order.UpdatedAt,
 	}
+}
+
+func requireJsapiCheckout(provider payment.Provider, wechatSubOpenID string) error {
+	if provider == nil {
+		return BadAuthRequest("未知支付渠道")
+	}
+	return requireJsapiOpenID(provider.Descriptor().CheckoutMode, wechatSubOpenID)
+}
+
+func requireJsapiOpenID(checkoutMode, wechatSubOpenID string) error {
+	if checkoutMode != "jsapi" {
+		return nil
+	}
+	if strings.TrimSpace(wechatSubOpenID) == "" {
+		return BadAuthRequest("微信小程序支付需要用户 openid")
+	}
+	return nil
 }
 
 func (s *Service) AdminPaymentOrderPage(actor *model.User, status, keyword string, page, limit int) (*AdminPaymentOrderPage, error) {

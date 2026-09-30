@@ -685,6 +685,9 @@ func (s *Service) createMembershipPaymentOrder(ctx context.Context, actor *model
 	if !view.Enabled || !view.Configured || config == nil {
 		return nil, Forbidden("支付渠道未启用或尚未配置")
 	}
+	if err := requireJsapiCheckout(provider, request.WeChatSubOpenID); err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	order := &model.PaymentOrder{
 		ID: newID(), UserID: actor.ID, IdempotencyKey: idempotencyKey, MerchantOrderNo: newID(),
@@ -721,7 +724,7 @@ func (s *Service) createMembershipPaymentOrder(ctx context.Context, actor *model
 	baseURL := strings.TrimRight(values["publicBaseUrl"], "/")
 	checkout, err := provider.CreateOrder(ctx, values, payment.CreateRequest{
 		MerchantOrderNo: order.MerchantOrderNo, Description: product.Name, AmountFen: order.AmountFen,
-		Currency: order.Currency, ExpiresAt: order.ExpiresAt,
+		Currency: order.Currency, ExpiresAt: order.ExpiresAt, WeChatSubOpenID: request.WeChatSubOpenID,
 		NotifyURL: baseURL + "/api/payments/notify/" + url.PathEscape(order.ProviderID) + "/" + url.PathEscape(config.ID),
 		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
 	})

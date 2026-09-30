@@ -4,6 +4,7 @@ import test from "node:test";
 import { defaultPaymentScanBrand, hasPaymentScanChannel, paymentScanBrand, qrScanChannels, solePaymentScanBrand } from "./payment-brands";
 
 const wechatHuifu = { id: "huifu-wechat-native", checkoutMode: "qr_code" };
+const wechatHuifuMiniapp = { id: "huifu-wechat-native", checkoutMode: "jsapi" };
 const wechatDirect = { id: "wechat-native", checkoutMode: "qr_code" };
 const alipayHuifu = { id: "huifu-aggregate-native", checkoutMode: "qr_code" };
 const alipayPage = { id: "alipay-page-pay", checkoutMode: "redirect" };
@@ -42,4 +43,12 @@ test("只有一个正扫品牌才跳过选择窗", () => {
     assert.equal(solePaymentScanBrand(qrScanChannels([alipayHuifu])), "alipay");
     assert.equal(solePaymentScanBrand(qrScanChannels([wechatHuifu])), "wechat");
     assert.equal(solePaymentScanBrand(qrScanChannels([huifuH5, alipayPage])), null);
+});
+
+test("斗拱微信小程序 jsapi 不进网站扫码渠道", () => {
+    const channels = qrScanChannels([wechatHuifuMiniapp, alipayHuifu, huifuH5]);
+    assert.equal(channels.wechat, undefined);
+    assert.equal(channels.alipay?.id, "huifu-aggregate-native");
+    assert.equal(solePaymentScanBrand(channels), "alipay");
+    assert.equal(paymentScanBrand("huifu-wechat-native"), "wechat");
 });

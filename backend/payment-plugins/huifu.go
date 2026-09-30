@@ -296,26 +296,27 @@ type huifuEnvelope struct {
 }
 
 type huifuData struct {
-	RespCode     string `json:"resp_code"`
-	RespDesc     string `json:"resp_desc"`
-	ReqDate      string `json:"req_date"`
-	ReqSeqID     string `json:"req_seq_id"`
-	HuifuID      string `json:"huifu_id"`
-	JumpURL      string `json:"jump_url"`
-	PreOrderID   string `json:"pre_order_id"`
-	TimeExpire   string `json:"time_expire"`
-	OrgReqDate   string `json:"org_req_date"`
-	OrgReqSeqID  string `json:"org_req_seq_id"`
-	OrgHfSeqID   string `json:"org_hf_seq_id"`
-	HfSeqID      string `json:"hf_seq_id"`
-	QrCode       string `json:"qr_code"`
-	TransStat    string `json:"trans_stat"`
-	TransAmt     string `json:"trans_amt"`
-	TransTime    string `json:"trans_time"`
-	EndTime      string `json:"end_time"`
-	CloseStat    string `json:"close_stat"`
-	OrgTransStat string `json:"org_trans_stat"`
-	OrderStat    string `json:"order_stat"`
+	RespCode     string          `json:"resp_code"`
+	RespDesc     string          `json:"resp_desc"`
+	ReqDate      string          `json:"req_date"`
+	ReqSeqID     string          `json:"req_seq_id"`
+	HuifuID      string          `json:"huifu_id"`
+	JumpURL      string          `json:"jump_url"`
+	PreOrderID   string          `json:"pre_order_id"`
+	TimeExpire   string          `json:"time_expire"`
+	OrgReqDate   string          `json:"org_req_date"`
+	OrgReqSeqID  string          `json:"org_req_seq_id"`
+	OrgHfSeqID   string          `json:"org_hf_seq_id"`
+	HfSeqID      string          `json:"hf_seq_id"`
+	QrCode       string          `json:"qr_code"`
+	PayInfo      json.RawMessage `json:"pay_info"`
+	TransStat    string          `json:"trans_stat"`
+	TransAmt     string          `json:"trans_amt"`
+	TransTime    string          `json:"trans_time"`
+	EndTime      string          `json:"end_time"`
+	CloseStat    string          `json:"close_stat"`
+	OrgTransStat string          `json:"org_trans_stat"`
+	OrderStat    string          `json:"order_stat"`
 }
 
 type huifuNotifyPayload struct {
@@ -363,6 +364,28 @@ func huifuJSON(value any) ([]byte, error) {
 		return nil, err
 	}
 	return []byte(text), nil
+}
+
+func huifuPayInfoValue(raw json.RawMessage) (string, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", errors.New("斗拱微信小程序未返回 pay_info")
+	}
+	if raw[0] == '"' {
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return "", fmt.Errorf("斗拱微信小程序 pay_info 无效：%w", err)
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return "", errors.New("斗拱微信小程序未返回 pay_info")
+		}
+		return value, nil
+	}
+	if raw[0] != '{' {
+		return "", errors.New("斗拱微信小程序 pay_info 不是有效调起参数")
+	}
+	return string(raw), nil
 }
 
 // huifuJSONSignText 与官方 Go SDK FormatSignSrcText 一致：对对象做 json.Marshal，

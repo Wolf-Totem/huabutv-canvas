@@ -151,7 +151,7 @@
   "plugin.item.official-payment-wechat-native.name": "WeChat Pay Native",
   "plugin.item.official-payment-xunhupay.name": "Xunhupay",
   "plugin.item.official-payment-huifu-jspay.name": "DouGong Alipay Native",
-  "plugin.item.official-payment-huifu-wechat-jspay.name": "DouGong WeChat Native",
+  "plugin.item.official-payment-huifu-wechat-jspay.name": "DouGong WeChat Mini Program",
   "plugin.item.tencent-hunyuan-image.name": "Tencent Hunyuan Imej",
   "plugin.item.tencent-hunyuan-video.name": "Tencent Hunyuan Video",
   "section.runninghub": "Aliran kerja RunningHub",
