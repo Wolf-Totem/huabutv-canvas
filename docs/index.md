@@ -25,6 +25,7 @@
 - [编辑器预设插件化实施规格](plans/editor-preset-plugin-implementation.md)：参考 open-vetta 万物皆可插件，把编辑器做成预设插件的分阶段实施计划（SDK v2、命令状态机、8 个 editor 预设插件（含 AI 助手）、后端转写/导出任务、权限执行校验、AI 对话式剪辑），含产品视图、接口草案与文件规划。
 - [编辑器实施 Runbook](plans/editor-implementation-runbook.md)：分步执行计划——M0~M6 里程碑 + 原子步明细（每步改动文件/验证/完成标准）、依赖关系、验证命令速查、高风险步与回退。解决「一次性实施效果差」：每步可验证、可回退、看得见进度。
 - [生成链路：鉴权发票、R2 入库与掉线续跑](plans/generation-edge-ticket-design.md)：服务器只开票记账；用户 API 走本地 Worker；异步 task_id 入库后关页续跑；私有桶短签名预览；同一票禁止二次提交；Agent 默认关。
+- [画布提示词放大编辑、@ 分组与创作页拖放](plans/canvas-prompt-expand-mention-create-dropzone.md)：放大编辑随视口增高且可拖；`@` 菜单进 Modal 锁根；独立画布「所有画布 / 当前画布」含视频音频；创作页 composer dropzone + 上传。前端 only，不 bump VERSION。
 
 ## 决策记录（`docs/adr/`）
 
