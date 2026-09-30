@@ -41,7 +41,7 @@ describe("creation library button", () => {
         const source = readCreateSource();
         const pickerSource = readFileSync(resolve(import.meta.dir, "../src/components/assets/asset-library-picker-modal.tsx"), "utf8");
         const uploadStart = source.indexOf("const uploadLibraryAssets = async");
-        const uploadEnd = source.indexOf("const handleLibrarySelect", uploadStart);
+        const uploadEnd = source.indexOf("const addLocalCreationFiles", uploadStart);
 
         expect(uploadStart).toBeGreaterThanOrEqual(0);
         expect(uploadEnd).toBeGreaterThan(uploadStart);
@@ -143,6 +143,44 @@ describe("creation library button", () => {
         expect(source).toContain("onRemove(item.id)");
         expect(source).toContain("onClick={props.onOpenLibrary}");
         expect(source).not.toContain("onClick={() => props.fileInputRef.current?.click()}");
+    });
+
+    test("composer dropzone and 上传 sit next to 参考内容, not in the dock", () => {
+        const workspace = readCreateWorkspaceSource();
+        const overlay = readFileSync(resolve(import.meta.dir, "../src/pages/create/creation-file-drop-overlay.tsx"), "utf8");
+        const index = readCreateSource();
+        const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+        const dockStart = workspace.indexOf('<footer className="creation-chat-dock">');
+        const dockEnd = workspace.indexOf("</footer>", dockStart);
+        const dockSource = compactSource(workspace.slice(dockStart, dockEnd));
+        const addLocalStart = index.indexOf("const addLocalCreationFiles");
+        const addLocalEnd = index.indexOf("const handleLibrarySelect", addLocalStart);
+
+        expect(dockStart).toBeGreaterThanOrEqual(0);
+        expect(dockSource).not.toContain('aria-label="从本机上传附件"');
+        expect(dockSource).not.toContain('aria-label="从本机上传参考内容"');
+        expect(dockSource).not.toContain("<span>上传</span>");
+        expect(workspace).toContain("<span>上传</span>");
+        expect(workspace).toContain('aria-label="从本机上传参考内容"');
+        expect(workspace).toContain("onAddLocalFiles");
+        expect(workspace).toContain("CreationFileDropOverlay");
+        expect(workspace).toContain("imageReferenceAtPoint(event.clientX, event.clientY)");
+        expect(workspace).not.toContain("elementsFromPoint(event.clientX, event.clientY)[0]");
+        expect(overlay).toContain("pointer-events-none");
+        expect(overlay).toContain('aria-live="polite"');
+        expect(overlay).toContain("释放文件，添加为参考内容");
+        expect(styles).toContain(".creation-file-drop-overlay");
+        expect(styles).toContain("pointer-events: none");
+        expect(styles).not.toContain("creation-file-drop-overlay { position: fixed");
+        expect(addLocalStart).toBeGreaterThanOrEqual(0);
+        expect(addLocalEnd).toBeGreaterThan(addLocalStart);
+        const addLocalSource = index.slice(addLocalStart, addLocalEnd);
+        expect(addLocalSource.indexOf("creationFileAccepted(mode, file)")).toBeGreaterThanOrEqual(0);
+        expect(addLocalSource.indexOf("accepted.slice(0, remainingSlots)")).toBeGreaterThan(addLocalSource.indexOf("creationFileAccepted(mode, file)"));
+        expect(addLocalSource.indexOf("Promise.allSettled")).toBeGreaterThan(addLocalSource.indexOf("accepted.slice(0, remainingSlots)"));
+        expect(addLocalSource).not.toContain("setPrompt");
+        expect(index).toContain("onUpload: uploadLibraryAssets");
+        expect(index).not.toContain("onUpload={() => fileInputRef.current?.click()}");
     });
 });
 

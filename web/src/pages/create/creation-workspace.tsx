@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ImageSizePicker } from "@/components/image-size-picker";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { App, Button, Dropdown, Popover } from "antd";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -10,7 +10,7 @@ import { useWorkspaceTopBarMount } from "@/components/layout/workspace-top-bar-e
 import { useNavigate } from "react-router";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { Reorder, LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { ArrowDown, ArrowUp, Brain, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, MoreHorizontal, Music2, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, UserRound, WandSparkles, Waves, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Brain, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Clock3, Copy, Download, FileText, Film, History, Image as ImageIcon, LoaderCircle, Maximize2, MessageSquareText, Minimize2, MoreHorizontal, Music2, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Upload, UserRound, WandSparkles, Waves, X } from "lucide-react";
 
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { GenerationToolCard, type GenerationToolStatus } from "@/components/ai/generation-tool-card";
@@ -50,6 +50,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { displayCreationPrompt, type CreationReference } from "./creation-references";
 import { creationAttachmentKind, creationMediaAspectRatio, removeCreationAttachment, type CreationAttachment, type CreationMode } from "./creation-assets";
+import { CreationFileDropOverlay } from "./creation-file-drop-overlay";
 import { conversationTimestamp, isImageAttachment, isVideoAttachment } from "./creation-conversations";
 import { conversationTimeFormatter, countOptions, historyDayFormatter, messageTimeFormatter, modeLabels, qualityOptions, ratioOptions, resolutionOptions, shotScriptLabels, type CreationConversation, type CreationMessage, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import "./creation-product.css";
@@ -328,6 +329,9 @@ type ComposerProps = {
     onReorderAttachments: (attachments: CreationAttachment[]) => void;
     onReplaceAttachment: (targetAttachmentId: string, replacement: CreationAttachment) => void;
     onReplaceReferenceFiles: (targetAttachmentId: string, files: File[]) => void;
+    onAddLocalFiles: (files: File[]) => void;
+    uploadAccept: string;
+    localFilesBusy?: boolean;
     onOpenLibrary: () => void;
     onModeChange: (mode: CreationMode) => void;
     model: string;
@@ -368,11 +372,14 @@ export function CreationComposer(props: ComposerProps) {
     const [canDragReferences, setCanDragReferences] = useState(false);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
     const attachmentTrackRef = useRef<HTMLUListElement>(null);
+    const localFileInputRef = useRef<HTMLInputElement>(null);
+    const fileDragDepthRef = useRef(0);
+    const [dropActive, setDropActive] = useState(false);
     const cardDragRef = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
     const suppressAttachmentClickRef = useRef(false);
     const [trackState, setTrackState] = useState({ canScrollLeft: false, canScrollRight: false, isExpanded: true, isDragging: false });
     const previousAttachmentCountRef = useRef(0);
-    const interactionBusy = props.busy || props.referenceReplacementBusy;
+    const interactionBusy = props.busy || props.referenceReplacementBusy || Boolean(props.localFilesBusy);
     const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy;
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const priceChannel = resolveModelChannel(props.config, props.model);
@@ -399,7 +406,8 @@ export function CreationComposer(props: ComposerProps) {
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
     const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.videoProfile.operations.includes("image_to_video");
     const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;
-    const addReferenceLabel = interactionBusy ? (props.referenceReplacementBusy ? "正在替换参考图" : "生成中暂不能添加参考内容") : canAddMoreReferences ? "添加更多参考内容" : `已达到当前模型的参考内容上限（${props.maxReferences} 个）`;
+    const addReferenceLabel = interactionBusy ? (props.referenceReplacementBusy ? "正在替换参考图" : props.localFilesBusy ? "正在添加参考内容" : "生成中暂不能添加参考内容") : canAddMoreReferences ? "添加更多参考内容" : `已达到当前模型的参考内容上限（${props.maxReferences} 个）`;
+    const uploadLabel = canAddMoreReferences && !interactionBusy ? "从本机上传参考内容" : addReferenceLabel;
     const referenceCounts = useMemo(() => props.attachments.reduce((counts, attachment) => {
         const kind = creationAttachmentKind(attachment);
         counts[kind] += 1;
@@ -496,7 +504,47 @@ export function CreationComposer(props: ComposerProps) {
         }
         return undefined;
     };
-    const composer = <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner">
+    const hasDraggedFiles = (event: DragEvent<HTMLElement>) => Array.from(event.dataTransfer.types).includes("Files");
+    const resetFileDrag = () => {
+        fileDragDepthRef.current = 0;
+        setDropActive(false);
+    };
+    const handleComposerDragEnter = (event: DragEvent<HTMLElement>) => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        fileDragDepthRef.current += 1;
+        setDropActive(true);
+    };
+    const handleComposerDragOver = (event: DragEvent<HTMLElement>) => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = interactionBusy || !canAddMoreReferences ? "none" : "copy";
+    };
+    const handleComposerDragLeave = (event: DragEvent<HTMLElement>) => {
+        if (!hasDraggedFiles(event)) return;
+        fileDragDepthRef.current = Math.max(0, fileDragDepthRef.current - 1);
+        if (fileDragDepthRef.current === 0) setDropActive(false);
+    };
+    const handleComposerDrop = (event: DragEvent<HTMLElement>) => {
+        if (!hasDraggedFiles(event)) return;
+        const alreadyHandled = event.defaultPrevented;
+        resetFileDrag();
+        if (alreadyHandled) return;
+        if (imageReferenceAtPoint(event.clientX, event.clientY)) {
+            event.preventDefault();
+            return;
+        }
+        event.preventDefault();
+        if (interactionBusy) return;
+        props.onAddLocalFiles(Array.from(event.dataTransfer.files));
+    };
+    const pickLocalFiles = () => localFileInputRef.current?.click();
+    const handleLocalFileInput = (event: ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files || []);
+        event.target.value = "";
+        if (files.length) props.onAddLocalFiles(files);
+    };
+    const composer = <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner" onDragEnter={handleComposerDragEnter} onDragOver={handleComposerDragOver} onDragLeave={handleComposerDragLeave} onDrop={handleComposerDrop}>
         <SpotlightSurface
             className={`creation-chat-composer is-${props.variant}`}
             contentClassName="contents"
@@ -564,6 +612,7 @@ export function CreationComposer(props: ComposerProps) {
                                 </Reorder.Item>)}
                                 {!visibleAttachments.length && props.attachments.length ? <li className="creation-reference-filter-empty">该类型暂无参考内容</li> : null}
                                 {referencesSupported ? <li className="creation-reference-add-slot"><Tooltip title={addReferenceLabel}><button type="button" className="creation-reference-add-button" onClick={props.onOpenLibrary} disabled={interactionBusy || !canAddMoreReferences} aria-label={addReferenceLabel}><Plus aria-hidden="true" /><span>参考内容</span></button></Tooltip></li> : null}
+                                {referencesSupported ? <li className="creation-reference-add-slot"><Tooltip title={uploadLabel}><button type="button" className="creation-reference-add-button" onClick={pickLocalFiles} disabled={interactionBusy || !canAddMoreReferences} aria-label="从本机上传参考内容"><Upload aria-hidden="true" /><span>上传</span></button></Tooltip></li> : null}
                             </Reorder.Group>
                             {trackState.canScrollRight ? <button type="button" className="creation-reference-track-button is-right" onClick={() => scrollAttachmentTrack(1)} aria-label="向右浏览参考内容" title="向右浏览参考内容"><ChevronRight aria-hidden="true" /></button> : null}
                             {!trackState.isExpanded && props.attachments.length ? <Tooltip title="查看全部"><button type="button" className="creation-reference-panel-expand" onClick={() => setReferencePanelExpanded(true)} aria-label={`查看全部 ${props.attachments.length} 个参考内容`} aria-expanded="false"><Maximize2 aria-hidden="true" /></button></Tooltip> : null}
@@ -621,6 +670,8 @@ export function CreationComposer(props: ComposerProps) {
         </footer>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
         </SpotlightSurface>
+        <CreationFileDropOverlay active={dropActive} busy={interactionBusy} atLimit={!canAddMoreReferences} maxReferences={props.maxReferences} mode={props.mode} />
+        <input ref={localFileInputRef} type="file" multiple accept={props.uploadAccept} className="hidden" onChange={handleLocalFileInput} />
     </HoverBorderGradient>;
 
     if (!promptOptimizerOpen) return composer;

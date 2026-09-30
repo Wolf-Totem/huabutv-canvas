@@ -41,7 +41,12 @@ describe("creation references", () => {
         expect(creationFileAccepted("text", { name: "story.pdf", type: "application/pdf" })).toBe(true);
         expect(creationFileAccepted("text", { name: "clip.mp4", type: "video/mp4" })).toBe(true);
         expect(creationFileAccepted("image", { name: "story.pdf", type: "application/pdf" })).toBe(false);
+        expect(creationFileAccepted("image", { name: "clip.mp4", type: "video/mp4" })).toBe(false);
         expect(creationUploadAccept("text")).toContain(".docx");
+    });
+
+    test("图片创作拒绝视频文件", () => {
+        expect(creationFileAccepted("image", { name: "clip.mp4", type: "video/mp4" })).toBe(false);
     });
 
     test("文档附件会作为文本资源参与引用", () => {

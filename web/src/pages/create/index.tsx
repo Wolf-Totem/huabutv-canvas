@@ -104,6 +104,7 @@ export default function CreatePage() {
     const [textThinking, setTextThinking] = useState(() => readComposerPref(TEXT_THINKING_PREF_KEY, false));
     const [busy, setBusy] = useState(false);
     const [referenceReplacementBusy, setReferenceReplacementBusy] = useState(false);
+    const [localFilesBusy, setLocalFilesBusy] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [libraryOpen, setLibraryOpen] = useState(false);
     const externalAssetSources = useExternalAssetSources(libraryOpen);
@@ -447,6 +448,41 @@ export default function CreatePage() {
         if (assetIds.length) toast.success(`${assetIds.length} 个素材已上传到素材库并自动选中`);
         if (failed.length) toast.error(`${failed.length} 个素材上传失败，请重试`);
         return assetIds;
+    };
+
+    const addLocalCreationFiles = async (files: File[]) => {
+        if (busy || referenceReplacementBusy || localFilesBusy || !files.length) return;
+        const remainingSlots = Math.max(0, maxReferences - attachmentsRef.current.length);
+        const accepted = files.filter((file) => creationFileAccepted(mode, file));
+        const rejected = files.length - accepted.length;
+        const queued = accepted.slice(0, remainingSlots);
+        const overflow = accepted.length - queued.length;
+        if (rejected) toast.warning(mode === "image" ? "图片创作仅支持参考图" : `${rejected} 个文件类型不支持`);
+        if (overflow) toast.warning(`已达到当前模型的参考内容上限（${maxReferences} 个），${overflow} 个未添加`);
+        if (!queued.length) return;
+        setLocalFilesBusy(true);
+        try {
+            const settled = await Promise.allSettled(queued.map(async (file) => {
+                const { asset, attachment } = await uploadCreationAsset(file);
+                if (asset) addAsset(asset);
+                return attachment;
+            }));
+            const added = settled.flatMap((entry) => entry.status === "fulfilled" ? [entry.value] : []);
+            const failed = settled.filter((entry) => entry.status === "rejected");
+            if (added.length) {
+                setAttachments((current) => {
+                    const next = [...current];
+                    for (const item of added) {
+                        if (!next.some((existing) => existing.id === item.id)) next.push(item);
+                    }
+                    return next.slice(0, maxReferences);
+                });
+                toast.success(`已添加 ${added.length} 个参考内容`);
+            }
+            if (failed.length) toast.error(`${failed.length} 个素材上传失败，请重试`);
+        } finally {
+            setLocalFilesBusy(false);
+        }
     };
 
     const handleLibrarySelect = (selectedIds: string[]) => {
@@ -945,6 +981,9 @@ export default function CreatePage() {
         onReorderAttachments: reorderAttachments,
         onReplaceAttachment: replaceReferenceFromTrack,
         onReplaceReferenceFiles: replaceReferenceFromFiles,
+        onAddLocalFiles: (files) => void addLocalCreationFiles(files),
+        uploadAccept: creationUploadAccept(mode),
+        localFilesBusy,
         onOpenLibrary: () => setLibraryOpen(true),
         onModeChange: selectMode,
         model: selectedModel,
