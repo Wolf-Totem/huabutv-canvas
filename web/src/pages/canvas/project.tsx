@@ -36,6 +36,7 @@ import { CanvasConfigNodePanel } from "@/components/canvas/canvas-config-node-pa
 import { CanvasCloudAgentPanel } from "@/components/canvas/canvas-cloud-agent-panel";
 import { CanvasActiveTaskPanel } from "@/components/canvas/canvas-active-task-panel";
 import { CanvasAssetTray } from "@/components/canvas/canvas-asset-tray";
+import { localAssetToInsertPayload } from "@/components/canvas/asset-picker-modal";
 import { CanvasProjectSidebar } from "@/components/canvas/canvas-project-sidebar";
 import { CanvasWorkspacePanel } from "@/components/canvas/canvas-workspace-panel";
 import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asset-modal";
@@ -693,7 +694,7 @@ function InfiniteCanvasPage() {
     const {
         fitCanvasContent,
         fitCanvasSelection,
-        focusCanvasImageNode,
+        focusCanvasMediaNode,
         focusCanvasNode,
         getCanvasCenter,
         handleCanvasDoubleClick,
@@ -756,7 +757,7 @@ function InfiniteCanvasPage() {
         closeUploadModal,
         closeAssetPicker,
         createVideoNodeFromBlob,
-        createImageAssetNode,
+        insertLibraryAssetAt,
         fileDropActive,
         handleAssetsInsert,
         handleDrop,
@@ -1393,14 +1394,14 @@ function InfiniteCanvasPage() {
         annotationNode,
         batchChildCountById,
         batchMotionById,
-        canvasImageNodes,
+        canvasMediaNodes,
         configInputsById,
         connectionLayerBounds,
         contextMenuNode,
         cropNode,
         displayConnections,
         frameChildrenById,
-        imageAssets,
+        mediaAssets,
         infoNode,
         maskEditNode,
         mentionReferencesByNodeId,
@@ -2901,12 +2902,12 @@ function InfiniteCanvasPage() {
                                     onOpenShortcuts={() => setShortcutRequestNonce((value) => value + 1)}
                                 />
                                 <CanvasAssetTray
-                                    assetImages={imageAssets}
-                                    canvasImages={canvasImageNodes}
+                                    assetItems={mediaAssets}
+                                    canvasNodes={canvasMediaNodes}
                                     showLibrary={!currentProject?.projectId}
                                     activeNodeId={selectedNodeIds.size === 1 ? Array.from(selectedNodeIds)[0] : null}
-                                    onInsertAssetImage={(asset) => void createImageAssetNode(asset)}
-                                    onFocusCanvasImage={focusCanvasImageNode}
+                                    onInsertLibraryAsset={(asset) => void insertLibraryAssetAt(localAssetToInsertPayload(asset), getCanvasCenter())}
+                                    onFocusCanvasMedia={focusCanvasMediaNode}
                                 />
                             </CanvasOverlayLayerContainer>
                         ) : null}

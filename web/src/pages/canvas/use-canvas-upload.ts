@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type Dispat
 import { useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 
-import { CANVAS_IMAGE_ASSET_DND_TYPE } from "@/components/canvas/canvas-asset-tray";
-import type { InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
+import { CANVAS_ASSET_DND_TYPE, CANVAS_IMAGE_ASSET_DND_TYPE } from "@/components/canvas/canvas-asset-tray";
+import { localAssetToInsertPayload, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { CANVAS_PROJECT_CHAPTER_DND_TYPE, type CanvasProjectChapterPayload } from "@/components/canvas/canvas-project-sidebar";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
@@ -17,7 +17,7 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { getProjectUnit } from "@/services/api/projects";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
-import { useAssetStore, type ImageAsset } from "@/stores/use-asset-store";
+import { useAssetStore, type AudioAsset, type ImageAsset, type VideoAsset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData, type ContextMenuState, type Position } from "@/types/canvas";
 import type { TimelineDirectMedia } from "@/types/timeline";
 import type { CanvasUploadStatus } from "./canvas-project-feedback";
@@ -257,6 +257,74 @@ export function useCanvasUpload({
             message.error(error instanceof Error ? error.message : "素材图片读取失败");
         }
     }, [getCanvasCenter, message, selectInsertedNode, setNodes]);
+
+    const createAssetPayloadNode = useCallback(async (payload: InsertAssetPayload, center: Position) => {
+        if (payload.kind === "character") {
+            const width = 320;
+            const height = 260;
+            return {
+                id: `character-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                type: CanvasNodeType.Text,
+                title: payload.title,
+                position: { x: center.x - width / 2, y: center.y - height / 2 },
+                width,
+                height,
+                metadata: {
+                    workflowKind: "character",
+                    characterAssetId: payload.assetId,
+                    characterVersionId: payload.versionId,
+                    characterVersionPolicy: "current",
+                    characterName: payload.title,
+                    characterPrompt: payload.prompt,
+                    characterAliases: payload.aliases,
+                    characterDefinition: payload.definition,
+                    characterCoverUrl: payload.coverUrl,
+                    characterVisualStatus: payload.visualStatus,
+                    characterVoiceStatus: payload.voiceStatus,
+                    characterVoiceName: payload.voiceName,
+                    characterVoiceProfile: payload.voiceProfile,
+                    characterVoiceInstructions: payload.voiceInstructions,
+                    assetId: payload.assetId,
+                    status: NODE_STATUS_SUCCESS,
+                    fontSize: 14,
+                },
+            } satisfies CanvasNodeData;
+        }
+        if (payload.kind === "text") {
+            const node = { ...createCanvasNode(CanvasNodeType.Text, center, { content: payload.content, status: NODE_STATUS_SUCCESS, assetId: payload.assetId }), title: payload.content.slice(0, 32) || "Assistant Text" };
+            return node;
+        }
+        if (payload.kind === "audio") {
+            const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
+            const id = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            return { id, type: CanvasNodeType.Audio, title: payload.title, position: { x: center.x - spec.width / 2, y: center.y - spec.height / 2 }, width: spec.width, height: spec.height, metadata: { content: payload.url, storageKey: payload.storageKey, durationMs: payload.durationMs, bytes: payload.bytes, mimeType: payload.mimeType || "audio/mpeg", assetId: payload.assetId, status: NODE_STATUS_SUCCESS } } satisfies CanvasNodeData;
+        }
+        if (payload.kind === "video") {
+            const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
+            const size = fitNodeSize(payload.width || spec.width, payload.height || spec.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
+            const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            return { id, type: CanvasNodeType.Video, title: payload.title, position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { content: payload.url, storageKey: payload.storageKey, status: NODE_STATUS_SUCCESS, naturalWidth: payload.width, naturalHeight: payload.height, durationMs: payload.durationMs, hasAudio: payload.hasAudio, bytes: payload.bytes, mimeType: payload.mimeType || "video/mp4", assetId: payload.assetId } } satisfies CanvasNodeData;
+        }
+        const storedImage = payload.url
+            ? { url: payload.url, storageKey: undefined, width: payload.width || 1, height: payload.height || 1, bytes: payload.bytes || 0, mimeType: payload.mimeType || "image/png" }
+            : payload.storageKey
+                ? { url: payload.dataUrl, storageKey: payload.storageKey, width: payload.width || 1, height: payload.height || 1, bytes: payload.bytes || 0, mimeType: payload.mimeType || "image/png" }
+                : await uploadImage(payload.dataUrl);
+        const meta = !payload.storageKey && (!payload.width || !payload.height) ? await readImageMeta(storedImage.url) : storedImage;
+        const size = fitNodeSize(meta.width, meta.height);
+        const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const metadata = storedImage.storageKey
+            ? imageMetadata({ ...storedImage, storageKey: storedImage.storageKey, width: meta.width, height: meta.height })
+            : { content: storedImage.url, status: NODE_STATUS_SUCCESS, naturalWidth: meta.width, naturalHeight: meta.height, bytes: storedImage.bytes, mimeType: storedImage.mimeType };
+        return { id, type: CanvasNodeType.Image, title: payload.title.slice(0, 32) || "Generated Image", position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { ...metadata, prompt: payload.title, assetId: payload.assetId } } satisfies CanvasNodeData;
+    }, []);
+
+    const insertLibraryAssetAt = useCallback(async (payload: InsertAssetPayload, position: Position) => {
+        const node = await createAssetPayloadNode(payload, position);
+        setNodes((current) => [...current, node]);
+        selectInsertedNode(node.id, "close");
+        return node;
+    }, [createAssetPayloadNode, selectInsertedNode, setNodes]);
 
     const createTextNodeFromClipboard = useCallback((text: string, position?: Position) => {
         const trimmed = text.trim();
@@ -543,14 +611,14 @@ export function useCanvasUpload({
             void handleProjectChapterInsert(chapterPayload, screenToCanvas(event.clientX, event.clientY));
             return;
         }
-        const imageAssetId = event.dataTransfer.getData(CANVAS_IMAGE_ASSET_DND_TYPE);
-        if (imageAssetId) {
-            const asset = useAssetStore.getState().assets.find((item): item is ImageAsset => item.kind === "image" && item.id === imageAssetId);
+        const libraryAssetId = event.dataTransfer.getData(CANVAS_ASSET_DND_TYPE) || event.dataTransfer.getData(CANVAS_IMAGE_ASSET_DND_TYPE);
+        if (libraryAssetId) {
+            const asset = useAssetStore.getState().assets.find((item): item is ImageAsset | VideoAsset | AudioAsset => item.id === libraryAssetId && (item.kind === "image" || item.kind === "video" || item.kind === "audio") && item.status !== "archived");
             if (!asset) {
                 message.warning("素材不存在");
                 return;
             }
-            void createImageAssetNode(asset, screenToCanvas(event.clientX, event.clientY));
+            void insertLibraryAssetAt(localAssetToInsertPayload(asset), screenToCanvas(event.clientX, event.clientY));
             return;
         }
         const files = Array.from(event.dataTransfer.files).filter((item) => uploadNodeType(item));
@@ -572,7 +640,7 @@ export function useCanvasUpload({
             return;
         }
         void createFileNode(file, position);
-    }, [createFileNode, createImageAssetNode, handleProjectChapterInsert, handleUploadFiles, message, nodesRef, replaceNodeMedia, screenToCanvas]);
+    }, [createFileNode, handleProjectChapterInsert, handleUploadFiles, insertLibraryAssetAt, message, nodesRef, replaceNodeMedia, screenToCanvas]);
 
     const handleFileDragEnter = useCallback((event: DragEvent<HTMLDivElement>) => {
         if (!hasDraggedFiles(event)) return;
@@ -582,7 +650,8 @@ export function useCanvasUpload({
     }, []);
 
     const handleFileDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
-        if (!hasDraggedFiles(event) && !Array.from(event.dataTransfer.types).includes(CANVAS_PROJECT_CHAPTER_DND_TYPE)) return;
+        const types = Array.from(event.dataTransfer.types);
+        if (!hasDraggedFiles(event) && !types.includes(CANVAS_PROJECT_CHAPTER_DND_TYPE) && !types.includes(CANVAS_ASSET_DND_TYPE) && !types.includes(CANVAS_IMAGE_ASSET_DND_TYPE)) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
     }, []);
@@ -607,67 +676,6 @@ export function useCanvasUpload({
     const closeAssetPicker = useCallback(() => {
         assetInsertPositionRef.current = null;
         setAssetPickerOpen(false);
-    }, []);
-
-    const createAssetPayloadNode = useCallback(async (payload: InsertAssetPayload, center: Position) => {
-        if (payload.kind === "character") {
-            const width = 320;
-            const height = 260;
-            return {
-                id: `character-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                type: CanvasNodeType.Text,
-                title: payload.title,
-                position: { x: center.x - width / 2, y: center.y - height / 2 },
-                width,
-                height,
-                metadata: {
-                    workflowKind: "character",
-                    characterAssetId: payload.assetId,
-                    characterVersionId: payload.versionId,
-                    characterVersionPolicy: "current",
-                    characterName: payload.title,
-                    characterPrompt: payload.prompt,
-                    characterAliases: payload.aliases,
-                    characterDefinition: payload.definition,
-                    characterCoverUrl: payload.coverUrl,
-                    characterVisualStatus: payload.visualStatus,
-                    characterVoiceStatus: payload.voiceStatus,
-                    characterVoiceName: payload.voiceName,
-                    characterVoiceProfile: payload.voiceProfile,
-                    characterVoiceInstructions: payload.voiceInstructions,
-                    assetId: payload.assetId,
-                    status: NODE_STATUS_SUCCESS,
-                    fontSize: 14,
-                },
-            } satisfies CanvasNodeData;
-        }
-        if (payload.kind === "text") {
-            const node = { ...createCanvasNode(CanvasNodeType.Text, center, { content: payload.content, status: NODE_STATUS_SUCCESS, assetId: payload.assetId }), title: payload.content.slice(0, 32) || "Assistant Text" };
-            return node;
-        }
-        if (payload.kind === "audio") {
-            const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Audio];
-            const id = `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            return { id, type: CanvasNodeType.Audio, title: payload.title, position: { x: center.x - spec.width / 2, y: center.y - spec.height / 2 }, width: spec.width, height: spec.height, metadata: { content: payload.url, storageKey: payload.storageKey, durationMs: payload.durationMs, bytes: payload.bytes, mimeType: payload.mimeType || "audio/mpeg", assetId: payload.assetId, status: NODE_STATUS_SUCCESS } } satisfies CanvasNodeData;
-        }
-        if (payload.kind === "video") {
-            const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
-            const size = fitNodeSize(payload.width || spec.width, payload.height || spec.height, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
-            const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-            return { id, type: CanvasNodeType.Video, title: payload.title, position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { content: payload.url, storageKey: payload.storageKey, status: NODE_STATUS_SUCCESS, naturalWidth: payload.width, naturalHeight: payload.height, durationMs: payload.durationMs, hasAudio: payload.hasAudio, bytes: payload.bytes, mimeType: payload.mimeType || "video/mp4", assetId: payload.assetId } } satisfies CanvasNodeData;
-        }
-        const storedImage = payload.url
-            ? { url: payload.url, storageKey: undefined, width: payload.width || 1, height: payload.height || 1, bytes: payload.bytes || 0, mimeType: payload.mimeType || "image/png" }
-            : payload.storageKey
-                ? { url: payload.dataUrl, storageKey: payload.storageKey, width: payload.width || 1, height: payload.height || 1, bytes: payload.bytes || 0, mimeType: payload.mimeType || "image/png" }
-                : await uploadImage(payload.dataUrl);
-        const meta = !payload.storageKey && (!payload.width || !payload.height) ? await readImageMeta(storedImage.url) : storedImage;
-        const size = fitNodeSize(meta.width, meta.height);
-        const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-        const metadata = storedImage.storageKey
-            ? imageMetadata({ ...storedImage, storageKey: storedImage.storageKey, width: meta.width, height: meta.height })
-            : { content: storedImage.url, status: NODE_STATUS_SUCCESS, naturalWidth: meta.width, naturalHeight: meta.height, bytes: storedImage.bytes, mimeType: storedImage.mimeType };
-        return { id, type: CanvasNodeType.Image, title: payload.title.slice(0, 32) || "Generated Image", position: { x: center.x - size.width / 2, y: center.y - size.height / 2 }, width: size.width, height: size.height, metadata: { ...metadata, prompt: payload.title, assetId: payload.assetId } } satisfies CanvasNodeData;
     }, []);
 
     const insertAssetPayloads = useCallback(async (payloads: InsertAssetPayload[], origin: Position, successMessage: string, failureMessage: string): Promise<CanvasNodeData[]> => {
@@ -704,6 +712,7 @@ export function useCanvasUpload({
         createVideoNodeFromBlob,
         createAssetPayloadNode,
         createImageAssetNode,
+        insertLibraryAssetAt,
         fileDropActive,
         handleAssetsInsert,
         handleDrop,

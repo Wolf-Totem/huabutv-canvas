@@ -128,8 +128,8 @@ export function useCanvasViewportController({
         setContextMenu(null);
     }, [selectedNodeIdsRef, setContextMenu, setSelectedConnectionId, setSelectedNodeIds]);
 
-    const focusCanvasImageNode = useCallback((nodeId: string) => {
-        const node = nodesRef.current.find((item) => item.id === nodeId && item.type === CanvasNodeType.Image);
+    const focusCanvasMediaNode = useCallback((nodeId: string) => {
+        const node = nodesRef.current.find((item) => item.id === nodeId && (item.type === CanvasNodeType.Image || item.type === CanvasNodeType.Video || item.type === CanvasNodeType.Audio || item.type === CanvasNodeType.Drawing));
         if (!node) return;
         const scale = Math.min(1.25, Math.max(viewportRef.current.k, 0.78));
         transitionViewportTo({ x: size.width / 2 - (node.position.x + node.width / 2) * scale, y: size.height / 2 - (node.position.y + node.height / 2) * scale, k: scale });
@@ -137,6 +137,10 @@ export function useCanvasViewportController({
         setDialogNodeId(null);
         setToolbarNodeId(node.id);
     }, [nodesRef, selectFocusedNode, setDialogNodeId, setToolbarNodeId, size.height, size.width, transitionViewportTo, viewportRef]);
+
+    const focusCanvasImageNode = useCallback((nodeId: string) => {
+        focusCanvasMediaNode(nodeId);
+    }, [focusCanvasMediaNode]);
 
     const focusCanvasNode = useCallback((nodeId: string) => {
         const node = nodesRef.current.find((item) => item.id === nodeId);
@@ -178,6 +182,7 @@ export function useCanvasViewportController({
         fitCanvasContent,
         fitCanvasSelection,
         focusCanvasImageNode,
+        focusCanvasMediaNode,
         focusCanvasNode,
         getCanvasCenter,
         handleCanvasDoubleClick,

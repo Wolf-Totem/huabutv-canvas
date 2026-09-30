@@ -8,7 +8,8 @@ import { buildCanvasNodeMentionReferenceMap, buildCanvasResourceReferences } fro
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex, type CanvasSpatialIndexEntry } from "@/lib/canvas/canvas-spatial-index";
 import type { Skill } from "@/services/api/skills";
-import type { Asset, ImageAsset } from "@/stores/use-asset-store";
+import { isTrayCanvasMediaNode } from "@/lib/canvas/canvas-tray-media";
+import type { Asset, AudioAsset, ImageAsset, VideoAsset } from "@/stores/use-asset-store";
 import type { DirectorScene } from "@/types/director";
 import { CanvasNodeType, type CanvasConnection, type CanvasDisplayConnection, type CanvasMediaPerformanceMode, type CanvasNodeData, type ContextMenuState, type ViewportTransform } from "@/types/canvas";
 
@@ -85,6 +86,7 @@ export function useCanvasRenderModel({
         const renderHiddenNodeIds = new Set<string>();
         const frameChildrenById = new Map<string, CanvasNodeData[]>();
         const canvasImageNodes: CanvasNodeData[] = [];
+        const canvasMediaNodes: CanvasNodeData[] = [];
         const batchRoots: CanvasNodeData[] = [];
         const batchMotionById = new Map<string, { x: number; y: number; index: number }>();
         const batchChildIndexByRootId = new Map<string, Map<string, number>>();
@@ -107,8 +109,9 @@ export function useCanvasRenderModel({
             }
 
             if (node.metadata?.isBatchRoot) batchRoots.push(node);
-            if (node.type === CanvasNodeType.Image && node.metadata?.content && !collapsedBatchChildIds.has(node.id) && !(parent && isFrameNode(parent) && parent.metadata?.frame?.collapsed)) {
-                canvasImageNodes.push(node);
+            if (!collapsedBatchChildIds.has(node.id) && !(parent && isFrameNode(parent) && parent.metadata?.frame?.collapsed)) {
+                if (node.type === CanvasNodeType.Image && node.metadata?.content) canvasImageNodes.push(node);
+                if (isTrayCanvasMediaNode(node)) canvasMediaNodes.push(node);
             }
         }
 
@@ -133,9 +136,9 @@ export function useCanvasRenderModel({
             batchChildCountById.set(root.id, liveChildCount);
         }
 
-        return { batchChildCountById, batchMotionById, canvasImageNodes, collapsedBatchChildIds, frameChildrenById, renderHiddenNodeIds };
+        return { batchChildCountById, batchMotionById, canvasImageNodes, canvasMediaNodes, collapsedBatchChildIds, frameChildrenById, renderHiddenNodeIds };
     }, [collapsingBatchIds, nodeById, nodes]);
-    const { batchChildCountById, batchMotionById, canvasImageNodes, collapsedBatchChildIds, frameChildrenById, renderHiddenNodeIds } = nodeDerivedData;
+    const { batchChildCountById, batchMotionById, canvasImageNodes, canvasMediaNodes, collapsedBatchChildIds, frameChildrenById, renderHiddenNodeIds } = nodeDerivedData;
     const connectionLayerBounds = useMemo(() => {
         const padding = (reduceMediaEffects ? 96 : 144) / Math.max(viewport.k, 0.05);
         const left = -viewport.x / viewport.k - padding;
@@ -204,6 +207,7 @@ export function useCanvasRenderModel({
     }, [visibleNodes]);
 
     const imageAssets = useMemo(() => assets.filter((asset): asset is ImageAsset => asset.kind === "image" && asset.status !== "archived"), [assets]);
+    const mediaAssets = useMemo(() => assets.filter((asset): asset is ImageAsset | VideoAsset | AudioAsset => (asset.kind === "image" || asset.kind === "video" || asset.kind === "audio") && asset.status !== "archived"), [assets]);
     const semanticNodesRef = useRef(nodes);
     const semanticNodes = useMemo(() => {
         const previous = semanticNodesRef.current;
@@ -370,6 +374,7 @@ export function useCanvasRenderModel({
         batchChildCountById,
         batchMotionById,
         canvasImageNodes,
+        canvasMediaNodes,
         configInputsById,
         connectionLayerBounds,
         contextMenuNode,
@@ -377,6 +382,7 @@ export function useCanvasRenderModel({
         displayConnections,
         frameChildrenById,
         imageAssets,
+        mediaAssets,
         infoNode,
         maskEditNode,
         mentionReferencesByNodeId,
